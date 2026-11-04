@@ -264,7 +264,8 @@ export async function createEvent(
   opts: { countdown?: boolean } = {},
 ): Promise<void> {
   const { id } = await source.insert(calendarId, draft);
-  await put('eventMeta', {
+  // Firestore writes apply to the local cache at once; awaiting the server ack would hang offline.
+  void put('eventMeta', {
     id: metaKey(calendarId, id),
     profiles: profileIds,
     countdown: opts.countdown,
@@ -283,9 +284,8 @@ export async function updateEvent(
   const before = metaFor(ev);
   const { newSeriesId } = await source.update(ev, draft, scope);
   const meta = { profiles: profileIds, countdown: opts.countdown, updatedAt: currentTime() };
-  if (newSeriesId) await put('eventMeta', { ...before, ...meta, id: metaKey(ev.calendarId, newSeriesId) });
-  else if (ev.seriesId && scope === 'this') await put('eventMeta', { ...before, ...meta, id: metaKey(ev.calendarId, ev.id) });
-  else await put('eventMeta', { ...before, ...meta, id: metaKey(ev.calendarId, ev.seriesId ?? ev.id) });
+  const id = newSeriesId ?? (ev.seriesId && scope === 'this' ? ev.id : (ev.seriesId ?? ev.id));
+  void put('eventMeta', { ...before, ...meta, id: metaKey(ev.calendarId, id) });
   await refresh();
 }
 

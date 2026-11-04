@@ -6,18 +6,16 @@ import { auth, functions } from './firebase';
 import { closeHousehold, openHousehold } from './store';
 
 /**
- * Who the tablet is signed in as. A household signs in once through Google
- * (OAuth code flow, full-page redirect so it works in kiosk browsers); the
- * connectGoogle Function keeps the refresh token server-side and returns a
- * Firebase custom token carrying the household id (`hid` claim).
+ * Who the tablet is signed in as. A household signs in once with Google's
+ * popup code flow (Google Identity Services, redirect_uri 'postmessage', so
+ * only the page origin has to be registered on the OAuth client); the
+ * connectGoogle Function exchanges the code, keeps the refresh token
+ * server-side and returns a Firebase custom token carrying the household id
+ * (`hid` claim).
  */
 export type SessionState = 'loading' | 'signedOut' | 'connecting' | 'signedIn' | 'error';
 
 export const session = signal<{ state: SessionState; account?: string; error?: string }>({ state: 'loading' });
-
-const REDIRECT_PATH = '/oauth';
-const STATE_KEY = 'manwar.oauthState';
-export const redirectUri = () => `${location.origin}${REDIRECT_PATH}`;
 
 interface ConnectResult {
   customToken: string;
@@ -26,43 +24,87 @@ interface ConnectResult {
   account: string;
 }
 
-/** Leave for Google's consent screen; returns to /oauth. */
-export function startGoogleConnect(): void {
-  if (!googleClientId) {
-    session.value = { state: 'error', error: 'The Google OAuth client id is not configured yet (src/config.ts).' };
-    return;
-  }
-  const state = crypto.randomUUID();
-  sessionStorage.setItem(STATE_KEY, state);
-  const params = new URLSearchParams({
-    client_id: googleClientId,
-    redirect_uri: redirectUri(),
-    response_type: 'code',
-    scope: googleScopes.join(' '),
-    access_type: 'offline',
-    prompt: 'consent',
-    include_granted_scopes: 'true',
-    login_hint: householdEmail,
-    state,
-  });
-  location.assign(`https://accounts.google.com/o/oauth2/v2/auth?${params}`);
+interface CodeResponse {
+  code?: string;
+  error?: string;
+  error_description?: string;
 }
 
-async function finishRedirect(): Promise<void> {
-  const q = new URLSearchParams(location.search);
-  history.replaceState(null, '', '/');
-  const expected = sessionStorage.getItem(STATE_KEY);
-  sessionStorage.removeItem(STATE_KEY);
-  if (q.get('error')) throw new Error(`Google sign-in was cancelled (${q.get('error')}).`);
-  const code = q.get('code');
-  if (!code || !expected || q.get('state') !== expected)
-    throw new Error('The Google sign-in response did not match this tablet. Try again.');
-  const res = await httpsCallable<{ code: string; redirectUri: string }, ConnectResult>(
-    functions,
-    'connectGoogle',
-  )({ code, redirectUri: redirectUri() });
-  cacheToken(res.data.accessToken, res.data.expiresAt);
-  await signInWithCustomToken(auth, res.data.customToken);
+interface GisOauth2 {
+  initCodeClient(config: {
+    client_id: string;
+    scope: string;
+    ux_mode: 'popup';
+    login_hint?: string;
+    select_account?: boolean;
+    callback: (r: CodeResponse) => void;
+    error_callback?: (e: { type: string }) => void;
+  }): { requestCode(): void };
+}
+
+declare global {
+  interface Window {
+    google?: { accounts?: { oauth2?: GisOauth2 } };
+  }
+}
+
+let gis: Promise<void> | null = null;
+
+/** Load Google Identity Services ahead of the tap, so the popup opens inside the user gesture. */
+function loadGis(): Promise<void> {
+  gis ??= new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://accounts.google.com/gsi/client';
+    s.async = true;
+    s.onload = () => resolve();
+    s.onerror = () => {
+      gis = null;
+      reject(new Error('Could not load Google sign-in. Check the connection and try again.'));
+    };
+    document.head.appendChild(s);
+  });
+  return gis;
+}
+
+const fail = (error: string) => (session.value = { state: 'error', error });
+
+/** Open Google's consent popup for the household account. Must run in a tap handler. */
+export function startGoogleConnect(): void {
+  const oauth2 = window.google?.accounts?.oauth2;
+  if (!oauth2) {
+    fail('Google sign-in is still loading. Try again in a moment.');
+    void loadGis().catch((e: Error) => fail(e.message));
+    return;
+  }
+  oauth2
+    .initCodeClient({
+      client_id: googleClientId,
+      scope: googleScopes.join(' '),
+      ux_mode: 'popup',
+      login_hint: householdEmail,
+      callback: (r) => {
+        if (r.code) void exchange(r.code);
+        else fail(`Google sign-in did not finish (${r.error_description ?? r.error ?? 'no code'}).`);
+      },
+      error_callback: (e) =>
+        fail(
+          e.type === 'popup_closed'
+            ? 'The Google window was closed before finishing.'
+            : 'The browser blocked the Google sign-in window.',
+        ),
+    })
+    .requestCode();
+}
+
+async function exchange(code: string): Promise<void> {
+  session.value = { state: 'connecting' };
+  try {
+    const res = await httpsCallable<{ code: string }, ConnectResult>(functions, 'connectGoogle')({ code });
+    cacheToken(res.data.accessToken, res.data.expiresAt);
+    await signInWithCustomToken(auth, res.data.customToken);
+  } catch (e) {
+    fail(e instanceof Error ? e.message : String(e));
+  }
 }
 
 let token: { value: string; expiresAt: number } | null = null;
@@ -101,8 +143,7 @@ function demoToken(): string {
 }
 
 export function initSession(): void {
-  const returning = location.pathname === REDIRECT_PATH;
-  if (returning) session.value = { state: 'connecting' };
+  if (!demoMode) void loadGis().catch(() => {});
 
   onAuthStateChanged(auth, async (user) => {
     if (!user) {
@@ -121,9 +162,4 @@ export function initSession(): void {
     openHousehold(hid);
     session.value = { state: 'signedIn', account: typeof claims.account === 'string' ? claims.account : undefined };
   });
-
-  if (returning)
-    finishRedirect().catch((e: unknown) => {
-      session.value = { state: 'error', error: e instanceof Error ? e.message : String(e) };
-    });
 }

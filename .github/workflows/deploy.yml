@@ -48,4 +48,4 @@ jobs:
           service_account: github-deployer@manwar-home.iam.gserviceaccount.com
 
       - if: github.event_name != 'pull_request'
-        run: npx --yes firebase-tools@15 deploy --only hosting,firestore --project manwar-home --non-interactive
+        run: npx --yes firebase-tools@15 deploy --only hosting,firestore,functions --project manwar-home --non-interactive

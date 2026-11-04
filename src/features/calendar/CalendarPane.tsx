@@ -1,3 +1,4 @@
+import { CalendarDays } from 'lucide-preact';
 import { useLayoutEffect, useMemo } from 'preact/hooks';
 import type { CalendarView } from '../../data/types';
 import { CalendarBody } from './CalendarBody';
@@ -22,6 +23,10 @@ export function CalendarPane({ view, onViewChange }: { view: CalendarView; onVie
   return (
     <section class="cal-pane" aria-label="Calendar">
       <header class="cal-pane-head">
+        <h2 class="cal-pane-label">
+          <CalendarDays size="1.8rem" strokeWidth={2} />
+          Calendar
+        </h2>
         <span class="cal-pane-title serif">{title}</span>
         <NavControls nav={nav} compact />
       </header>

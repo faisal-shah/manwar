@@ -32,7 +32,7 @@ test('Home shows the calendar, tasks and lists panes; Customize turns side panes
   await open(page);
   await rail(page, 'Home').click();
   await expect(page.locator('.home-pane')).toHaveCount(3);
-  await expect(page.locator('.home-pane-head')).toHaveText(['Calendar', "Today's tasks", 'Lists']);
+  await expect(page.locator('.home-pane h2')).toHaveText(['Calendar', "Today's tasks", 'Lists']);
   await page.getByRole('button', { name: 'Customize' }).click();
   await page.getByRole('switch', { name: 'Tasks' }).click();
   await expect(page.locator('.home-tasks')).toHaveCount(0);

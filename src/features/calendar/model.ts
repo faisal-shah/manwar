@@ -1,7 +1,7 @@
 import { computed } from '@preact/signals';
 import { calendars, daysOf, eventsBetween, eventColors, metaFor, profilesOf } from '../../calendar/engine';
 import type { CalEvent } from '../../calendar/types';
-import { data, profileById, settings } from '../../data/store';
+import { profileById, settings } from '../../data/store';
 import { nowMs } from '../../lib/clock';
 import { EVERYONE, type ISODate, type MealCategory, type MealEntry, type Profile } from '../../data/types';
 import {
@@ -14,7 +14,7 @@ import {
   formatTimeRange,
   toISODate,
 } from '../../lib/date';
-import { occursOn } from '../../lib/repeat';
+import { calendarMeals } from '../meals/state';
 import { everyoneProfile } from '../../ui/profile';
 
 /** Reactive helpers shared by the views (they read signals, so components re-render on change). */
@@ -40,19 +40,10 @@ const DAY_MS = 86_400_000;
 /** All-day events and events of a day or longer go in the all-day row and month bars. */
 export const isLong = (ev: CalEvent) => ev.allDay || ev.end.getTime() - ev.start.getTime() >= DAY_MS;
 
-/** Planned meals on a day, for categories shown on the calendar (Filter > Meals). */
+/** Planned meals on a day, for categories shown on the calendar (Filter > Meals). Repeats and per-day exceptions come from the Meals slice. */
 export function mealsOn(day: ISODate): MealItem[] {
   if (!settings.value.filter.meals) return [];
-  const cats = settings.value.mealCategories;
-  const out: MealItem[] = [];
-  cats.forEach((category) => {
-    if (!category.visible || !category.showOnCalendar) return;
-    data.meals.value
-      .filter((m) => m.category === category.id && occursOn(m.repeat, m.date, day))
-      .sort((a, b) => a.order - b.order || a.createdAt - b.createdAt)
-      .forEach((meal) => out.push({ key: `${meal.id}@${day}`, meal, category, day }));
-  });
-  return out;
+  return calendarMeals(day, day).map((m) => ({ key: `${m.entry.id}@${day}`, meal: m.entry, category: m.category, day }));
 }
 
 const byStart = (a: CalEvent, b: CalEvent) =>

@@ -31,12 +31,13 @@ async function setPin(demo: string, pin: string) {
 /** Opens a fresh demo household with a parent PIN, on the given tab. */
 async function open(page: Page, name: string, tab: 'Rewards' | 'Tasks') {
   const demo = `e2e-rewards-${run}-${name}`;
+  // Set the PIN before the first load so the app never runs without it (no snapshot race).
+  await setPin(demo, PIN);
   await page.goto(`/?demo=${demo}&${NOW}`);
   await expect(page.locator('.shell')).toBeVisible({ timeout: 20_000 });
   await page.locator('.rail button', { hasText: tab }).click();
   await expect(page.locator('[data-column="asiyah"]')).toBeVisible({ timeout: 15_000 });
   await expect(page.locator('[data-column="asiyah"] .star-pill')).toHaveText('128', { timeout: 15_000 });
-  await setPin(demo, PIN);
 }
 
 async function enterPin(page: Page) {

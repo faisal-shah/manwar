@@ -13,8 +13,15 @@ export const firebaseConfig = {
   appId: '1:1056874888372:web:d069969a315965a9496be1',
 };
 
-/** Web OAuth client used for the household Google Calendar connection. Empty until created in the Cloud Console. */
-export const googleClientId = '';
+/**
+ * Web OAuth client for the household Google Calendar connection: the client
+ * Firebase created for Google sign-in. Its registered JavaScript origins are
+ * manwar-home.firebaseapp.com and localhost, so the app is served from
+ * `canonicalHost` (web.app forwards there).
+ */
+export const googleClientId = '1056874888372-5akc9aoc2ouj70gck1heqosn74ugfqpq.apps.googleusercontent.com';
+
+export const canonicalHost = 'manwar-home.firebaseapp.com';
 
 /** The Google account the wall tablet connects to. Pre-selected in the consent popup. */
 export const householdEmail = 'household@example.com';

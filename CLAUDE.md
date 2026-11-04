@@ -22,6 +22,13 @@ Recipes, Sleep, Settings. Not built: Photos, Disney, Magic Import, Sidekick.
   Secret `GOOGLE_OAUTH_CLIENT_SECRET` in Secret Manager; non-secret params in
   `functions/.env` (`GOOGLE_OAUTH_CLIENT_ID` must equal `googleClientId` in
   `src/config.ts`; `tests/unit/config.test.ts` checks).
+- The OAuth client is the one Firebase auto-created for Google sign-in
+  ("Web client (auto created by Google Service)"). Its client id and secret
+  are readable from `identitytoolkit.googleapis.com/admin/v2/projects/manwar-home/defaultSupportedIdpConfigs/google.com`.
+  Its registered JavaScript origins are `https://manwar-home.firebaseapp.com`
+  and `http://localhost` (any port), not web.app, so the canonical origin is
+  `manwar-home.firebaseapp.com` and `main.tsx` forwards web.app there. Editing
+  the client's origins needs the Cloud Console (no public API).
 - Household Google account: `household@example.com` (the only account
   `connectGoogle` accepts).
 - Budget alert "manwar-home monthly", $10.
@@ -104,6 +111,31 @@ so `1rem` = 10 design px. Use rem for every size. Tokens are CSS variables in
 - Preact 11: element attribute types are `import type { ButtonHTMLAttributes } from 'preact'`, not `JSX.HTMLAttributes`.
 - Firestore field paths cannot contain `*`; `lastDoneKey()` maps Up for Grabs to `any`.
 - Overlays (`Sheet`, `Modal`, `Popover`) portal to `document.body`.
-- The OAuth flow is a full-page redirect to `/oauth` (works in kiosk
-  browsers, always returns a refresh token via `prompt=consent`). Redirect
-  URIs `<origin>/oauth` must be registered on the OAuth client.
+- The Google connection uses the Google Identity Services popup code flow
+  (`redirect_uri` 'postmessage'), so only the page origin must be registered.
+  Google returns a refresh token on the first consent only; `connectGoogle`
+  keeps the stored one when a later connection returns none. Under Fully Kiosk,
+  "Enable Popups" must be on for the consent window.
+- Registered-or-not check without signing in: request
+  `accounts.google.com/o/oauth2/v2/auth?client_id=...&redirect_uri=...` and
+  look at the redirect; `signin/identifier` means registered, `authError`
+  (base64, contains `redirect_uri_mismatch`) means not. For JS origins use
+  `redirect_uri=storagerelay://https/<host>?id=x`.
+- Worktrees under `.claude/worktrees/` with a symlinked `node_modules` need
+  Vite's `server.fs.allow` widened, or font files return 403.
+
+## Feature modules
+
+- `features/calendar`: `index.tsx` (tab, `openEditor`, `ProgressStrip`),
+  `model.ts` (per-day items; meals come from `features/meals/state.ts`
+  `calendarMeals`), `views/` (Schedule, Day, Week, Month), `CalendarPane.tsx`
+  (Home). Class prefixes `cal-`, `ev-`, `evd-`.
+- `features/tasks` and `features/rewards`: Tasks filter is per device
+  (localStorage). `TodayPane.tsx` fills the container Home gives it.
+- `features/lists`, `features/meals`, `features/recipes`: pure logic in
+  `logic.ts`, `plan.ts`, `ingredients.ts` (unit-tested); the ingredients
+  modal merges into the default grocery list without duplicates;
+  `MealCategoriesEditor` is mounted by Settings.
+- `features/home`, `features/settings`, `features/messages`, `features/timer`:
+  a running timer holds off scheduled sleep (`sleepHeldUntil` in
+  `core/display.ts`).

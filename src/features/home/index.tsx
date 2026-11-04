@@ -26,19 +26,24 @@ function Pane({
   title,
   icon: Icon,
   kind,
+  bare,
   children,
 }: {
   title: string;
   icon: IconType;
   kind: string;
+  /** The child draws its own header row (the calendar pane puts its controls beside the title). */
+  bare?: boolean;
   children: ComponentChildren;
 }) {
   return (
     <section class={`home-pane home-${kind}`} aria-label={title}>
-      <header class="home-pane-head">
-        <Icon size="1.8rem" strokeWidth={2} />
-        <h2>{title}</h2>
-      </header>
+      {!bare && (
+        <header class="home-pane-head">
+          <Icon size="1.8rem" strokeWidth={2} />
+          <h2>{title}</h2>
+        </header>
+      )}
       <div class="home-pane-body">{children}</div>
     </section>
   );
@@ -50,7 +55,7 @@ function HomeBody() {
   const lists = !hidden.includes('lists');
   return (
     <div class={`home${tasks || lists ? '' : ' home-solo'}`}>
-      <Pane title="Calendar" icon={CalendarDays} kind="calendar">
+      <Pane title="Calendar" icon={CalendarDays} kind="calendar" bare>
         <CalendarPane view={homeCalendarView.value} onViewChange={(v) => (homeCalendarView.value = v)} />
       </Pane>
       {(tasks || lists) && (
