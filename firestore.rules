@@ -1,0 +1,21 @@
+rules_version = '2';
+// Each tablet signs in with a custom token carrying its household id (hid
+// claim, minted by the connectGoogle Function). A household may read and
+// write its own collections; households/{hid}/private holds the Google
+// refresh token and is reachable only through the Admin SDK.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function member(hid) {
+      return request.auth != null && request.auth.token.hid == hid;
+    }
+    match /households/{hid} {
+      allow read: if member(hid);
+      match /private/{doc} {
+        allow read, write: if false;
+      }
+      match /{collection}/{docId} {
+        allow read, write: if member(hid) && collection != 'private';
+      }
+    }
+  }
+}

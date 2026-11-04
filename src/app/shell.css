@@ -1,0 +1,170 @@
+.shell {
+  display: grid;
+  grid-template-columns: var(--rail-w) 1fr;
+  height: 100%;
+}
+
+/* Nav rail */
+.rail {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  background: var(--rail);
+  padding: 0.8rem 0;
+  gap: 0.2rem;
+  z-index: 2;
+}
+.rail-spacer {
+  flex: 1;
+}
+.rail button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  min-height: 7.6rem;
+  margin: 0 0.8rem;
+  border-radius: 1.4rem;
+  color: var(--text-2);
+  font-size: 1.3rem;
+  font-weight: 500;
+}
+.rail button.on {
+  background: var(--rail-active);
+  color: var(--text);
+  box-shadow: var(--shadow-soft);
+}
+.rail .brand {
+  font-family: var(--font-display);
+  font-size: 3.2rem;
+  line-height: 1;
+  font-weight: 500;
+}
+.rail .badge {
+  position: absolute;
+  top: 0.6rem;
+  right: 1.2rem;
+  min-width: 2rem;
+  height: 2rem;
+  padding: 0 0.5rem;
+  border-radius: 99rem;
+  background: var(--today);
+  color: #fff;
+  font-size: 1.15rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.rail button {
+  position: relative;
+}
+
+/* Main column */
+.main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+}
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  height: var(--top-h);
+  padding: 0 2.4rem 0 2.8rem;
+  flex: none;
+}
+.topbar .when {
+  display: flex;
+  align-items: baseline;
+  gap: 1.8rem;
+  font-family: var(--font-display);
+  font-size: 3.8rem;
+  white-space: nowrap;
+}
+.topbar .when .time {
+  font-size: 3.4rem;
+}
+.topbar .wx {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  align-self: center;
+  font-family: var(--font-display);
+  font-size: 3.2rem;
+}
+.topbar .controls {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+.tab-body {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  padding: 0 2.4rem 2.4rem 1.6rem;
+}
+
+.fab {
+  position: fixed;
+  right: 2.4rem;
+  bottom: 2.4rem;
+  width: 7.2rem;
+  height: 7.2rem;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow);
+  z-index: 20;
+}
+.fab:active {
+  transform: scale(0.95);
+}
+
+/* Connect / loading screens */
+.connect {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2.4rem;
+  text-align: center;
+  padding: 4rem;
+}
+.connect h1 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 7.2rem;
+  margin: 0;
+}
+.connect p {
+  max-width: 64rem;
+  color: var(--text-2);
+  font-size: 2rem;
+  margin: 0;
+}
+.connect .error {
+  color: var(--danger);
+}
+
+/* Sleep */
+.sleep-screen {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #333;
+  font-family: var(--font-display);
+  font-size: 6rem;
+}

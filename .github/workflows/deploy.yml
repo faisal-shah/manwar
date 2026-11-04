@@ -1,0 +1,51 @@
+name: Build and deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - run: npm ci --prefix functions
+      - run: npm test --prefix functions
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npx playwright install --with-deps chromium
+      # Demo mode runs against the Auth and Firestore emulators.
+      - run: npx --yes firebase-tools@15 emulators:exec --only auth,firestore --project demo-manwar "npx playwright test"
+
+      # Keyless auth: GitHub's OIDC token is exchanged for the deployer
+      # service account via Workload Identity Federation (the provider only
+      # accepts tokens from faisal-shah/manwar).
+      - if: github.event_name != 'pull_request'
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: projects/1056874888372/locations/global/workloadIdentityPools/github/providers/github
+          service_account: github-deployer@manwar-home.iam.gserviceaccount.com
+
+      - if: github.event_name != 'pull_request'
+        run: npx --yes firebase-tools@15 deploy --only hosting,firestore --project manwar-home --non-interactive

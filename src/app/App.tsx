@@ -1,0 +1,122 @@
+import type { FunctionComponent } from 'preact';
+import { Moon, Plus, Settings as SettingsIcon } from 'lucide-preact';
+import { demoMode } from '../config';
+import { sleeping, wake } from '../core/display';
+import { weather, toUnit } from '../core/weather';
+import { ready, settings } from '../data/store';
+import { session, startGoogleConnect } from '../data/session';
+import { now, today } from '../lib/clock';
+import { formatHeaderDate, formatTime } from '../lib/date';
+import { Button } from '../ui/controls';
+import { DialogHost, ToastHost } from '../ui/overlays';
+import { WeatherIcon } from '../ui/WeatherIcon';
+import { activeTab, goTo, settingsOpen, sleepMenuOpen } from './nav';
+import { TABS, Overlays, RailBadges } from './tabs';
+import { SettingsSheet, SleepMenu } from '../features/settings';
+
+export function App() {
+  const s = session.value;
+  if (s.state === 'signedIn' && ready.value) return <Shell />;
+  return <ConnectScreen />;
+}
+
+function ConnectScreen() {
+  const s = session.value;
+  const busy = s.state === 'loading' || s.state === 'connecting' || (s.state === 'signedIn' && !ready.value);
+  return (
+    <div class="connect">
+      <h1>Manwar</h1>
+      {busy ? (
+        <p>{s.state === 'connecting' ? 'Connecting the household Google account…' : 'Loading…'}</p>
+      ) : (
+        <>
+          <p>
+            {demoMode
+              ? 'Starting the demo household…'
+              : 'Connect the household Google account. Its calendars appear on this wall, and events added here are saved to it.'}
+          </p>
+          {s.state === 'error' && <p class="error">{s.error}</p>}
+          {!demoMode && (
+            <Button variant="primary" onClick={startGoogleConnect}>
+              Connect Google account
+            </Button>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function Shell() {
+  const tabs = TABS.filter((t) => !settings.value.hiddenTabs.includes(t.id));
+  const tab = TABS.find((t) => t.id === activeTab.value) ?? TABS[1];
+  const badges = RailBadges();
+  return (
+    <div class="shell">
+      <nav class="rail" aria-label="Tabs">
+        {tabs.map((t) => (
+          <button
+            type="button"
+            class={t.id === tab.id ? 'on' : ''}
+            aria-current={t.id === tab.id ? 'page' : undefined}
+            onClick={() => goTo(t.id)}
+          >
+            {t.id === 'home' ? <span class="brand">M</span> : <t.icon size="2.8rem" strokeWidth={1.8} />}
+            {t.label}
+            {badges[t.id] ? <span class="badge">{badges[t.id]}</span> : null}
+          </button>
+        ))}
+        <div class="rail-spacer" />
+        <button type="button" onClick={() => (sleepMenuOpen.value = true)}>
+          <Moon size="2.6rem" strokeWidth={1.8} />
+          Sleep
+        </button>
+        <button type="button" onClick={() => (settingsOpen.value = true)}>
+          <SettingsIcon size="2.6rem" strokeWidth={1.8} />
+          Settings
+        </button>
+      </nav>
+      <div class="main">
+        <TopBar title={tab.title?.() ?? null} Controls={tab.Controls} />
+        <div class="tab-body">
+          <tab.Body />
+        </div>
+        {tab.onAdd && (
+          <button type="button" class="fab" aria-label="Add" onClick={tab.onAdd}>
+            <Plus size="3.6rem" strokeWidth={2.2} />
+          </button>
+        )}
+      </div>
+      {settingsOpen.value && <SettingsSheet onClose={() => (settingsOpen.value = false)} />}
+      {sleepMenuOpen.value && <SleepMenu onClose={() => (sleepMenuOpen.value = false)} />}
+      <Overlays />
+      <ToastHost />
+      <DialogHost />
+      {sleeping.value && (
+        <div class="sleep-screen" onClick={wake} role="button" aria-label="Wake">
+          {formatTime(now.value, settings.value.timeFormat)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TopBar({ title, Controls }: { title: string | null; Controls?: FunctionComponent }) {
+  const w = weather.value;
+  const hour = now.value.getHours();
+  return (
+    <header class="topbar">
+      <div class="when">
+        <span>{title ?? formatHeaderDate(today.value)}</span>
+        <span class="time">{formatTime(now.value, settings.value.timeFormat, { dropZeroMinutes: false })}</span>
+      </div>
+      {w && (
+        <span class="wx" aria-label="Current weather">
+          <WeatherIcon code={w.code} size={3} night={!w.isDay || hour < 6 || hour >= 20} />
+          {toUnit(w.tempC, settings.value.tempUnit)}°
+        </span>
+      )}
+      <div class="controls">{Controls && <Controls />}</div>
+    </header>
+  );
+}
