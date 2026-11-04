@@ -14,7 +14,7 @@ import { lastOccurrenceOnOrBefore, occursOn } from '../lib/repeat';
  *   newer occurrence.
  * - Repeat-after-done chores: due on task.date, or `every unit` after the
  *   last completion recorded in lastDone; late when overdue.
- * - A chore completed on a day always shows (checked) on that day.
+ * - A chore completed or skipped on a day always shows on that day.
  */
 
 export type Section = PartOfDay | 'chores';
@@ -48,6 +48,15 @@ function addUnit(d: ISODate, every: number, unit: 'day' | 'week' | 'month'): ISO
   if (unit === 'week') return addDays(d, every * 7);
   const [y, m, day] = d.split('-').map(Number);
   return toISODate(new Date(y, m - 1 + every, day));
+}
+
+/**
+ * The lastDone value that made `due` a repeat-after-done chore's due date,
+ * for undoing its completion; undefined when `due` was the first one.
+ */
+export function lastDoneBefore(task: Task, due: ISODate): ISODate | undefined {
+  const r = task.repeatAfterDone!;
+  return due <= task.date ? undefined : addUnit(due, -r.every, r.unit);
 }
 
 /** Next due date of a repeat-after-done chore for one profile. */
@@ -104,10 +113,10 @@ export function occurrencesOn(day: ISODate, tasks: Task[], states: Map<string, T
     }
   }
 
-  // Chores completed on this day stay visible (checked) on it.
+  // Chores completed or skipped on this day stay visible (checked or skipped) on it.
   const byId = new Map(tasks.map((t) => [t.id, t]));
   for (const st of states.values()) {
-    if (st.status !== 'done' || st.part !== null || toISODate(new Date(st.at)) !== day) continue;
+    if (st.part !== null || toISODate(new Date(st.at)) !== day) continue;
     const task = byId.get(st.taskId);
     if (task && task.kind === 'chore' && !task.archived) add(task, st.profileId, st.date, null);
   }
@@ -123,8 +132,15 @@ function compareOccurrences(a: Occurrence, b: Occurrence): number {
   return a.task.order - b.task.order || ta - tb || a.task.createdAt - b.task.createdAt;
 }
 
-/** Occurrences belonging to a profile's column (Up for Grabs has its own). */
-export const forProfile = (occ: Occurrence[], profileId: string) => occ.filter((o) => o.profileId === profileId);
+/**
+ * Whose column an occurrence sits in: its assignee, or for an Up for Grabs
+ * chore that someone completed, the claimer (Up for Grabs keeps the rest).
+ */
+export const columnOf = (o: Occurrence) =>
+  o.profileId === UP_FOR_GRABS && o.state?.status === 'done' ? o.state.by : o.profileId;
+
+/** Occurrences belonging to a profile's column (UP_FOR_GRABS for the Up for Grabs column). */
+export const forProfile = (occ: Occurrence[], profileId: string) => occ.filter((o) => columnOf(o) === profileId);
 
 /** done/total for the progress pills; skipped occurrences do not count. */
 export function progress(occ: Occurrence[]): { done: number; total: number } {
