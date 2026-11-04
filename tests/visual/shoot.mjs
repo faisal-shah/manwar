@@ -3,7 +3,8 @@
 //   query: extra URL params, e.g. "now=2026-11-04T11:44"
 //   steps: JSON array of actions run before the shot:
 //     {"click": "<selector>"}, {"text": "<visible text to click>"}, {"wait": ms}, {"press": "Escape"}
-// Env: W, H (viewport, default 1600x1000), DPR (default 1), BASE (default http://localhost:5173), WAIT (ms after load, default 1500)
+// Env: W, H (viewport, default 1600x1000), DPR (default 1), BASE (default http://localhost:5173), WAIT (ms after load, default 1500),
+//      DEMO (demo household name, default "shots"; each name is its own emulator household)
 import { chromium } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 
@@ -22,7 +23,7 @@ const page = await browser.newPage({ viewport: { width: W, height: H }, deviceSc
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
 page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
-await page.goto(`${base}/?demo&${query}`);
+await page.goto(`${base}/?demo=${process.env.DEMO ?? 'shots'}&${query}`);
 await page.waitForSelector('.shell', { timeout: 20000 });
 await page.waitForTimeout(Number(process.env.WAIT ?? 1500));
 for (const s of steps) {

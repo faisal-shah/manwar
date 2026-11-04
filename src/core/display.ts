@@ -23,8 +23,9 @@ export function inWindow(w: TimeWindow, minutes: number): boolean {
 export const sleepForcedUntil = signal(0);
 /** Woken by a tap until this instant. */
 export const wokenUntil = signal(0);
-/** Manual theme override for this session, null = follow the schedule. */
-export const themeOverride = signal<'light' | 'dark' | null>(null);
+/** Manual theme override for this session, null = follow the schedule. `?theme=dark` sets it (screenshots, tests). */
+const themeParam = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('theme') : null;
+export const themeOverride = signal<'light' | 'dark' | null>(themeParam === 'dark' || themeParam === 'light' ? themeParam : null);
 
 const WAKE_MS = 3 * 60_000;
 

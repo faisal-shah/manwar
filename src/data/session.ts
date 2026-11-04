@@ -81,6 +81,9 @@ export async function disconnect(): Promise<void> {
   await signOut(auth);
 }
 
+/** `?demo=name` gives each demo (or test run) its own household in the emulator. */
+const demoHousehold = `demo${new URLSearchParams(location.search).get('demo') ? `-${new URLSearchParams(location.search).get('demo')}` : ''}`;
+
 /** The Auth emulator accepts unsigned custom tokens, so demo mode signs itself in. */
 function demoToken(): string {
   const b64 = (o: object) => btoa(JSON.stringify(o)).replace(/=+$/, '').replace(/\+/g, '-').replace(/\//g, '_');
@@ -91,8 +94,8 @@ function demoToken(): string {
     aud: 'https://identitytoolkit.googleapis.com/google.identity.identitytoolkit.v1.IdentityToolkit',
     iat,
     exp: iat + 3600,
-    uid: 'demo-household',
-    claims: { hid: 'demo', account: 'demo@manwar.local' },
+    uid: `demo-${demoHousehold}`,
+    claims: { hid: demoHousehold, account: 'demo@manwar.local' },
   };
   return `${b64({ alg: 'none', typ: 'JWT' })}.${b64(payload)}.`;
 }

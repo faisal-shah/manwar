@@ -8,8 +8,3 @@ export const homeTab: TabDef = {
   icon: House,
   Body: () => <Empty emoji="🚧">Home is being built.</Empty>,
 };
-
-/** Timer overlay host. */
-export function HomeOverlays() {
-  return null;
-}

@@ -1,7 +1,7 @@
 import type { TabId } from '../data/types';
 import { unassigned } from '../calendar/engine';
 import type { TabDef } from './tab';
-import { homeTab, HomeOverlays } from '../features/home';
+import { homeTab } from '../features/home';
 import { calendarTab } from '../features/calendar';
 import { listsTab } from '../features/lists';
 import { tasksTab } from '../features/tasks';
@@ -9,6 +9,7 @@ import { rewardsTab } from '../features/rewards';
 import { mealsTab } from '../features/meals';
 import { recipesTab } from '../features/recipes';
 import { MessageOverlay } from '../features/messages';
+import { TimerOverlay } from '../features/timer';
 
 /** Nav-rail order, as on the Skylight device. */
 export const TABS: TabDef[] = [homeTab, calendarTab, listsTab, tasksTab, rewardsTab, mealsTab, recipesTab];
@@ -17,7 +18,7 @@ export const TABS: TabDef[] = [homeTab, calendarTab, listsTab, tasksTab, rewards
 export function Overlays() {
   return (
     <>
-      <HomeOverlays />
+      <TimerOverlay />
       <MessageOverlay />
     </>
   );

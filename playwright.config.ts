@@ -1,17 +1,23 @@
 import { defineConfig, devices } from '@playwright/test';
 
+// PW_BASE points the suite at an already-running server (a dev server in a
+// worktree); otherwise it builds nothing and serves dist/ with vite preview.
+const external = process.env.PW_BASE;
+
 export default defineConfig({
   testDir: 'tests/e2e',
   timeout: 30_000,
   use: {
-    baseURL: 'http://127.0.0.1:4173',
+    baseURL: external ?? 'http://127.0.0.1:4173',
     ...devices['Desktop Chrome'],
-    viewport: { width: 1280, height: 800 },
+    viewport: { width: 1600, height: 1000 },
     timezoneId: 'America/Chicago',
   },
-  webServer: {
-    command: 'npx vite preview --port 4173 --strictPort --host 127.0.0.1',
-    url: 'http://127.0.0.1:4173',
-    reuseExistingServer: true,
-  },
+  webServer: external
+    ? undefined
+    : {
+        command: 'npx vite preview --port 4173 --strictPort --host 127.0.0.1',
+        url: 'http://127.0.0.1:4173',
+        reuseExistingServer: true,
+      },
 });
