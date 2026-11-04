@@ -6,3 +6,4 @@ playwright-report/
 .firebase/
 *.log
 __pycache__/
+.claude/worktrees/
