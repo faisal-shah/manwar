@@ -47,5 +47,7 @@ jobs:
           workload_identity_provider: projects/1056874888372/locations/global/workloadIdentityPools/github/providers/github
           service_account: github-deployer@manwar-home.iam.gserviceaccount.com
 
+      # --force lets a non-interactive deploy set the Artifact Registry
+      # cleanup policy for function images (and delete removed functions).
       - if: github.event_name != 'pull_request'
-        run: npx --yes firebase-tools@15 deploy --only hosting,firestore,functions --project manwar-home --non-interactive
+        run: npx --yes firebase-tools@15 deploy --only hosting,firestore,functions --project manwar-home --non-interactive --force
