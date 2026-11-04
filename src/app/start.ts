@@ -24,9 +24,36 @@ export function startApp(): void {
     startWeather();
     startIdleReturn();
   });
-  // New deploys apply on the next reload; the wall reloads itself at 3 AM.
-  const update = registerSW({ immediate: true });
-  setInterval(() => {
-    if (new Date().getHours() === 3) void update(true);
-  }, 60 * 60_000);
+  startUpdates();
+}
+
+const IDLE_MS = 2 * 60_000;
+const CHECK_MS = 30 * 60_000;
+
+/**
+ * New deploys. The service worker checks for a new version every 30 minutes;
+ * once one is waiting it is applied (page reload) as soon as nothing would be
+ * interrupted: right away before sign-in, otherwise after two idle minutes
+ * with no sheet, dialog, popover or running timer on screen.
+ */
+function startUpdates(): void {
+  let waiting = false;
+  let lastTouch = Date.now();
+  window.addEventListener('pointerdown', () => (lastTouch = Date.now()), { capture: true, passive: true });
+  const safe = () =>
+    session.value.state !== 'signedIn' || (Date.now() - lastTouch > IDLE_MS && !document.querySelector('[role="dialog"]'));
+  const tryApply = () => {
+    if (waiting && safe()) void update(true);
+  };
+  const update = registerSW({
+    immediate: true,
+    onNeedRefresh() {
+      waiting = true;
+      tryApply();
+    },
+    onRegisteredSW(_url, reg) {
+      if (reg) setInterval(() => void reg.update(), CHECK_MS);
+    },
+  });
+  setInterval(tryApply, 30_000);
 }

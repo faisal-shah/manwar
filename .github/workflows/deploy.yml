@@ -28,6 +28,8 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+        env:
+          VITE_BUILD_ID: ${{ github.sha }}
       - run: npm ci --prefix functions
       - run: npm test --prefix functions
       - uses: actions/setup-java@v5

@@ -4,6 +4,7 @@ import { requireParent, unlocked } from '../../core/lock';
 import { settings } from '../../data/store';
 import { session } from '../../data/session';
 import { version } from '../../../package.json';
+import { buildId } from '../../config';
 import { ChoiceRow, Group, PageTitle, Row, change } from './parts';
 
 /*
@@ -78,7 +79,9 @@ export function AboutPage() {
       <PageTitle>About</PageTitle>
       <Group>
         <Row label="Manwar" hint="Family wall calendar">
-          <span class="set-value">Version {version}</span>
+          <span class="set-value">
+            Version {version} ({buildId})
+          </span>
         </Row>
         <Row label="Build">
           <span class="set-value">{import.meta.env.MODE}</span>

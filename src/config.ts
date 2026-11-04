@@ -43,3 +43,6 @@ export const googleScopes = [
  */
 export const demoMode =
   import.meta.env.VITE_DEMO === '1' || (typeof location !== 'undefined' && new URLSearchParams(location.search).has('demo'));
+
+/** Build identifier (the git commit in CI), shown in Settings > About and on <html data-build>. */
+export const buildId: string = import.meta.env.VITE_BUILD_ID?.slice(0, 7) || 'dev';
