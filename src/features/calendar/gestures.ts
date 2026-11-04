@@ -16,10 +16,15 @@ export function useSwipe(ref: RefObject<HTMLElement | null>, onPage: (dir: -1 | 
     if (!el) return;
     let start: { x: number; y: number; id: number } | null = null;
     let swallowUntil = 0;
+    /** Pointers currently down; a second finger makes it a pinch, never a swipe. */
+    const active = new Set<number>();
     const down = (e: PointerEvent) => {
-      if (e.isPrimary && e.button === 0) start = { x: e.clientX, y: e.clientY, id: e.pointerId };
+      active.add(e.pointerId);
+      if (active.size > 1) start = null;
+      else if (e.isPrimary && e.button === 0) start = { x: e.clientX, y: e.clientY, id: e.pointerId };
     };
     const up = (e: PointerEvent) => {
+      active.delete(e.pointerId);
       if (!start || e.pointerId !== start.id) return;
       const dx = e.clientX - start.x;
       const dy = e.clientY - start.y;
@@ -29,7 +34,10 @@ export function useSwipe(ref: RefObject<HTMLElement | null>, onPage: (dir: -1 | 
         cb.current(dx < 0 ? 1 : -1);
       }
     };
-    const cancel = () => (start = null);
+    const cancel = (e: PointerEvent) => {
+      active.delete(e.pointerId);
+      start = null;
+    };
     const click = (e: MouseEvent) => {
       if (performance.now() < swallowUntil) {
         e.stopPropagation();
@@ -38,12 +46,12 @@ export function useSwipe(ref: RefObject<HTMLElement | null>, onPage: (dir: -1 | 
     };
     el.addEventListener('pointerdown', down);
     window.addEventListener('pointerup', up);
-    el.addEventListener('pointercancel', cancel);
+    window.addEventListener('pointercancel', cancel);
     el.addEventListener('click', click, true);
     return () => {
       el.removeEventListener('pointerdown', down);
       window.removeEventListener('pointerup', up);
-      el.removeEventListener('pointercancel', cancel);
+      window.removeEventListener('pointercancel', cancel);
       el.removeEventListener('click', click, true);
     };
   }, [ref]);
@@ -72,7 +80,8 @@ export function usePinchZoom(
       el.scrollTop = ((baseScroll + y) * next) / base - y;
     };
     let pinch: { d0: number; h0: number; s0: number } | null = null;
-    const span = (t: TouchList) => Math.abs(t[0].clientY - t[1].clientY);
+    // Finger distance in any direction: people pinch side to side as often as up and down.
+    const span = (t: TouchList) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
     const mid = (t: TouchList) => (t[0].clientY + t[1].clientY) / 2;
     const tstart = (e: TouchEvent) => {
       if (e.touches.length === 2) pinch = { d0: Math.max(span(e.touches), 1), h0: io.current.get(), s0: el.scrollTop };
@@ -91,17 +100,19 @@ export function usePinchZoom(
       const h = io.current.get();
       zoomAt(e.clientY, clamp(h * (1 - e.deltaY * 0.002)), h, el.scrollTop);
     };
-    el.addEventListener('touchstart', tstart, { passive: true });
-    el.addEventListener('touchmove', tmove, { passive: false });
-    el.addEventListener('touchend', tend);
-    el.addEventListener('touchcancel', tend);
-    el.addEventListener('wheel', wheel, { passive: false });
+    // Listen on the whole view (headers and all-day row too); scroll and scale the scroller.
+    const area = el.closest<HTMLElement>('.sched') ?? el;
+    area.addEventListener('touchstart', tstart, { passive: true });
+    area.addEventListener('touchmove', tmove, { passive: false });
+    area.addEventListener('touchend', tend);
+    area.addEventListener('touchcancel', tend);
+    area.addEventListener('wheel', wheel, { passive: false });
     return () => {
-      el.removeEventListener('touchstart', tstart);
-      el.removeEventListener('touchmove', tmove);
-      el.removeEventListener('touchend', tend);
-      el.removeEventListener('touchcancel', tend);
-      el.removeEventListener('wheel', wheel);
+      area.removeEventListener('touchstart', tstart);
+      area.removeEventListener('touchmove', tmove);
+      area.removeEventListener('touchend', tend);
+      area.removeEventListener('touchcancel', tend);
+      area.removeEventListener('wheel', wheel);
     };
   }, [ref, min, max]);
 }

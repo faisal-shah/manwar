@@ -227,3 +227,41 @@ test('zooms the schedule hours with Ctrl + wheel', async ({ page }) => {
   await expect.poll(async () => (await grid.boundingBox())!.height).toBeGreaterThan(before * 1.2);
   expect(errors).toEqual([]);
 });
+
+/**
+ * Real two-finger touch through CDP (the renderer's touch pipeline, as on the
+ * tablet). A side-to-side pinch must zoom the hours and must not page.
+ */
+for (const [name, area] of [
+  ['the hour grid', '.sched-scroll'],
+  ['the day headers', '.sched-head'],
+] as const) {
+  test(`pinches the schedule hours from ${name} without paging`, async ({ browser }) => {
+    const ctx = await browser.newContext({
+      viewport: { width: 1600, height: 1000 },
+      hasTouch: true,
+      timezoneId: 'America/Chicago',
+    });
+    const page = await ctx.newPage();
+    const errors = await open(page);
+    const grid = page.locator('.sched-grid');
+    const days = await page.locator('.sched-head').innerText();
+    const before = (await grid.boundingBox())!.height;
+    const box = (await page.locator(area).boundingBox())!;
+    const cx = box.x + box.width / 2;
+    const cy = box.y + Math.min(box.height / 2, 60);
+    const at = (d: number) => [
+      { x: cx - d, y: cy, id: 1 },
+      { x: cx + d, y: cy, id: 2 },
+    ];
+    const cdp = await ctx.newCDPSession(page);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [at(40)[0]] });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: at(40) });
+    for (let d = 40; d <= 90; d += 10) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: at(d) });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await expect.poll(async () => (await grid.boundingBox())!.height).toBeGreaterThan(before * 1.5);
+    expect(await page.locator('.sched-head').innerText()).toBe(days);
+    expect(errors).toEqual([]);
+    await ctx.close();
+  });
+}
