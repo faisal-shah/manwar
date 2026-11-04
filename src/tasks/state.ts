@@ -1,4 +1,5 @@
 import { computed } from '@preact/signals';
+import { deleteField } from 'firebase/firestore';
 import { batch, data, newId, profileById, profiles } from '../data/store';
 import {
   UP_FOR_GRABS,
@@ -7,11 +8,12 @@ import {
   type LedgerEntry,
   type LedgerReason,
   type Reward,
+  type Task,
   type TaskState,
 } from '../data/types';
 import { currentTime, today } from '../lib/clock';
 import { toISODate } from '../lib/date';
-import { forProfile, occurrencesOn, progress, type Occurrence } from './engine';
+import { forProfile, lastDoneBefore, occurrencesOn, progress, type Occurrence } from './engine';
 
 /** Reactive views of the task engine over the live store. */
 
@@ -71,17 +73,25 @@ export function completeTask(o: Occurrence, by: string = o.profileId): Promise<v
   return b.commit();
 }
 
+/**
+ * A repeat-after-done chore's completion is being reversed: put lastDone back
+ * so the occurrence is due (or late) again, unless a later completion moved it.
+ */
+function revertLastDone(b: ReturnType<typeof batch>, task: Task, st: TaskState): void {
+  if (!task.repeatAfterDone) return;
+  const key = lastDoneKey(st.profileId);
+  if (task.lastDone?.[key] !== toISODate(new Date(st.at))) return;
+  b.patch('tasks', task.id, { [`lastDone.${key}`]: lastDoneBefore(task, st.date) ?? deleteField() } as never);
+}
+
 /** Un-check: removes the state and takes the stars back (a reversing ledger entry). */
 export function uncompleteTask(o: Occurrence): Promise<void> {
   const st = o.state;
   if (!st) return Promise.resolve();
   const b = batch().remove('taskStates', st.id);
   if (st.stars > 0) b.put('ledger', ledgerEntry(st.by, -st.stars, 'untask', o.task.title, o.task.id)).stars(st.by, -st.stars);
-  if (o.task.repeatAfterDone) {
-    const prior = o.task.lastDone?.[lastDoneKey(o.profileId)];
-    if (prior === toISODate(new Date(st.at)))
-      b.patch('tasks', o.task.id, { [`lastDone.${lastDoneKey(o.profileId)}`]: o.date } as never);
-  }
+  if (st.ledgerId) b.patch('ledger', st.ledgerId, { undoneAt: currentTime() });
+  revertLastDone(b, o.task, st);
   return b.commit();
 }
 
@@ -129,7 +139,9 @@ export function undoLedgerEntry(entry: LedgerEntry): Promise<void> {
   b.patch('ledger', entry.id, { undoneAt: now });
   if (entry.reason === 'task') {
     const st = data.taskStates.value.find((s) => s.ledgerId === entry.id);
+    const task = st && data.tasks.value.find((t) => t.id === st.taskId);
     if (st) b.remove('taskStates', st.id);
+    if (st && task) revertLastDone(b, task, st);
   }
   if (entry.reason === 'redeem' && entry.ref) {
     const reward = data.rewards.value.find((r) => r.id === entry.ref);
