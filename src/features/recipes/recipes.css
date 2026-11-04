@@ -1,0 +1,227 @@
+/* Recipes tab: list on the left, the selected recipe large on the right. Shared pickers and pills come from meals.css. */
+
+.recipes {
+  display: grid;
+  grid-template-columns: 48rem minmax(0, 1fr);
+  gap: var(--gap);
+  height: 100%;
+}
+
+.recipe-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1.6rem;
+  min-height: 0;
+  padding: 2rem 2rem 0;
+  border-radius: 2.4rem;
+  background: var(--surface);
+}
+.recipe-list .cat-picker {
+  justify-content: space-between;
+}
+.rl-items {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  padding-bottom: 2rem;
+}
+.rl-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+.rl-head {
+  margin: 1rem 0 0 0.4rem;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 2.2rem;
+  color: var(--text-2);
+}
+.rl-row {
+  display: flex;
+  align-items: center;
+  gap: 1.4rem;
+  min-height: 6.4rem;
+  padding: 0 1.6rem;
+  border-radius: 1.4rem;
+  background: var(--surface-strong);
+  border: 1px solid var(--line);
+  font-size: 2rem;
+  font-weight: 500;
+  text-align: left;
+  flex: none;
+}
+.rl-row.on {
+  box-shadow: inset 0 0 0 0.2rem var(--text);
+}
+.rl-emoji {
+  width: 3.6rem;
+  text-align: center;
+  font-size: 2.8rem;
+  line-height: 1;
+  flex: none;
+}
+.rl-empty {
+  margin: 1rem 0.4rem;
+}
+
+/* Detail */
+.recipe-card {
+  min-height: 0;
+  height: 100%;
+  padding: 3rem 3.6rem 10rem;
+  border-radius: 2.4rem;
+  background: color-mix(in srgb, color-mix(in srgb, var(--c, #93d1e5) 16%, var(--tint-base)) 82%, transparent);
+  color: var(--on-tint);
+}
+.rc-head {
+  display: flex;
+  align-items: center;
+  gap: 1.4rem;
+}
+.rc-emoji {
+  font-size: 5.6rem;
+  line-height: 1;
+}
+.rc-title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 5.4rem;
+  line-height: 1.05;
+}
+.rc-btn.icon-btn {
+  width: var(--touch);
+  height: var(--touch);
+  background: var(--surface-strong);
+  color: var(--text);
+}
+.rc-btn.icon-btn.danger {
+  color: var(--danger);
+}
+.rc-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.2rem;
+  margin: 2.2rem 0 2rem;
+}
+.rc-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem 3.2rem;
+  margin-bottom: 3rem;
+  font-size: 2rem;
+  color: var(--text-2);
+}
+.rc-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 1rem;
+}
+.rc-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  gap: 4.4rem;
+}
+.rc-cols.single {
+  grid-template-columns: minmax(0, 1fr);
+}
+.rc-cols h3 {
+  margin: 0 0 1.6rem;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 3.2rem;
+}
+.rc-ingredients,
+.rc-steps {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  font-size: 2.4rem;
+}
+.rc-ingredients {
+  gap: 1.1rem;
+  line-height: 1.3;
+}
+.rc-ingredients li {
+  position: relative;
+  padding-left: 2.6rem;
+}
+.rc-ingredients li::before {
+  content: '';
+  position: absolute;
+  left: 0.4rem;
+  top: 1.05rem;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--c, #93d1e5) 74%, #000);
+}
+.rc-steps {
+  gap: 2rem;
+  line-height: 1.45;
+}
+.rc-steps li {
+  display: flex;
+  gap: 1.6rem;
+}
+.rc-n {
+  flex: none;
+  width: 4rem;
+  height: 4rem;
+  margin-top: -0.1rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--c, #93d1e5) 74%, #000);
+  color: #fff;
+  font-size: 1.9rem;
+  font-weight: 700;
+}
+
+/* Recipe editor */
+.recipe-editor .emoji-btn {
+  width: 5.6rem;
+  height: 5.6rem;
+  flex: none;
+  border-radius: 1.2rem;
+  background: var(--surface-solid);
+  border: 1.5px solid var(--line-strong);
+  font-size: 3rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-2);
+}
+.re-meta {
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 0 4.8rem;
+}
+.re-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+}
+.re-cols textarea {
+  min-height: 24rem;
+}
+.re-error {
+  color: var(--danger);
+  font-size: 1.5rem;
+}
+
+/* Plan a recipe */
+.plan-recipe {
+  width: 60rem;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+}
