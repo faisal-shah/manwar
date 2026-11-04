@@ -252,8 +252,9 @@ function PinPadHost() {
     if (next.length === 4) {
       if (await checkPin(next)) req.resolve(true);
       else {
+        // Clear at once (the shake shows the miss) so digits typed next start a fresh entry.
         setBad(true);
-        setTimeout(() => setPin(''), 350);
+        setPin('');
       }
     }
   };

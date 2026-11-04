@@ -3,6 +3,9 @@ import { settings } from '../data/store';
 import type { TabId } from '../data/types';
 import { currentTime } from '../lib/clock';
 
+/** Rail order; the fallback when the open tab is hidden is the first one still shown. */
+const TAB_ORDER: TabId[] = ['home', 'calendar', 'lists', 'tasks', 'rewards', 'meals', 'recipes'];
+
 export const activeTab = signal<TabId>('calendar');
 /** Settings sheet and Sleep popover, opened from the bottom of the rail. */
 export const settingsOpen = signal(false);
@@ -24,6 +27,7 @@ export function startIdleReturn(): void {
   }, 15_000);
   // Never leave the wall on a tab that was just hidden.
   effect(() => {
-    if (settings.value.hiddenTabs.includes(activeTab.value)) activeTab.value = 'calendar';
+    const hidden = settings.value.hiddenTabs;
+    if (hidden.includes(activeTab.value)) activeTab.value = TAB_ORDER.find((t) => !hidden.includes(t)) ?? 'calendar';
   });
 }
