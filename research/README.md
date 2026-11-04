@@ -148,4 +148,4 @@ flowchart LR
 | APIs | Calendar, Functions, Cloud Build, Artifact Registry, Run, Eventarc, Secret Manager, Scheduler, IAM credentials, STS, Budgets |
 | Deploy identity | `github-deployer@manwar-home.iam.gserviceaccount.com` via Workload Identity Federation pool `github`, provider `github`, restricted to `faisal-shah/manwar` |
 | Functions runtime | `manwar-functions@manwar-home.iam.gserviceaccount.com` (Firestore user, Secret accessor, token creator on itself for custom tokens) |
-| OAuth | The web client Firebase auto-created when Google sign-in was enabled; secret in Secret Manager (`GOOGLE_OAUTH_CLIENT_SECRET`); origins `manwar-home.firebaseapp.com` and `localhost`, so the app is served from firebaseapp.com |
+| OAuth | The web client Firebase auto-created when Google sign-in was enabled; secret in Secret Manager (`GOOGLE_OAUTH_CLIENT_SECRET`); origins `manwar-home.firebaseapp.com` and `localhost`, so the app is served from firebaseapp.com; consent screen External, In production (refresh tokens do not expire after 7 days) |
