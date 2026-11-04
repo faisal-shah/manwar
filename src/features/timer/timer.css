@@ -1,0 +1,225 @@
+/* Timer: top-bar button, minutes keypad, full-screen running timer. */
+
+@property --left {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 1;
+}
+@property --pie {
+  syntax: '<color>';
+  inherits: false;
+  initial-value: #2177ae;
+}
+
+.timer-btn {
+  height: var(--touch);
+  padding: 0 2rem;
+  font-size: 1.6rem;
+  color: var(--text);
+}
+
+/* Keypad */
+.timer-entry {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 1.2rem;
+  margin: 0 0 2.4rem;
+  font-family: var(--font-display);
+}
+.timer-entry span {
+  font-size: 9rem;
+  line-height: 1;
+  min-width: 6rem;
+  text-align: right;
+}
+.timer-entry span.placeholder {
+  color: var(--text-3);
+}
+.timer-entry small {
+  font-size: 3rem;
+  color: var(--text-2);
+}
+.timer-keys button.word {
+  font-size: 1.8rem;
+  font-weight: 600;
+}
+.timer-keys button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.timer-hint {
+  text-align: center;
+  margin: 2rem 0 0;
+  font-size: 1.5rem;
+}
+.modal:has(.timer-keys) .btn {
+  min-height: var(--touch);
+  min-width: 14rem;
+  font-size: 1.8rem;
+}
+
+/* Full-screen layer */
+.timer-layer {
+  --timer-track: color-mix(in srgb, var(--accent) 10%, var(--sheet));
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  background: var(--sheet);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fade-in 0.2s ease;
+}
+.timer-close {
+  position: absolute;
+  top: 3rem;
+  left: 3rem;
+  width: 8rem;
+  height: 8rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+}
+.timer-close:active {
+  background: color-mix(in srgb, var(--text) 12%, transparent);
+}
+
+.timer-pie {
+  width: 72rem;
+  height: 72rem;
+  border-radius: 50%;
+  background: conic-gradient(var(--pie) calc(var(--left) * 360deg), var(--timer-track) 0);
+  transition:
+    --left 1s linear,
+    --pie 1.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.timer-lead {
+  font-family: var(--font-display);
+  font-size: 30rem;
+  line-height: 1;
+  color: var(--surface-solid);
+  animation: timer-lead 0.9s ease-out both;
+}
+@keyframes timer-lead {
+  from {
+    opacity: 0;
+    scale: 1.35;
+  }
+  30% {
+    opacity: 1;
+    scale: 1;
+  }
+}
+
+.timer-readout {
+  position: absolute;
+  left: 3rem;
+  bottom: 3rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+  min-width: 42rem;
+}
+.timer-clock {
+  display: flex;
+  justify-content: center;
+  gap: 3.2rem;
+  padding: 2.8rem 3.6rem 2.2rem;
+  border-radius: 3.2rem;
+  background: var(--surface-strong);
+  box-shadow: var(--shadow-soft);
+}
+.timer-clock .num {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 14rem;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.timer-clock .secs .num {
+  color: var(--text-3);
+}
+.timer-clock small {
+  display: block;
+  margin-top: 1rem;
+  text-align: center;
+  font-size: 2rem;
+  font-weight: 600;
+}
+.timer-total {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 7.2rem;
+  padding: 0 2.4rem;
+  border-radius: 99rem;
+  background: var(--surface-strong);
+  box-shadow: var(--shadow-soft);
+  font-size: 2.6rem;
+  font-weight: 600;
+  color: var(--text-2);
+}
+.timer-total .muted {
+  font-weight: 500;
+  font-size: 2rem;
+  white-space: pre;
+}
+
+/* Time's up */
+.timer-done {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3.2rem;
+}
+.timer-ring {
+  width: 56rem;
+  height: 56rem;
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2rem;
+  font-family: var(--font-display);
+  font-size: 9rem;
+  line-height: 1;
+  animation: timer-pulse 1.6s ease-out infinite;
+}
+@keyframes timer-pulse {
+  from {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--c) 45%, transparent);
+  }
+  to {
+    box-shadow: 0 0 0 6rem color-mix(in srgb, var(--c) 0%, transparent);
+  }
+}
+.timer-done-sub {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 3.2rem;
+  color: var(--text-2);
+}
+.timer-done-btn {
+  min-height: 8rem;
+  min-width: 36rem;
+  font-size: 2.8rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .timer-ring,
+  .timer-lead {
+    animation: none;
+  }
+  .timer-pie {
+    transition: none;
+  }
+}

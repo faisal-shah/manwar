@@ -25,6 +25,7 @@ export const DEFAULT_SETTINGS: Settings = {
   weather: null,
   tempUnit: 'f',
   hiddenTabs: [],
+  homeHiddenPanes: [],
   textScale: 'medium',
   night: { enabled: false, from: '20:30', to: '06:30' },
   sleep: { enabled: false, from: '22:30', to: '06:00' },

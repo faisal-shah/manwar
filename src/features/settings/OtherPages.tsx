@@ -1,0 +1,100 @@
+import type { ComponentChildren, FunctionComponent } from 'preact';
+import { demoMode } from '../../config';
+import { requireParent, unlocked } from '../../core/lock';
+import { settings } from '../../data/store';
+import { session } from '../../data/session';
+import { version } from '../../../package.json';
+import { ChoiceRow, Group, PageTitle, Row, change } from './parts';
+
+/*
+ * The Meals feature owns its category editor. The glob resolves to the
+ * module when src/features/meals/MealCategoriesEditor.tsx exists and to
+ * nothing otherwise, so this page builds with or without it.
+ */
+const mealEditors = import.meta.glob<{ MealCategoriesEditor: FunctionComponent }>('../meals/MealCategoriesEditor.tsx', {
+  eager: true,
+});
+const MealCategoriesEditor = Object.values(mealEditors)[0]?.MealCategoriesEditor;
+
+/** Asks for the PIN before any tap inside a component that writes settings itself. */
+function ParentGuard({ children }: { children: ComponentChildren }) {
+  return (
+    <div
+      onClickCapture={(e) => {
+        if (unlocked.value) return;
+        e.preventDefault();
+        e.stopPropagation();
+        void requireParent('Enter the PIN to change settings.');
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+export function MealsPage() {
+  return (
+    <>
+      <PageTitle>Meals</PageTitle>
+      {MealCategoriesEditor ? (
+        <ParentGuard>
+          <MealCategoriesEditor />
+        </ParentGuard>
+      ) : (
+        <Group>
+          <Row
+            label="Meal categories"
+            hint="Names, colors and which meals show on the calendar are edited here with the Meals tab."
+          />
+        </Group>
+      )}
+    </>
+  );
+}
+
+export function TasksPage() {
+  const s = settings.value;
+  return (
+    <>
+      <PageTitle>Tasks</PageTitle>
+      <Group hint="Routines can show Morning, Afternoon and Evening all day, or only the part of the day it is now.">
+        <ChoiceRow
+          label="Parts of the day"
+          value={s.tasksShowAllParts ? 'all' : 'current'}
+          options={[
+            { value: 'all', label: 'All parts' },
+            { value: 'current', label: 'Current part only' },
+          ]}
+          onChange={(v) => void change({ tasksShowAllParts: v === 'all' })}
+        />
+      </Group>
+    </>
+  );
+}
+
+export function AboutPage() {
+  return (
+    <>
+      <PageTitle>About</PageTitle>
+      <Group>
+        <Row label="Manwar" hint="Family wall calendar">
+          <span class="set-value">Version {version}</span>
+        </Row>
+        <Row label="Build">
+          <span class="set-value">{import.meta.env.MODE}</span>
+        </Row>
+        <Row label="Household account">
+          <span class="set-value">{session.value.account ?? 'Not connected'}</span>
+        </Row>
+      </Group>
+      {demoMode && (
+        <Group title="Demo mode">
+          <Row
+            label="Demo data"
+            hint="This wall runs on the local Firebase emulators with a demo family and a fake calendar. Restarting the emulators resets the demo households, and clearing this browser's site data resets the fake calendar's events. A new ?demo=name in the address opens a fresh household."
+          />
+        </Group>
+      )}
+    </>
+  );
+}

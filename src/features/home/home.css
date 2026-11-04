@@ -1,0 +1,100 @@
+/* Home dashboard: calendar pane (left), Today's tasks and Lists (right). */
+
+.home {
+  display: grid;
+  grid-template-columns: 55fr 45fr;
+  gap: var(--gap);
+  height: 100%;
+}
+.home-solo {
+  grid-template-columns: 1fr;
+}
+.home-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  min-width: 0;
+  min-height: 0;
+}
+.home-side > .home-pane {
+  flex: 1;
+}
+
+.home-pane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 2.4rem;
+  overflow: hidden;
+}
+.home-pane-head {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex: none;
+  height: 5.6rem;
+  padding: 0 2.2rem;
+  color: var(--text);
+}
+.home-pane-head h2 {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.home-pane-body {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Top-bar controls */
+.home-ctl {
+  height: var(--touch);
+  padding: 0 2rem;
+  font-size: 1.6rem;
+  color: var(--text);
+}
+.customize {
+  position: relative;
+}
+.customize-menu {
+  position: absolute;
+  top: calc(100% + 1rem);
+  right: 0;
+  z-index: 56;
+  width: 38rem;
+  padding: 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  background: var(--sheet);
+  border-radius: 2.4rem;
+  box-shadow: var(--shadow);
+  transform-origin: top right;
+  animation: pop-in 0.15s ease;
+}
+.customize-row {
+  display: flex;
+  align-items: center;
+  gap: 1.6rem;
+  min-height: 7.2rem;
+  padding: 0 1.8rem 0 2rem;
+  border-radius: 1.6rem;
+  background: color-mix(in srgb, var(--text) 4%, var(--sheet));
+  font-size: 1.8rem;
+  font-weight: 500;
+}
+.customize-row > span:first-of-type {
+  flex: 1;
+  text-align: left;
+}
+.customize-row .toggle {
+  display: block;
+}

@@ -9,7 +9,7 @@ import { setBrightness, wakeScreen } from './kiosk';
  * Display states: day (light), night (dark theme, dimmed) and sleep (black,
  * backlight off). Night and sleep follow their daily windows; "Sleep now"
  * forces sleep until the next wake time; a tap during sleep wakes the screen
- * for a few minutes.
+ * for a few minutes; a running timer holds scheduled sleep off.
  */
 
 export function inWindow(w: TimeWindow, minutes: number): boolean {
@@ -23,6 +23,8 @@ export function inWindow(w: TimeWindow, minutes: number): boolean {
 export const sleepForcedUntil = signal(0);
 /** Woken by a tap until this instant. */
 export const wokenUntil = signal(0);
+/** Scheduled sleep waits until this instant (a running timer holds it to 5 minutes past its end). */
+export const sleepHeldUntil = signal(0);
 /** Manual theme override for this session, null = follow the schedule. `?theme=dark` sets it (screenshots, tests). */
 const themeParam = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('theme') : null;
 export const themeOverride = signal<'light' | 'dark' | null>(themeParam === 'dark' || themeParam === 'light' ? themeParam : null);
@@ -33,6 +35,7 @@ export const sleeping = computed(() => {
   const t = now.value.getTime();
   if (t < wokenUntil.value) return false;
   if (t < sleepForcedUntil.value) return true;
+  if (t < sleepHeldUntil.value) return false;
   return inWindow(settings.value.sleep, minutesOfDay(now.value));
 });
 
