@@ -1,0 +1,162 @@
+/* Messages: top-bar button, composer, full-screen sticky note. */
+
+.message-btn {
+  height: var(--touch);
+  padding: 0 2rem;
+  font-size: 1.6rem;
+  color: var(--text);
+}
+
+/* Composer */
+.message-input {
+  min-height: 18rem;
+  font-family: var(--font-display);
+  font-size: 2.6rem;
+}
+.message-count {
+  align-self: flex-end;
+  font-size: 1.35rem;
+  color: var(--text-3);
+}
+.message-switch {
+  display: flex;
+  align-items: center;
+  gap: 1.6rem;
+  width: 100%;
+  min-height: 7.2rem;
+  padding: 1.2rem 1.8rem;
+  border-radius: 1.4rem;
+  background: var(--surface-solid);
+  text-align: left;
+  font-weight: 500;
+}
+.message-switch > span:first-child {
+  flex: 1;
+}
+.message-switch small {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 1.35rem;
+  font-weight: 400;
+  color: var(--text-2);
+}
+.message-switch .toggle {
+  display: block;
+}
+.message-foot-btn {
+  min-height: var(--touch);
+  min-width: 14rem;
+  font-size: 1.8rem;
+}
+
+/* Sticky note */
+.message-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 75;
+  background: var(--scrim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fade-in 0.2s ease;
+}
+.message-note {
+  --fold: 14rem;
+  position: relative;
+  width: 128rem;
+  max-width: calc(100vw - 8rem);
+  height: 82rem;
+  max-height: calc(100vh - 8rem);
+  padding: 8rem 12rem;
+  border-radius: 2.4rem;
+  background: var(--c);
+  color: var(--text);
+  clip-path: polygon(0 0, calc(100% - var(--fold)) 0, 100% var(--fold), 100% 100%, 0 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: pop-in 0.22s ease;
+}
+.message-note::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: var(--fold);
+  height: var(--fold);
+  border-bottom-left-radius: 2.4rem;
+  background: color-mix(in srgb, var(--c) 78%, var(--text));
+  clip-path: polygon(0 0, 100% 100%, 0 100%);
+}
+:root[data-theme='dark'] .message-note {
+  background: color-mix(in srgb, var(--c) 24%, var(--tint-base));
+}
+:root[data-theme='dark'] .message-note::after {
+  background: color-mix(in srgb, var(--c) 44%, var(--tint-base));
+}
+.message-content {
+  display: flex;
+  flex-direction: column;
+  gap: 3.2rem;
+  width: 100%;
+  max-width: 92rem;
+}
+.message-text {
+  margin: 0;
+  font-family: var(--font-display);
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+.message-text.size-xl {
+  font-size: 7.2rem;
+}
+.message-text.size-lg {
+  font-size: 5.6rem;
+}
+.message-text.size-md {
+  font-size: 4.4rem;
+}
+.message-meta {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 1.2rem;
+  font-family: var(--font-display);
+  font-size: 2.8rem;
+  color: var(--text-2);
+}
+.message-actions {
+  display: flex;
+  gap: 2rem;
+  margin-top: 0.8rem;
+}
+.message-ok {
+  flex: 1;
+  max-width: 60rem;
+  height: 8.8rem;
+  border-radius: 99rem;
+  background: var(--surface-solid);
+  font-size: 2.8rem;
+  font-weight: 600;
+  box-shadow: var(--shadow-soft);
+}
+.message-play {
+  width: 8.8rem;
+  height: 8.8rem;
+  border-radius: 50%;
+  background: var(--surface-solid);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-soft);
+}
+.message-ok:active,
+.message-play:active {
+  transform: scale(0.97);
+}
+.message-more {
+  margin: 0;
+  font-size: 1.8rem;
+  color: var(--text-2);
+}

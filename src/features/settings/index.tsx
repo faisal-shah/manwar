@@ -1,27 +1,70 @@
-import { sleepNow } from '../../core/display';
-import { Button } from '../../ui/controls';
-import { Modal, Sheet } from '../../ui/overlays';
+import { signal } from '@preact/signals';
+import type { ComponentType, FunctionComponent } from 'preact';
+import { useEffect, useState } from 'preact/hooks';
+import { CalendarDays, CalendarSync, CloudSun, Info, ListChecks, Lock, Monitor, Users, Utensils } from 'lucide-preact';
+import { requireParent, unlocked } from '../../core/lock';
+import { Sheet } from '../../ui/overlays';
+import { CalendarPage } from './CalendarPage';
+import { DisplayPage } from './DisplayPage';
+import { GooglePage } from './GooglePage';
+import { LockPage } from './LockPage';
+import { AboutPage, MealsPage, TasksPage } from './OtherPages';
+import { ProfilesPage } from './ProfilesPage';
+import { WeatherPage } from './WeatherPage';
+import './settings.css';
 
-export function SettingsSheet({ onClose }: { onClose: () => void }) {
-  return (
-    <Sheet title="Settings" onClose={onClose}>
-      <p class="muted">Settings are being built.</p>
-    </Sheet>
-  );
+export { SleepMenu } from './SleepMenu';
+
+interface PageDef {
+  id: string;
+  label: string;
+  icon: ComponentType<{ size?: number | string; strokeWidth?: number }>;
+  Page: FunctionComponent<{ onClose: () => void }>;
 }
 
-export function SleepMenu({ onClose }: { onClose: () => void }) {
+const PAGES: PageDef[] = [
+  { id: 'profiles', label: 'Profiles', icon: Users, Page: ProfilesPage },
+  { id: 'google', label: 'Google Calendar', icon: CalendarSync, Page: GooglePage },
+  { id: 'calendar', label: 'Calendar', icon: CalendarDays, Page: CalendarPage },
+  { id: 'display', label: 'Display', icon: Monitor, Page: DisplayPage },
+  { id: 'weather', label: 'Weather', icon: CloudSun, Page: WeatherPage },
+  { id: 'meals', label: 'Meals', icon: Utensils, Page: MealsPage },
+  { id: 'lock', label: 'Parental lock', icon: Lock, Page: LockPage },
+  { id: 'tasks', label: 'Tasks', icon: ListChecks, Page: TasksPage },
+  { id: 'about', label: 'About', icon: Info, Page: AboutPage },
+];
+
+/** The last page shown, so reopening Settings returns to it. */
+const page = signal(PAGES[0].id);
+
+/** The rail's Settings: behind the PIN when the lock is on. */
+export function SettingsSheet({ onClose }: { onClose: () => void }) {
+  const [allowed, setAllowed] = useState(() => unlocked.value);
+  useEffect(() => {
+    if (!allowed) void requireParent('Enter the PIN to open Settings.').then((ok) => (ok ? setAllowed(true) : onClose()));
+  }, []);
+  if (!allowed) return null;
+  const current = PAGES.find((p) => p.id === page.value) ?? PAGES[0];
   return (
-    <Modal title="Sleep" onClose={onClose}>
-      <Button
-        variant="primary"
-        onClick={() => {
-          sleepNow();
-          onClose();
-        }}
-      >
-        Enter sleep mode now
-      </Button>
-    </Modal>
+    <Sheet title="Settings" wide onClose={onClose}>
+      <div class="settings">
+        <nav class="set-menu" aria-label="Settings pages">
+          {PAGES.map((p) => (
+            <button
+              type="button"
+              class={p.id === current.id ? 'on' : ''}
+              aria-current={p.id === current.id ? 'page' : undefined}
+              onClick={() => (page.value = p.id)}
+            >
+              <p.icon size="2.2rem" strokeWidth={1.9} />
+              {p.label}
+            </button>
+          ))}
+        </nav>
+        <div class="set-page scroll" key={current.id}>
+          <current.Page onClose={onClose} />
+        </div>
+      </div>
+    </Sheet>
   );
 }

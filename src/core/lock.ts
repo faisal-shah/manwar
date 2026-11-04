@@ -1,5 +1,7 @@
 import { computed, signal } from '@preact/signals';
+import { deleteField } from 'firebase/firestore';
 import { saveSettings, settings } from '../data/store';
+import type { Settings } from '../data/types';
 import { currentTime, nowMs } from '../lib/clock';
 
 /**
@@ -57,13 +59,17 @@ export async function asParent(fn: () => unknown, reason?: string): Promise<void
 
 export async function setPin(pin: string | null): Promise<void> {
   if (!pin) {
-    await saveSettings({ lock: { relockMinutes: settings.value.lock.relockMinutes } });
+    // saveSettings merges nested maps, so the PIN fields must be deleted explicitly.
+    const lock = { relockMinutes: settings.value.lock.relockMinutes, pinHash: deleteField(), salt: deleteField() };
+    await saveSettings({ lock: lock as unknown as Settings['lock'] });
     return;
   }
   if (!/^\d{4}$/.test(pin)) throw new Error('The PIN must be 4 digits.');
   const salt = crypto.randomUUID();
-  await saveSettings({ lock: { ...settings.value.lock, salt, pinHash: await hash(salt, pin) } });
+  const pinHash = await hash(salt, pin);
+  // Stay unlocked from the moment the lock turns on, not from the server's ack.
   extend();
+  await saveSettings({ lock: { ...settings.value.lock, salt, pinHash } });
 }
 
 export function lockNow(): void {

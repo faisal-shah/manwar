@@ -205,6 +205,8 @@ export interface Message {
   from?: string;
   createdAt: number;
   dismissedAt?: number;
+  /** Speak the text (Web Speech) when it first appears on the wall. */
+  readAloud?: boolean;
 }
 
 /**
@@ -224,6 +226,8 @@ export const EVERYONE = '*';
 
 export type TabId = 'home' | 'calendar' | 'lists' | 'tasks' | 'rewards' | 'meals' | 'recipes';
 export type CalendarView = 'schedule' | 'day' | 'week' | 'month';
+/** Home's optional side panes (the calendar pane is always shown). */
+export type HomePane = 'tasks' | 'lists';
 
 export interface TimeWindow {
   enabled: boolean;
@@ -265,6 +269,8 @@ export interface Settings {
   tempUnit: 'f' | 'c';
   // Display
   hiddenTabs: TabId[];
+  /** Home panes turned off with Customize. */
+  homeHiddenPanes: HomePane[];
   textScale: 'small' | 'medium' | 'large';
   night: TimeWindow;
   sleep: TimeWindow;
