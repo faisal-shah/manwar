@@ -29,8 +29,14 @@ Recipes, Sleep, Settings. Not built: Photos, Disney, Magic Import, Sidekick.
   and `http://localhost` (any port), not web.app, so the canonical origin is
   `manwar-home.firebaseapp.com` and `main.tsx` forwards web.app there. Editing
   the client's origins needs the Cloud Console (no public API).
-- Household Google account: `household@example.com` (the only account
-  `connectGoogle` accepts).
+- Accounts: each connected Google account is its own household (`hid` =
+  `g` + the Google subject id); the Firestore rules keep households apart.
+  Only accounts in the Secret Manager secret `ALLOWED_ACCOUNTS` (emails,
+  comma separated) may connect or get Calendar tokens, so strangers cannot
+  run up the bill. Change it with
+  `gcloud secrets versions add ALLOWED_ACCOUNTS --data-file=- --project manwar-home --account faisal.shah@gmail.com`
+  and redeploy the Functions (re-run the workflow). No account names belong
+  in the repo.
 - Budget alert "manwar-home monthly", $10.
 
 ## Architecture

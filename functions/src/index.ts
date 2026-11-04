@@ -1,22 +1,29 @@
 import { initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
-import { defineList, defineSecret, defineString } from 'firebase-functions/params';
+import { defineSecret, defineString } from 'firebase-functions/params';
 import { HttpsError, onCall, type CallableOptions } from 'firebase-functions/v2/https';
 import { OAuth2Client } from 'google-auth-library';
-import { householdIdFor, isAllowedAccount } from './policy.js';
+import { householdIdFor, isAllowedAccount, parseAccountList } from './policy.js';
 
 initializeApp();
 const db = getFirestore();
 
 const CLIENT_ID = defineString('GOOGLE_OAUTH_CLIENT_ID');
 const CLIENT_SECRET = defineSecret('GOOGLE_OAUTH_CLIENT_SECRET');
-const HOUSEHOLD_EMAILS = defineList('HOUSEHOLD_EMAILS');
+/**
+ * Google accounts allowed to use this deployment (emails, comma separated),
+ * so strangers cannot run up the project's bill. Kept in Secret Manager, not
+ * the repo; a new version takes effect on the next deploy.
+ */
+const ALLOWED_ACCOUNTS = defineSecret('ALLOWED_ACCOUNTS');
+const allowed = (email: string) => isAllowedAccount(email, parseAccountList(ALLOWED_ACCOUNTS.value()));
+const NOT_ALLOWED = 'This Google account is not on the allowlist for this Manwar. Ask its owner to add it.';
 
 const opts: CallableOptions = {
   region: 'us-central1',
   serviceAccount: 'manwar-functions@manwar-home.iam.gserviceaccount.com',
-  secrets: [CLIENT_SECRET],
+  secrets: [CLIENT_SECRET, ALLOWED_ACCOUNTS],
   cors: true,
   maxInstances: 3,
   memory: '256MiB',
@@ -30,7 +37,9 @@ const oauth = () => new OAuth2Client(CLIENT_ID.value(), CLIENT_SECRET.value(), '
 
 /**
  * Exchange the OAuth code from the tablet's sign-in popup for tokens, keep the
- * refresh token server-side, and sign the tablet in as the household.
+ * refresh token server-side, and sign the tablet in to that Google account's
+ * household (created on its first connection). Only allowlisted accounts may
+ * connect; the Firestore rules keep households apart.
  */
 export const connectGoogle = onCall<{ code?: unknown }>(opts, async (req) => {
   const code = req.data?.code;
@@ -49,8 +58,7 @@ export const connectGoogle = onCall<{ code?: unknown }>(opts, async (req) => {
   const p = ticket.getPayload();
   if (!p?.sub || !p.email || p.email_verified !== true)
     throw new HttpsError('permission-denied', 'The Google account has no verified email.');
-  if (!isAllowedAccount(p.email, HOUSEHOLD_EMAILS.value()))
-    throw new HttpsError('permission-denied', `${p.email} is not this household's Google account.`);
+  if (!allowed(p.email)) throw new HttpsError('permission-denied', NOT_ALLOWED);
 
   const hid = householdIdFor(p.sub);
   const ref = tokenDoc(hid);
@@ -80,7 +88,10 @@ export const googleAccessToken = onCall(opts, async (req) => {
   const snap = await tokenDoc(hid).get();
   const refreshToken = snap.get('refreshToken');
   if (typeof refreshToken !== 'string')
-    throw new HttpsError('failed-precondition', 'Google is not connected. Connect the household account again.');
+    throw new HttpsError('failed-precondition', 'Google is not connected. Connect the Google account again.');
+  // Removing an account from the allowlist cuts off its calendar access too.
+  const account = snap.get('account');
+  if (typeof account !== 'string' || !allowed(account)) throw new HttpsError('permission-denied', NOT_ALLOWED);
 
   const client = oauth();
   client.setCredentials({ refresh_token: refreshToken });
@@ -91,7 +102,7 @@ export const googleAccessToken = onCall(opts, async (req) => {
   } catch (e) {
     if (String(e).includes('invalid_grant')) {
       await tokenDoc(hid).update({ refreshToken: null, revokedAt: Date.now() });
-      throw new HttpsError('failed-precondition', 'Google access was revoked. Connect the household account again.');
+      throw new HttpsError('failed-precondition', 'Google access was revoked. Connect the Google account again.');
     }
     throw new HttpsError('unavailable', 'Could not reach Google. Try again shortly.');
   }

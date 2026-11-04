@@ -1,7 +1,7 @@
 import { signal } from '@preact/signals';
 import { onAuthStateChanged, signInWithCustomToken, signOut } from 'firebase/auth';
 import { httpsCallable } from 'firebase/functions';
-import { demoMode, googleClientId, googleScopes, householdEmail } from '../config';
+import { demoMode, googleClientId, googleScopes } from '../config';
 import { auth, functions } from './firebase';
 import { closeHousehold, openHousehold } from './store';
 
@@ -35,7 +35,6 @@ interface GisOauth2 {
     client_id: string;
     scope: string;
     ux_mode: 'popup';
-    login_hint?: string;
     select_account?: boolean;
     callback: (r: CodeResponse) => void;
     error_callback?: (e: { type: string }) => void;
@@ -68,7 +67,7 @@ function loadGis(): Promise<void> {
 
 const fail = (error: string) => (session.value = { state: 'error', error });
 
-/** Open Google's consent popup for the household account. Must run in a tap handler. */
+/** Open Google's account chooser and consent popup. Must run in a tap handler. */
 export function startGoogleConnect(): void {
   const oauth2 = window.google?.accounts?.oauth2;
   if (!oauth2) {
@@ -81,7 +80,6 @@ export function startGoogleConnect(): void {
       client_id: googleClientId,
       scope: googleScopes.join(' '),
       ux_mode: 'popup',
-      login_hint: householdEmail,
       callback: (r) => {
         if (r.code) void exchange(r.code);
         else fail(`Google sign-in did not finish (${r.error_description ?? r.error ?? 'no code'}).`);

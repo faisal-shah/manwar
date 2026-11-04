@@ -127,7 +127,7 @@ flowchart LR
 |---|---|
 | Scope | Calendar, Lists, Tasks, Rewards, Meals, Recipes, Home, Sleep, Settings. No Photos, Disney, Magic Import, Sidekick |
 | App data | Firestore with offline persistence (not tablet-only storage) |
-| Household Google account | `household@example.com`; events created on the tablet are written to its calendars |
+| Google account | Whatever account the wall signs in with; each account is its own household, and events created on the tablet are written to its calendars |
 | Event-to-profile association | Per event, stored by the app (Firestore, keyed by Google event id; series-level for recurring events). No automatic rules: unassigned events go to a **triage queue** where a parent assigns them |
 | Tablet | Android, landscape, Fully Kiosk Browser |
 | Additions beyond Skylight | Night/dark mode, star history ledger with undo, parent PIN with kid check-only mode |

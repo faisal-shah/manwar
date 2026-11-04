@@ -35,11 +35,18 @@ flowchart LR
 
 ### Who an event belongs to
 
-Events live in the household Google account (`household@example.com`).
-On the wall, each event is assigned to one or more people (or Everyone); the
-assignment is stored by the app and never shows in Google Calendar. Events
+Events live in the Google account the wall is signed in with. On the wall,
+each event is assigned to one or more people (or Everyone); the assignment is
+stored by the app and never shows in Google Calendar. Events
 that arrive from elsewhere start unassigned: they show in grey and wait in
 **Calendar → To assign** until a parent picks who they are for.
+
+### Who can sign in
+
+Any Google account can be the wall's account, but only accounts on the
+deployment's allowlist can connect (the `ALLOWED_ACCOUNTS` secret in the
+Firebase project's Secret Manager; see [CLAUDE.md](CLAUDE.md)). Everyone else
+gets a "not on the allowlist" message, so strangers cannot use the backend.
 
 ### Kid mode
 
@@ -56,17 +63,17 @@ has been idle for a few minutes.
    Google consent window); Web Content Settings → **Autoplay audio** on (chimes);
    Advanced Web Settings → **Enable JavaScript Interface** on (lets the app dim
    and blank the screen at night).
-3. Open the app and tap **Connect Google account**. Sign in as
-   `household@example.com`. Google warns that the app is unverified
-   (it is private to this family): choose **Advanced → Go to Manwar**, then
-   allow calendar access.
+3. Open the app, tap **Connect Google account** and sign in with the Google
+   account whose calendars the wall should show (a shared family account
+   works well). Google warns that the app is unverified: choose
+   **Advanced → Go to Manwar**, then allow calendar access. Each Google
+   account gets its own household: its own people, tasks, lists and meals.
 4. In Settings, add the family's profiles, pick the weather location and set a
    parental PIN.
 
-To add events from a phone, create them in the household Google account's
-calendar, or invite `household@example.com` to an event from your own
-Google account. To have a whole personal calendar appear, share it with that
-account.
+To add events from a phone, create them in that Google account's calendar,
+or invite that account to an event from your own Google account. To have a
+whole personal calendar appear, share it with that account.
 
 ## Development
 

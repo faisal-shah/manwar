@@ -27,13 +27,13 @@ function ConnectScreen() {
     <div class="connect">
       <h1>Manwar</h1>
       {busy ? (
-        <p>{s.state === 'connecting' ? 'Connecting the household Google account…' : 'Loading…'}</p>
+        <p>{s.state === 'connecting' ? 'Connecting your Google account…' : 'Loading…'}</p>
       ) : (
         <>
           <p>
             {demoMode
               ? 'Starting the demo household…'
-              : 'Connect the household Google account. Its calendars appear on this wall, and events added here are saved to it.'}
+              : 'Sign in with the Google account whose calendars this wall should show. Events added here are saved to it.'}
           </p>
           {s.state === 'error' && <p class="error">{s.error}</p>}
           {!demoMode && (

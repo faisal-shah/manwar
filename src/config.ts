@@ -23,9 +23,6 @@ export const googleClientId = '1056874888372-5akc9aoc2ouj70gck1heqosn74ugfqpq.ap
 
 export const canonicalHost = 'manwar-home.firebaseapp.com';
 
-/** The Google account the wall tablet connects to. Pre-selected in the consent popup. */
-export const householdEmail = 'household@example.com';
-
 export const functionsRegion = 'us-central1';
 
 /** Calendar scopes: read/write events on every calendar, list the account's calendars. */
