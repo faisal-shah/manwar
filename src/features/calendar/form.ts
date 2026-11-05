@@ -1,6 +1,6 @@
 import type { CalEvent, EventDraft } from '../../calendar/types';
 import type { HHMM, ISODate, Repeat } from '../../data/types';
-import { addDays, dateAt, diffDays, minutesToHHMM, toISODate } from '../../lib/date';
+import { addDays, dateAt, diffDays, hhmmToMinutes, minutesToHHMM, toISODate } from '../../lib/date';
 import { plainText } from './text';
 
 /** Pure event-editor form logic (tests/unit/calendar-form.test.ts). */
@@ -126,6 +126,19 @@ export function sameRepeat(a: Repeat | undefined, b: Repeat | undefined): boolea
   if (!a || !b) return a === b;
   const days = (r: Repeat) => [...(r.weekdays ?? [])].sort().join(',');
   return a.every === b.every && a.unit === b.unit && days(a) === days(b) && (a.until ?? '') === (b.until ?? '');
+}
+
+/**
+ * Set the end time. An event under a day long stays under a day: the end is
+ * the first time it reads after the start, on the start day or the next (so
+ * 11 PM to 1 AM ends the next day, and setting the end back to 11:30 PM
+ * brings it back). A longer event the parent set up keeps its end day.
+ */
+export function setEndTime(f: Form, endTime: HHMM): Form {
+  const span = diffDays(f.startDate, f.endDate) * 1440 + hhmmToMinutes(f.endTime) - hhmmToMinutes(f.startTime);
+  if (span > 1440) return { ...f, endTime };
+  const endDate = hhmmToMinutes(endTime) > hhmmToMinutes(f.startTime) ? f.startDate : addDays(f.startDate, 1);
+  return { ...f, endTime, endDate };
 }
 
 /** Move the start and keep the duration. */

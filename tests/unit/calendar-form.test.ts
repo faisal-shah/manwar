@@ -7,6 +7,7 @@ import {
   newForm,
   sameRepeat,
   setAllDay,
+  setEndTime,
   shiftStart,
   type Form,
 } from '../../src/features/calendar/form';
@@ -97,6 +98,27 @@ describe('event editor form', () => {
     // A timed event keeps its times through a round trip.
     const t = valid({ startTime: '14:00', endTime: '15:30' });
     expect(setAllDay(setAllDay(t, true), false)).toEqual(t);
+  });
+  it('keeps an event under a day long when the end time changes, and rolls the end day back', () => {
+    const late = valid({ startTime: '23:00', endTime: '23:30' });
+    const overnight = setEndTime(late, '01:00');
+    expect([overnight.endDate, overnight.endTime]).toEqual(['2026-11-07', '01:00']);
+    // Changing the mind back: the same evening again, not a 24-hour event.
+    const back = setEndTime(overnight, '23:45');
+    expect([back.endDate, back.endTime]).toEqual(['2026-11-06', '23:45']);
+    expect(formProblem(back)).toBeNull();
+    // An overnight event read from Google, shortened to end before midnight.
+    const party = setEndTime(valid({ startTime: '20:00', endDate: '2026-11-07', endTime: '02:00' }), '22:30');
+    expect([party.endDate, party.endTime]).toEqual(['2026-11-06', '22:30']);
+    // An end at the start time is a whole day; moving it on stays within the day after the start.
+    const day = setEndTime(valid({ startTime: '09:00', endTime: '10:00' }), '09:00');
+    expect([day.endDate, setEndTime(day, '09:30').endDate]).toEqual(['2026-11-07', '2026-11-06']);
+  });
+  it('keeps the end day of an event set to run longer than a day', () => {
+    const visit = valid({ startTime: '15:00', endDate: '2026-11-09', endTime: '11:00' });
+    expect(setEndTime(visit, '17:00')).toMatchObject({ endDate: '2026-11-09', endTime: '17:00' });
+    const longer = valid({ startTime: '15:00', endDate: '2026-11-07', endTime: '17:00' });
+    expect(setEndTime(longer, '18:00')).toMatchObject({ endDate: '2026-11-07', endTime: '18:00' });
   });
   it("writes the event's own reminders back unless the reminder was changed", () => {
     const ev: CalEvent = {

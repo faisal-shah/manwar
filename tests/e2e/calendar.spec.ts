@@ -229,6 +229,27 @@ async function addEvent(page: Page, title: string, date: string, start: string, 
   await expect(sheet).toHaveCount(0);
 }
 
+test('an end time set past midnight and back again keeps the event on its day', async ({ page }) => {
+  const errors = await open(page);
+  await page.locator('.fab').click();
+  const sheet = page.locator('.sheet');
+  await sheet.locator('input[name="title"]').fill('Late call');
+  await sheet.locator('input[name="startDate"]').fill('2026-11-05');
+  await sheet.locator('input[name="startTime"]').fill('23:00');
+  await sheet.locator('input[name="endTime"]').fill('01:00');
+  await expect(sheet.locator('input[name="endDate"]')).toHaveValue('2026-11-06');
+  await sheet.locator('input[name="endTime"]').fill('23:45');
+  await expect(sheet.locator('input[name="endDate"]')).toHaveValue('2026-11-05');
+  await sheet.locator('.picker button', { hasText: 'Asiyah' }).click();
+  await sheet.getByRole('button', { name: 'Add', exact: true }).click();
+  await expect(sheet).toHaveCount(0);
+  await expect(page.locator('.sched-col[data-day="2026-11-05"] .ev-block', { hasText: 'Late call' })).toContainText(
+    '11 - 11:45 PM',
+  );
+  await expect(page.locator('.sched-col[data-day="2026-11-06"] .ev-block', { hasText: 'Late call' })).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
 test('keeps an event card on screen when its profile picker opens near the bottom', async ({ page }) => {
   const errors = await open(page);
   await page.locator('[data-event="family@demo::isha_20261107"]').click();
