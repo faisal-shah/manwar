@@ -435,6 +435,33 @@ test('the screen wake lock is taken again when the system drops it', async ({ pa
   await expect.poll(locks).toBe(2);
 });
 
+test('a wake lock the browser keeps refusing is asked for once a minute, however often the page shows', async ({ page }) => {
+  // A browser that refuses the lock (a WebView without the permission).
+  await page.addInitScript(() => {
+    const w = window as unknown as { __asks: number };
+    w.__asks = 0;
+    Object.defineProperty(navigator, 'wakeLock', {
+      value: {
+        request: () => {
+          w.__asks++;
+          return Promise.reject(new DOMException('refused', 'NotAllowedError'));
+        },
+      },
+    });
+  });
+  await page.clock.install();
+  await open(page);
+  const asks = () => page.evaluate(() => (window as unknown as { __asks: number }).__asks);
+  expect(await asks()).toBe(1);
+  // The screen goes off and on again and again over the weeks (each time the page shows).
+  for (let i = 0; i < 5; i++) await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  await page.clock.runFor('01:00');
+  const afterAMinute = await asks();
+  await page.clock.runFor('05:00');
+  // Five more minutes: five more asks, not five per retry chain.
+  expect((await asks()) - afterAMinute).toBeLessThanOrEqual(5);
+});
+
 test('five wrong PINs pause the pad; the right PIN works after the pause', async ({ page }) => {
   await page.clock.install();
   await open(page);
