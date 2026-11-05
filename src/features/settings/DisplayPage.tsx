@@ -2,6 +2,7 @@ import { Settings as SettingsIcon } from 'lucide-preact';
 import { activeTab, goTo } from '../../app/nav';
 import { TABS } from '../../app/tabs';
 import { asParent } from '../../core/lock';
+import { hiddenChange } from '../../data/settings';
 import { saveSettings, settings } from '../../data/store';
 import type { TabId } from '../../data/types';
 import { canHideTab, fallbackTab, setTabShown } from './logic';
@@ -11,9 +12,11 @@ const IDLE_CHOICES = [0, 1, 2, 5, 10];
 
 function setTab(id: TabId, shown: boolean) {
   return asParent(() => {
-    const next = setTabShown(settings.value.hiddenTabs, id, shown);
+    const now = settings.value.hiddenTabs;
+    const next = setTabShown(now, id, shown);
+    if (next === now) return;
     if (next.includes(activeTab.value)) goTo(fallbackTab(next));
-    void saveSettings({ hiddenTabs: next });
+    void saveSettings(hiddenChange('hiddenTabs', id, !shown));
   }, 'Enter the PIN to change settings.');
 }
 

@@ -4,6 +4,7 @@ import { demoMode } from '../../config';
 import { calendars, defaultCalendarId, refresh, sync, syncNow, writableCalendars } from '../../calendar/engine';
 import type { CalendarInfo } from '../../calendar/types';
 import { asParent } from '../../core/lock';
+import { hiddenChange } from '../../data/settings';
 import { settings } from '../../data/store';
 import { disconnect, googleProblem, session, startGoogleConnect } from '../../data/session';
 import { nowMs } from '../../lib/clock';
@@ -111,7 +112,7 @@ export function GooglePage() {
             label={c.name}
             hint={access(c)}
             on={!hidden.includes(c.id)}
-            onChange={(on) => void change({ hiddenCalendars: on ? hidden.filter((id) => id !== c.id) : [...hidden, c.id] })}
+            onChange={(on) => void change(hiddenChange('hiddenCalendars', c.id, !on))}
           />
         ))}
         {calendars.value.length === 0 && <p class="muted">No calendars loaded yet.</p>}

@@ -235,6 +235,11 @@ export interface TimeWindow {
   to: HHMM;
 }
 
+/** A change as a merge applies it: nested maps merge field by field, a list is replaced whole. */
+type Patch<T> = T extends unknown[] ? T : T extends object ? { [K in keyof T]?: Patch<T[K]> } : T;
+/** A change to the settings document (saveSettings). */
+export type SettingsPatch = Patch<Settings>;
+
 /** Household settings: one document, settings/main. */
 export interface Settings {
   // Calendar
@@ -263,7 +268,11 @@ export interface Settings {
     hiddenProfiles: string[];
   };
   // Meals
-  mealCategories: MealCategory[];
+  /**
+   * The four categories by id (a map, so each tablet's change is a field
+   * write that keeps another's); shown in DEFAULT_MEAL_CATEGORIES order.
+   */
+  mealCategories: Record<MealCategoryId, MealCategory>;
   // Weather
   weather: { lat: number; lon: number; name: string } | null;
   tempUnit: 'f' | 'c';

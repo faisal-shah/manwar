@@ -2,6 +2,7 @@ import { useState } from 'preact/hooks';
 import { arrayRemove, deleteField } from 'firebase/firestore';
 import { ArrowLeft, ChevronDown, ChevronRight, ChevronUp, Plus, Trash2 } from 'lucide-preact';
 import { asParent } from '../../core/lock';
+import { profileShownChange } from '../../data/settings';
 import { batch, data, newId, patch, profileById, profiles, put, saveSettings, settings } from '../../data/store';
 import type { Profile } from '../../data/types';
 import { currentTime } from '../../lib/clock';
@@ -96,7 +97,7 @@ function applyDelete(p: Profile): void {
     plan.eventMeta.slice(i, i + BATCH_LIMIT).forEach(({ id }) => mb.patch('eventMeta', id, { profiles: without, updatedAt: at }));
     void mb.commit();
   }
-  if (settings.value.filter.hiddenProfiles.includes(p.id)) void saveSettings({ filter: { hiddenProfiles: without } as never });
+  if (settings.value.filter.hiddenProfiles.includes(p.id)) void saveSettings(profileShownChange(p.id, true));
 }
 
 function ProfileEditor({ profile, onDone }: { profile: Profile | null; onDone: () => void }) {

@@ -1,11 +1,11 @@
 import type { ComponentChildren } from 'preact';
 import { asParent } from '../../core/lock';
 import { saveSettings } from '../../data/store';
-import type { HHMM, Settings } from '../../data/types';
+import type { HHMM, SettingsPatch } from '../../data/types';
 import { Segmented } from '../../ui/controls';
 
 /** Every settings write is a parent action. */
-export function change(partial: Partial<Settings>): Promise<void> {
+export function change(partial: SettingsPatch): Promise<void> {
   return asParent(() => {
     void saveSettings(partial);
   }, 'Enter the PIN to change settings.');

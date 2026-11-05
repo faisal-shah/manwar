@@ -3,12 +3,13 @@ import { useState } from 'preact/hooks';
 import type { TargetedEvent } from 'preact';
 import { Pencil } from 'lucide-preact';
 import { asParent } from '../../core/lock';
-import { DEFAULT_MEAL_CATEGORIES } from '../../data/settings';
-import { saveSettings, settings } from '../../data/store';
+import { DEFAULT_MEAL_CATEGORIES, mealCategoryChange } from '../../data/settings';
+import { saveSettings } from '../../data/store';
 import type { MealCategory, MealCategoryId } from '../../data/types';
 import { IconButton, Toggle } from '../../ui/controls';
 import { toast } from '../../ui/overlays';
 import { ColorSwatches, PROFILE_COLORS } from '../../ui/pickers';
+import { categories } from './state';
 import { CategoryBadge } from './ui';
 
 const MEAL_COLORS = [...new Set([...DEFAULT_MEAL_CATEGORIES.map((c) => c.color), ...PROFILE_COLORS])];
@@ -19,10 +20,11 @@ const MEAL_COLORS = [...new Set([...DEFAULT_MEAL_CATEGORIES.map((c) => c.color),
  * sheet and in the Meals tab's Filter popover.
  */
 export function MealCategoriesEditor() {
-  const cats = settings.value.mealCategories;
+  const cats = categories.value;
   const [editing, setEditing] = useState<MealCategoryId | null>(null);
-  const set = (id: MealCategoryId, patch: Partial<MealCategory>) =>
-    void asParent(() => void saveSettings({ mealCategories: cats.map((c) => (c.id === id ? { ...c, ...patch } : c)) }));
+  // Only the changed field of the one category: another tablet's edit of the others is kept.
+  const set = (id: MealCategoryId, patch: Partial<Omit<MealCategory, 'id'>>) =>
+    void asParent(() => void saveSettings(mealCategoryChange(id, patch)));
   const setVisible = (c: MealCategory, visible: boolean) => {
     if (!visible && cats.filter((x) => x.visible).length === 1) {
       toast('Keep at least one meal category showing.');

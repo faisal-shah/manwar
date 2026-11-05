@@ -1,4 +1,5 @@
 import { computed, signal } from '@preact/signals';
+import { DEFAULT_MEAL_CATEGORIES } from '../../data/settings';
 import { batch, data, fieldChanges, newId, put, settings } from '../../data/store';
 import type { ISODate, MealCategory, MealCategoryId, MealEntry, Recipe, Repeat } from '../../data/types';
 import { goTo } from '../../app/nav';
@@ -9,7 +10,8 @@ import { editOccurrence, mealOccurrences, nextCellOrder, undoOps, weekOf, type M
 /** Reactive views of the meal plan and its writes. Callers wrap writes in asParent(). */
 
 export const recipesById = computed(() => new Map(data.recipes.value.map((r) => [r.id, r])));
-export const categories = computed(() => settings.value.mealCategories);
+/** The meal categories in their fixed order. */
+export const categories = computed(() => DEFAULT_MEAL_CATEGORIES.map((c) => settings.value.mealCategories[c.id]));
 export const visibleCategories = computed(() => categories.value.filter((c) => c.visible));
 export const categoryById = computed(() => new Map(categories.value.map((c) => [c.id, c])));
 

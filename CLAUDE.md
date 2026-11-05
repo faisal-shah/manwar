@@ -80,7 +80,15 @@ flowchart LR
   written back. Writes start from the store's current document, not the
   copy an editor opened with. An editor or popover whose document is
   deleted elsewhere closes itself through `useCloseWhenGone`
-  (`ui/overlays.tsx`), with a toast for an editor.
+  (`ui/overlays.tsx`), with a toast for an editor. The settings document
+  follows the same rule: `saveSettings` merges, so a change names only the
+  fields it changes (`{ filter: { weather: false } }`, never the whole
+  filter from this tablet's copy), and the change builders in
+  `data/settings.ts` (`filterChange`, `profileShownChange`, `hiddenChange`,
+  `mealCategoryChange`, `listAdd`/`listRemove`) cover the shared lists and
+  maps. `mealCategories` is stored as a map by category id for that reason
+  (`categories` in `meals/state.ts` gives them in order). A merge never
+  deletes a nested key: pass `deleteField()` for that (`core/lock.ts`).
 - **Calendar events** live in the household's Google calendars. `calendar/engine.ts`
   fetches a window around today (six weeks back, four months ahead, widened
   to the days the latest view asked for with `ensureRange`), caches a snapshot

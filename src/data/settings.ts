@@ -1,4 +1,5 @@
-import type { MealCategory, Settings } from './types';
+import { arrayRemove, arrayUnion } from 'firebase/firestore';
+import type { HomePane, MealCategory, MealCategoryId, Settings, SettingsPatch, TabId } from './types';
 
 export const DEFAULT_MEAL_CATEGORIES: MealCategory[] = [
   { id: 'breakfast', name: 'Breakfast', color: '#F2B074', visible: true, showOnCalendar: false },
@@ -6,6 +7,8 @@ export const DEFAULT_MEAL_CATEGORIES: MealCategory[] = [
   { id: 'dinner', name: 'Dinner', color: '#CB434C', visible: true, showOnCalendar: true },
   { id: 'snack', name: 'Snack', color: '#D9C3A5', visible: true, showOnCalendar: true },
 ];
+
+const byId = (cats: MealCategory[]) => Object.fromEntries(cats.map((c) => [c.id, c])) as Settings['mealCategories'];
 
 export const DEFAULT_SETTINGS: Settings = {
   weekStart: 0,
@@ -21,7 +24,7 @@ export const DEFAULT_SETTINGS: Settings = {
   hiddenCalendars: [],
   familyColor: '#A8D4D3',
   filter: { taskProgress: true, countdowns: true, weather: true, meals: true, hiddenProfiles: [] },
-  mealCategories: DEFAULT_MEAL_CATEGORIES,
+  mealCategories: byId(DEFAULT_MEAL_CATEGORIES),
   weather: null,
   tempUnit: 'f',
   hiddenTabs: [],
@@ -46,6 +49,36 @@ export function mergeSettings(stored: Partial<Settings>): Settings {
   s.lock = { ...DEFAULT_SETTINGS.lock, ...stored.lock };
   s.night = { ...DEFAULT_SETTINGS.night, ...stored.night };
   s.sleep = { ...DEFAULT_SETTINGS.sleep, ...stored.sleep };
-  if (!stored.mealCategories?.length) s.mealCategories = DEFAULT_MEAL_CATEGORIES;
+  s.mealCategories = byId(DEFAULT_MEAL_CATEGORIES.map((c) => ({ ...c, ...stored.mealCategories?.[c.id], id: c.id })));
   return s;
 }
+
+/*
+ * Changes for saveSettings that keep another tablet's change. The settings
+ * are one document every tablet writes, so a change names only the fields
+ * it changes, and a list gains or loses one element where it stands on the
+ * server instead of being rewritten from this tablet's copy.
+ */
+
+/** Elements added to a stored list (arrayUnion), typed as the list. */
+export const listAdd = <T>(...values: T[]) => arrayUnion(...values) as unknown as T[];
+/** Elements taken out of a stored list (arrayRemove), typed as the list. */
+export const listRemove = <T>(...values: T[]) => arrayRemove(...values) as unknown as T[];
+
+/** Some of the Calendar filter's switches. */
+export const filterChange = (patch: Partial<Settings['filter']>): SettingsPatch => ({ filter: patch });
+
+/** Show or hide one profile's events in the Calendar filter. */
+export const profileShownChange = (id: string, shown: boolean): SettingsPatch =>
+  filterChange({ hiddenProfiles: shown ? listRemove(id) : listAdd(id) });
+
+type HiddenLists = { hiddenCalendars: string; hiddenTabs: TabId; homeHiddenPanes: HomePane };
+
+/** Hide (`hidden`) or show one calendar, tab or Home pane. */
+export const hiddenChange = <K extends keyof HiddenLists>(key: K, value: HiddenLists[K], hidden: boolean): SettingsPatch =>
+  ({ [key]: hidden ? listAdd(value) : listRemove(value) }) as SettingsPatch;
+
+/** Some fields of one meal category. */
+export const mealCategoryChange = (id: MealCategoryId, patch: Partial<Omit<MealCategory, 'id'>>): SettingsPatch => ({
+  mealCategories: { [id]: patch },
+});

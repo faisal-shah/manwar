@@ -37,6 +37,7 @@ import type {
   Recipe,
   Reward,
   Settings,
+  SettingsPatch,
   Task,
   TaskState,
 } from './types';
@@ -285,7 +286,13 @@ export function remove(name: CollectionName, id: string): Promise<void> {
   return deleteDoc(docRef(name, id));
 }
 
-export function saveSettings(partial: Partial<Settings>): Promise<void> {
+/**
+ * Merge `partial` into the settings document. Name only what changed: a
+ * nested map is merged, so `{ filter: { weather: false } }` keeps another
+ * tablet's change to the other filters, while a list is written whole, so
+ * one element goes in or out with listAdd / listRemove (data/settings.ts).
+ */
+export function saveSettings(partial: SettingsPatch): Promise<void> {
   return setDoc(settingsRef(), partial, { merge: true });
 }
 
@@ -306,7 +313,7 @@ export function batch() {
       return api;
     },
     /** Merge into the settings document, as saveSettings does. */
-    settings(partial: Partial<Settings>) {
+    settings(partial: SettingsPatch) {
       b.set(settingsRef(), partial, { merge: true });
       return api;
     },

@@ -1,15 +1,18 @@
 import { CloudSun, ListChecks, Timer, Users, UtensilsCrossed } from 'lucide-preact';
 import type { ComponentChildren } from 'preact';
+import { filterChange, listAdd, profileShownChange } from '../../data/settings';
 import { profiles, saveSettings, settings } from '../../data/store';
 import type { Settings } from '../../data/types';
 import { Toggle } from '../../ui/controls';
 import { Avatar } from '../../ui/profile';
 import { Menu } from './Menu';
 
-type FilterState = Settings['filter'];
-
-/** Filter writes are viewing preferences, not data changes, so they are not behind the parent PIN. */
-const setFilter = (patch: Partial<FilterState>) => void saveSettings({ filter: { ...settings.value.filter, ...patch } });
+/*
+ * Filter writes are viewing preferences, not data changes, so they are not
+ * behind the parent PIN. The filter is shared by the household's tablets,
+ * so each write names only what it changes.
+ */
+const setFilter = (patch: Partial<Settings['filter']>) => void saveSettings(filterChange(patch));
 
 function Row({
   icon,
@@ -54,7 +57,7 @@ export function FilterMenu({ anchor, onClose }: { anchor: DOMRect; onClose: () =
         icon={<Users {...ICON} />}
         label="Select All"
         on={hidden.size === 0}
-        onChange={(on) => setFilter({ hiddenProfiles: on ? [] : all.map((p) => p.id) })}
+        onChange={(on) => setFilter({ hiddenProfiles: on ? [] : listAdd(...all.map((p) => p.id)) })}
       />
       {all.map((p) => (
         <Row
@@ -62,9 +65,7 @@ export function FilterMenu({ anchor, onClose }: { anchor: DOMRect; onClose: () =
           icon={<Avatar profile={p} size={3} />}
           label={p.name}
           on={!hidden.has(p.id)}
-          onChange={(on) =>
-            setFilter({ hiddenProfiles: on ? f.hiddenProfiles.filter((id) => id !== p.id) : [...f.hiddenProfiles, p.id] })
-          }
+          onChange={(on) => void saveSettings(profileShownChange(p.id, on))}
         />
       ))}
     </Menu>

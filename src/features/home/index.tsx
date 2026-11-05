@@ -5,6 +5,7 @@ import { CalendarDays, Check, LayoutGrid, List, House } from 'lucide-preact';
 import type { TabDef } from '../../app/tab';
 import { goTo } from '../../app/nav';
 import { asParent } from '../../core/lock';
+import { hiddenChange } from '../../data/settings';
 import { saveSettings, settings } from '../../data/store';
 import type { CalendarView, HomePane, TabId } from '../../data/types';
 import { choose, useOverlay } from '../../ui/overlays';
@@ -100,8 +101,7 @@ function CustomizeMenu({ onClose }: { onClose: () => void }) {
   const hidden = settings.value.homeHiddenPanes;
   const toggle = (id: HomePane) =>
     asParent(() => {
-      const now = settings.value.homeHiddenPanes;
-      void saveSettings({ homeHiddenPanes: now.includes(id) ? now.filter((p) => p !== id) : [...now, id] });
+      void saveSettings(hiddenChange('homeHiddenPanes', id, !settings.value.homeHiddenPanes.includes(id)));
     }, 'Enter the PIN to customize Home.');
   return (
     <>
