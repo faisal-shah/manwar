@@ -98,8 +98,7 @@ function Entry({ e, now }: { e: LedgerEntry; now: number }) {
           aria-label={`Undo ${e.label}`}
           onClick={() =>
             void asParent(() => {
-              void undoLedgerEntry(e);
-              toast(`Undid "${e.label}"`);
+              if (undoLedgerEntry(e)) toast(`Undid "${e.label}"`);
             }, 'Enter the PIN to undo stars.')
           }
         >
@@ -126,7 +125,9 @@ function Adjust({
   const [amount, setAmount] = useState(kind === 'give' ? 5 : 1);
   const [text, setText] = useState(String(amount));
   const [note, setNote] = useState('');
-  const valid = Number.isInteger(amount) && amount >= 1 && amount <= MAX_REWARD_COST;
+  // Removing stops at zero; it never takes a balance negative.
+  const max = kind === 'remove' ? Math.min(MAX_REWARD_COST, balance) : MAX_REWARD_COST;
+  const valid = Number.isInteger(amount) && amount >= 1 && amount <= max;
   const after = balance + (kind === 'give' ? amount : -amount);
   const set = (n: number) => {
     setAmount(n);
@@ -164,7 +165,9 @@ function Adjust({
       <p class={valid ? 'muted' : 'hist-error'}>
         {valid
           ? `${balance.toLocaleString()} → ${after.toLocaleString()} stars`
-          : `Enter a whole number from 1 to ${MAX_REWARD_COST.toLocaleString()}.`}
+          : max < 1
+            ? 'There are no stars to remove.'
+            : `Enter a whole number from 1 to ${max.toLocaleString()}.`}
       </p>
       <div class="row" style={{ justifyContent: 'flex-end' }}>
         <Button variant="ghost" onClick={onDone}>

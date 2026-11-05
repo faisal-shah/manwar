@@ -11,7 +11,7 @@ import { DayView } from './DayView';
 import { DEFAULT_FILTER, weekTitle, type TaskFilter } from './logic';
 import { TasksOverlays } from './overlays';
 import { UFG_COLOR } from './TaskCard';
-import { dayOffset, mode, selectedDay, taskFilter, weekOffset, weekStart } from './view';
+import { dayOffset, firstDay, mode, selectedDay, taskFilter, weekOffset, weekStart } from './view';
 import { WeekView } from './WeekView';
 import './columns.css';
 import './tasks.css';
@@ -19,6 +19,7 @@ import './tasks.css';
 function Controls() {
   const m = mode.value;
   const offset = m === 'day' ? dayOffset : weekOffset;
+  const atStart = (m === 'day' ? selectedDay.value : weekStart.value) <= firstDay.value;
   const [filterAt, setFilterAt] = useState<DOMRect | null>(null);
   const f = taskFilter.value;
   const filtered = JSON.stringify(f) !== JSON.stringify(DEFAULT_FILTER);
@@ -44,6 +45,7 @@ function Controls() {
         type="button"
         class="ctl ctl-round"
         aria-label={m === 'day' ? 'Previous day' : 'Previous week'}
+        disabled={atStart}
         onClick={() => offset.value--}
       >
         <ChevronLeft size="2.2rem" />

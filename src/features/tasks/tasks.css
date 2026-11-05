@@ -5,8 +5,11 @@
   min-height: 0;
 }
 
-/* The last column's cards can scroll clear of the + button. */
-.tk-tab .pcols > .pcol:last-child .pcol-body {
+/*
+ * Cards can scroll clear of the + button. Every column gets the room, since
+ * with more than four the one under the button depends on the scroll.
+ */
+.tk-tab .pcol-body {
   padding-bottom: 9rem;
 }
 
@@ -393,6 +396,12 @@
   font-size: 1.4rem;
   color: var(--text-2);
 }
+.wk-owner-name {
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .wk-owners button:not(.on) .avatar {
   opacity: 0.45;
 }
@@ -437,7 +446,8 @@
 .wk-body {
   flex: 1;
   min-height: 0;
-  padding-bottom: 1.6rem;
+  /* The last row can scroll clear of the + button. */
+  padding-bottom: 9rem;
 }
 .wk-section {
   margin: 1.2rem 1.2rem 0.6rem;

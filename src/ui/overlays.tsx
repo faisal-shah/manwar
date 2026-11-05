@@ -8,6 +8,30 @@ import { IconButton } from './controls';
 
 const portal = (node: ComponentChildren) => createPortal(node, document.body);
 
+/*
+ * The second tap of a double tap lands where the first one did, a moment
+ * later. When the first opened an overlay, the second falls on its scrim
+ * and would close it again at once; so a scrim ignores a tap that comes
+ * soon after it opened and close to the tap that opened it.
+ */
+const DOUBLE_TAP_MS = 450;
+const DOUBLE_TAP_REM = 6;
+let lastDown = { x: -1e9, y: -1e9 };
+if (typeof window !== 'undefined')
+  window.addEventListener('pointerdown', (e) => (lastDown = { x: e.clientX, y: e.clientY }), { capture: true, passive: true });
+
+/** Close handler for a scrim (tap outside) that lets the rest of a double tap through. */
+export function useScrimClose(onClose: () => void): (e: MouseEvent) => void {
+  const opened = useRef({ at: performance.now(), ...lastDown });
+  return (e) => {
+    const o = opened.current;
+    const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 10;
+    const near = Math.hypot(e.clientX - o.x, e.clientY - o.y) < DOUBLE_TAP_REM * rem;
+    if (near && performance.now() - o.at < DOUBLE_TAP_MS) return;
+    onClose();
+  };
+}
+
 /** Right-hand side sheet (editors, settings pages). */
 export function Sheet({
   title,
@@ -24,9 +48,10 @@ export function Sheet({
   wide?: boolean;
   children: ComponentChildren;
 }) {
+  const scrimClose = useScrimClose(onClose);
   return portal(
     <>
-      <div class="scrim" onClick={onClose} />
+      <div class="scrim" onClick={scrimClose} />
       <section class={`sheet${wide ? ' sheet-wide' : ''}`} role="dialog" aria-label={title}>
         <header class="sheet-head">
           {onBack ? (
@@ -58,9 +83,10 @@ export function Modal({
   children: ComponentChildren;
   actions?: ComponentChildren;
 }) {
+  const scrimClose = useScrimClose(onClose);
   return portal(
     <>
-      <div class="scrim top" onClick={onClose} />
+      <div class="scrim top" onClick={scrimClose} />
       <div class="modal" role="dialog" aria-label={title}>
         {title && <h2>{title}</h2>}
         <div class="scroll" style={{ minHeight: 0 }}>
@@ -88,6 +114,7 @@ export function Popover({
   children: ComponentChildren;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const scrimClose = useScrimClose(onClose);
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
   // Place it again when the viewport changes (an on-screen keyboard that resizes the page), so it stays on screen.
   const [viewport, setViewport] = useState(0);
@@ -113,7 +140,7 @@ export function Popover({
   }, [anchor, width, viewport]);
   return portal(
     <>
-      <div class="popover-scrim" onClick={onClose} />
+      <div class="popover-scrim" onClick={scrimClose} />
       <div
         ref={ref}
         class="popover"

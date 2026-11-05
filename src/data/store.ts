@@ -20,6 +20,7 @@ import { db } from './firebase';
 import { addDays } from '../lib/date';
 import { currentTime } from '../lib/clock';
 import { toISODate } from '../lib/date';
+import { HISTORY_DAYS } from '../tasks/engine';
 import { DEFAULT_SETTINGS, mergeSettings } from './settings';
 import type {
   EventMeta,
@@ -103,7 +104,8 @@ export function openHousehold(id: string): void {
     pending.delete(name);
     if (pending.size === 0) ready.value = true;
   };
-  const since = toISODate(new Date(currentTime() - 62 * 86_400_000));
+  // Task states as far back as the task views reach, plus a margin.
+  const since = toISODate(new Date(currentTime() - (HISTORY_DAYS + 2) * 86_400_000));
   for (const name of NAMES) {
     let q: Query = colRef(name);
     // Bounded history for the two collections that grow without limit.

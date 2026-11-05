@@ -8,10 +8,11 @@ import { occurrencesFor, todayOccurrences } from '../../tasks/state';
 import { Empty } from '../../ui/controls';
 import { Avatar } from '../../ui/profile';
 import { StarPill } from '../rewards/StarPill';
+import { NoColumns } from './DayView';
 import { detailsFor, tapCheck } from './actions';
 import { SECTION_META, subtitle, weekRows, type WeekCell, type WeekRow } from './logic';
 import { UFG_COLOR } from './TaskCard';
-import { taskFilter, weekDays, weekOwner } from './view';
+import { firstDay, taskFilter, weekDays, weekOwner } from './view';
 
 /** Week view: one profile's habit grid (rows = tasks, columns = days), picked from the avatar row. */
 export function WeekView() {
@@ -23,16 +24,19 @@ export function WeekView() {
     ...(hasUfg && f.upForGrabs ? [UP_FOR_GRABS] : []),
     ...profiles.value.filter((p) => !f.hidden.includes(p.id)).map((p) => p.id),
   ];
-  if (!owners.length) return <Empty emoji="👀">Every profile is hidden. Use Filter to show them.</Empty>;
+  if (!owners.length) return <NoColumns />;
   const owner =
     weekOwner.value && owners.includes(weekOwner.value)
       ? weekOwner.value
       : (owners.find((id) => id !== UP_FOR_GRABS) ?? owners[0]);
   const p = profileById.value.get(owner);
   const color = p?.color ?? UFG_COLOR;
-  const byDay = days.map((d) => (d === t ? todayOccurrences.value : occurrencesFor(d)));
+  // Days before the task history stay blank: their states are not loaded.
+  const first = firstDay.value;
+  const byDay = days.map((d) => (d < first ? [] : d === t ? todayOccurrences.value : occurrencesFor(d)));
   const tasks = new Map(data.tasks.value.map((x) => [x.id, x]));
-  const rows = weekRows(days, byDay, owner, t, data.taskStates.value, tasks);
+  const states = data.taskStates.value.filter((s) => s.date >= first);
+  const rows = weekRows(days, byDay, owner, t, states, tasks);
 
   return (
     <div class="wk" style={{ '--c': color }}>
@@ -53,7 +57,7 @@ export function WeekView() {
                     <House size="2.6rem" />
                   </span>
                 )}
-                <span>{op?.name ?? 'Up for Grabs'}</span>
+                <span class="wk-owner-name">{op?.name ?? 'Up for Grabs'}</span>
               </button>
             );
           })}
@@ -116,14 +120,16 @@ function Cell({ c, day, color }: { c: WeekCell; day: string; color: string }) {
     <span class="wk-cell">
       <button
         type="button"
-        class={`wk-dot ${c.status}${c.status === 'open' && c.o.lateDays > 0 ? ' late' : ''}`}
+        class={`wk-dot ${c.status}${c.late ? ' late' : ''}`}
         style={{ '--c': by?.color ?? color }}
         aria-label={label}
         disabled={!tappable}
         onClick={(e) => {
           const el = e.currentTarget as HTMLElement;
-          if (c.status === 'skipped') detailsFor.value = { o: c.o, day, anchor: el.getBoundingClientRect() };
-          else tapCheck(c.o, day, el.getBoundingClientRect());
+          // A late chore still open is today's to check off, wherever its due date sits.
+          const on = c.late ? today.value : day;
+          if (c.status === 'skipped') detailsFor.value = { o: c.o, day: on, anchor: el.getBoundingClientRect() };
+          else tapCheck(c.o, on, el.getBoundingClientRect());
         }}
       >
         {c.status === 'done' &&

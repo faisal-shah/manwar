@@ -113,6 +113,8 @@ export type CellStatus = 'done' | 'skipped' | 'missed' | 'open' | 'upcoming';
 export interface WeekCell {
   o: Occurrence;
   status: CellStatus;
+  /** Still open and carried into today's list as late: it is checked off as today's. */
+  late: boolean;
 }
 
 export interface WeekRow {
@@ -126,9 +128,10 @@ export interface WeekRow {
 /**
  * One row per task (and part of day) for one owner (a profile or
  * UP_FOR_GRABS) over `days`. Each occurrence sits on its due date; a chore
- * that was already late before the week starts sits on today. Stored states
- * the schedule no longer produces (repeat-after-done history) are added on
- * their due date.
+ * due before the week starts sits on the day it was checked off or skipped,
+ * or on today while it is still late. A late chore still in today's list is
+ * open, not missed. Stored states the schedule no longer produces
+ * (repeat-after-done history) are added on their due date.
  */
 export function weekRows(
   days: ISODate[],
@@ -144,12 +147,17 @@ export function weekRows(
     if (i === undefined || placed.has(o.id)) return;
     placed.set(o.id, { o, i });
   };
+  const todayIndex = index.get(todayISO);
+  const carried = new Set(
+    (todayIndex === undefined ? [] : byDay[todayIndex])
+      .filter((o) => o.profileId === owner && o.date < todayISO && !o.state)
+      .map((o) => o.id),
+  );
   byDay.forEach((list, i) => {
     for (const o of list) {
       if (o.profileId !== owner) continue;
-      if (o.date === days[i]) place(o, i);
-      else if (index.has(o.date)) place(o, index.get(o.date));
-      else if (days[i] === todayISO && o.date < days[0] && !o.state) place(o, i);
+      if (index.has(o.date)) place(o, index.get(o.date));
+      else if (o.date < days[0] && (o.state || days[i] === todayISO)) place(o, i);
     }
   });
   for (const st of states) {
@@ -171,17 +179,18 @@ export function weekRows(
       rows.set(key, row);
     }
     const day = days[i];
+    const late = carried.has(o.id);
     const status: CellStatus =
       o.state?.status === 'done'
         ? 'done'
         : o.state?.status === 'skipped'
           ? 'skipped'
-          : day < todayISO
-            ? 'missed'
-            : day === todayISO
-              ? 'open'
+          : late || day === todayISO
+            ? 'open'
+            : day < todayISO
+              ? 'missed'
               : 'upcoming';
-    row.cells[i] = { o, status };
+    row.cells[i] = { o, status, late };
   }
   return [...rows.values()].sort(
     (a, b) =>

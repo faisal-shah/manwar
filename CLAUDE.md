@@ -82,7 +82,15 @@ flowchart LR
   `tasks/state.ts` has the reactive views and the writes. Stars use an
   append-only ledger (`ledger` collection) plus `Profile.stars` kept equal
   to the sum by `batch().stars()` in the same batch. Undo writes a reversing
-  entry and marks the original `undoneAt`.
+  entry and marks the original `undoneAt`. Every write there reads the
+  current state from the store (never the caller's copy) and holds its keys
+  through `exclusive()` until `onSnapshotsInSync` fires, since the local
+  snapshot lags the write by milliseconds and a second tap in between would
+  award or charge twice; writes return null when they did nothing.
+  Check-offs on another day are stamped on that day (`madeAt`).
+  `HISTORY_DAYS` bounds the task views, late carry-over, the writes and the
+  store's `taskStates` query. Two devices completing the same occurrence in
+  the same instant can still both award (the balance is an increment).
 - **Parental lock** (`core/lock.ts`): with a PIN set, only checking off tasks
   is open; wrap every other mutation in `asParent(() => ...)` or
   `await requireParent()`.
@@ -130,7 +138,10 @@ generated from it: `node scripts/icons/render.mjs` after any brand change.
 
 - Preact 11: element attribute types are `import type { ButtonHTMLAttributes } from 'preact'`, not `JSX.HTMLAttributes`.
 - Firestore field paths cannot contain `*`; `lastDoneKey()` maps Up for Grabs to `any`.
-- Overlays (`Sheet`, `Modal`, `Popover`) portal to `document.body`.
+- Overlays (`Sheet`, `Modal`, `Popover`) portal to `document.body`. Their
+  scrims close through `useScrimClose`, which lets the second tap of the
+  double tap that opened them through; use it for any custom scrim. In
+  e2e tests, close by tapping away from the control that opened it.
 - The Google connection uses the Google Identity Services popup code flow
   (`redirect_uri` 'postmessage'), so only the page origin must be registered.
   Google returns a refresh token on the first consent only; `connectGoogle`
