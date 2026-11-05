@@ -330,8 +330,11 @@ so `1rem` = 10 design px. Use rem for every size. Tokens are CSS variables in
   anyway. Sheets, dialogs and popovers are fixed to that viewport and end
   above the keyboard. The scale must not follow: while a text field has
   focus and only the height shrank, `--app-h` keeps the full height and the
-  field is scrolled into view. Test it by focusing a field and shrinking the
-  viewport height (`tests/e2e/layout-fit.spec.ts`).
+  field is scrolled into view. The phone's scale does not follow the
+  viewport, so there only the field is kept in view
+  (`keepFieldAboveKeyboard`). Test it by focusing a field and shrinking the
+  viewport height (`tests/e2e/layout-fit.spec.ts`, and the editor in
+  `tests/e2e/phone-calendar.spec.ts`).
 - **The + button** covers the bottom-right corner. A scroller that can pass
   under it ends with `padding-bottom: var(--fab-clear)`; Month gives the
   corner day fewer lines (`useFit` in `views/Month.tsx`).

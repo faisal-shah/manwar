@@ -661,3 +661,32 @@ test('a busy day opens at its Now line, with today on top and no Today button', 
   await expect(page.locator('.phc-today')).toHaveCount(0);
   expect(p.errors).toEqual([]);
 });
+
+test('the editor keeps the field being typed in above the on-screen keyboard, Save still in reach', async ({ browser }) => {
+  const { p } = await pair(browser, 'keyboard');
+  const page = p.page;
+  await page.getByRole('button', { name: 'Add event' }).click();
+  const sheet = page.locator('.sheet');
+  const notes = sheet.locator('textarea[name="notes"]');
+  // Notes low on the screen, then tapped: the keyboard takes the bottom 40% of the screen.
+  await sheet.locator('.sheet-body').evaluate((body) => {
+    const field = body.querySelector('textarea')!;
+    body.scrollTop += field.getBoundingClientRect().bottom - body.getBoundingClientRect().bottom + 4;
+  });
+  await page.waitForTimeout(500);
+  await notes.click();
+  const full = page.viewportSize()!;
+  await page.setViewportSize({ width: full.width, height: Math.round(full.height * 0.6) });
+  await page.waitForTimeout(400);
+  const box = (await notes.boundingBox())!;
+  expect(box.y).toBeGreaterThanOrEqual(0);
+  expect(box.y + 30).toBeLessThanOrEqual(full.height * 0.6);
+  await expect(notes).toBeFocused();
+  await page.keyboard.type('Bring the forms');
+  // The footer sits above the keyboard.
+  const save = (await sheet.getByRole('button', { name: 'Add', exact: true }).boundingBox())!;
+  expect(save.y + save.height).toBeLessThanOrEqual(full.height * 0.6);
+  await page.setViewportSize(full);
+  await expect(notes).toHaveValue('Bring the forms');
+  expect(p.errors).toEqual([]);
+});

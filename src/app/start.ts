@@ -5,7 +5,7 @@ import { followDisplayCommands, startDisplay } from '../core/display';
 import { holdWakeLock } from '../core/kiosk';
 import { idleFor, trackActivity } from '../core/activity';
 import { startRelock } from '../core/lock';
-import { keepScaleWithKeyboard } from '../core/viewport';
+import { keepFieldAboveKeyboard, keepScaleWithKeyboard } from '../core/viewport';
 import { startWeather } from '../core/weather';
 import { seedIfEmpty } from '../data/seed';
 import { ready } from '../data/store';
@@ -26,6 +26,7 @@ export function startApp(): void {
   if (isPhone) {
     startPhoneTheme();
     startBack();
+    keepFieldAboveKeyboard();
   } else {
     keepScaleWithKeyboard();
     startDisplay();
