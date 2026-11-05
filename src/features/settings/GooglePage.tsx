@@ -73,18 +73,23 @@ export function GooglePage() {
           hint={status}
         >
           {problem ? (
-            // Opens Google's popup, so it runs straight from the tap (Settings is already behind the PIN).
+            // Settings can stay open after the lock relocks, so this asks too. Google's popup opens from
+            // the PIN pad's last tap, still inside the user gesture.
             <Button
               variant="primary"
               class="set-btn"
               onClick={() =>
-                startGoogleConnect({
-                  onDone: () => {
-                    toast('Google Calendar is connected again.');
-                    void refresh();
-                  },
-                  onError: (m) => toast(m),
-                })
+                void asParent(
+                  () =>
+                    startGoogleConnect({
+                      onDone: () => {
+                        toast('Google Calendar is connected again.');
+                        void refresh();
+                      },
+                      onError: (m) => toast(m),
+                    }),
+                  'Enter the PIN to reconnect Google.',
+                )
               }
             >
               <RefreshCw size="2rem" />

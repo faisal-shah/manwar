@@ -19,6 +19,27 @@ async function open(page: Page, extra = ''): Promise<string> {
   return name;
 }
 
+/**
+ * The app's own session module, for tests that drive it (dev server only).
+ * After an edit Vite serves modules with a ?t= stamp, so the URL comes from
+ * the page's requests; call before the page loads.
+ */
+function sessionModule(page: Page): () => string {
+  const urls: string[] = [];
+  page.on('request', (r) => urls.push(r.url()));
+  return () => urls.find((u) => new URL(u).pathname === '/src/data/session.ts')!;
+}
+
+/** Ask the token Function for a Calendar token; the demo household has no Google connection, so it refuses. */
+const requestToken = (page: Page, url: string) =>
+  page.evaluate(async (u) => {
+    const s = await import(/* @vite-ignore */ u);
+    return s.googleAccessToken().then(
+      () => 'no error',
+      (e: Error) => e.message,
+    );
+  }, url);
+
 async function openSettings(page: Page, section: string) {
   await rail(page, 'Settings').click();
   await page.locator('.set-menu button', { hasText: new RegExp(`^${section}$`) }).click();
@@ -153,21 +174,10 @@ test('Sleep now survives a reload of the page', async ({ page }) => {
 
 test('a Google connection that needs a reconnect shows on the wall and leads to Settings', async ({ page }) => {
   test.skip(!process.env.PW_BASE, 'calls the session module through the dev server');
+  const session = sessionModule(page);
   await open(page);
   await expect(page.locator('.sync-status')).toHaveCount(0);
-  // The demo household has no Google connection, so the token Function refuses it.
-  const message = await page.evaluate(async () => {
-    // The app's own instance of the module (after an edit, Vite serves it with a ?t= stamp).
-    const url = performance
-      .getEntriesByType('resource')
-      .map((e) => e.name)
-      .find((n) => new URL(n).pathname === '/src/data/session.ts')!;
-    const s = await import(/* @vite-ignore */ url);
-    return s.googleAccessToken().then(
-      () => 'no error',
-      (e: Error) => e.message,
-    );
-  });
+  const message = await requestToken(page, session());
   expect(message).toBe('Google is not connected. Connect the Google account again.');
   const chip = page.locator('.sync-status.bad');
   await expect(chip).toHaveText('Reconnect Google Calendar');
@@ -229,6 +239,26 @@ test('a sleep or night window with the same From and To says it never turns on',
   await page.getByRole('switch', { name: 'Dark theme at night' }).click();
   await page.getByRole('textbox', { name: 'To' }).fill('20:30');
   await expect(page.locator('.set-page [role=alert]')).toBeVisible();
+});
+
+test('Reconnect asks for the PIN once the lock has relocked behind an open Settings', async ({ page }) => {
+  test.skip(!process.env.PW_BASE, 'calls the session module through the dev server');
+  const session = sessionModule(page);
+  await page.clock.install();
+  await open(page);
+  const key = (d: string) => page.locator('.pin-setup .pin-keys button', { hasText: new RegExp(`^${d}$`) });
+  await openSettings(page, 'Parental lock');
+  await page.getByRole('button', { name: /Set a PIN/ }).click();
+  for (const d of '1357') await key(d).click();
+  await expect(page.locator('.pin-setup')).toContainText('Enter the PIN again');
+  for (const d of '1357') await key(d).click();
+  await expect(page.getByText('The lock is on')).toBeVisible();
+  await requestToken(page, session());
+  await page.locator('.set-menu button', { hasText: /^Google Calendar$/ }).click();
+  // Nobody touches the wall; the lock relocks with Settings still open.
+  await page.clock.fastForward('02:10');
+  await page.locator('.set-page').getByRole('button', { name: 'Reconnect' }).click();
+  await expect(page.locator('.modal', { hasText: 'Parent PIN' })).toContainText('Enter the PIN to reconnect Google.');
 });
 
 test("a failed place search shows only the failure, not the last query's places", async ({ page }) => {
