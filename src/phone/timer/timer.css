@@ -1,0 +1,112 @@
+/* More > Wall timer. */
+.pt-presets {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+.pt-preset {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 8.8rem;
+  border-radius: 1.6rem;
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface-solid));
+  color: var(--text);
+}
+.pt-preset:active {
+  background: color-mix(in srgb, var(--accent) 26%, var(--surface-solid));
+  transform: scale(0.97);
+}
+.pt-preset .num {
+  font-family: var(--font-display);
+  font-size: 3.6rem;
+  line-height: 1;
+}
+.pt-preset small {
+  font-size: 1.4rem;
+  color: var(--text-2);
+}
+.pt-other {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+.pt-other-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+.pt-other-row .input {
+  flex: 1;
+  min-width: 0;
+  font-size: 2.2rem;
+  font-variant-numeric: tabular-nums;
+}
+.pt-unit {
+  color: var(--text-2);
+  font-weight: 600;
+}
+.pt-other-row .btn {
+  min-height: var(--touch);
+}
+.pt-note {
+  margin: 0 0.4rem;
+  font-size: 1.45rem;
+}
+
+/* Running */
+.pt-run {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.4rem;
+}
+.pt-ring {
+  width: min(26rem, 70vw);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  padding: 1.4rem;
+  margin: 0.8rem 0 1.2rem;
+  background: conic-gradient(var(--pie) calc(var(--left) * 360deg), var(--line-strong) 0);
+}
+.pt-ring-inner {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: var(--surface-solid);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+}
+.pt-big {
+  font-family: var(--font-display);
+  font-size: 5.6rem;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.pt-big.pt-word {
+  font-size: 3.4rem;
+}
+.pt-ring-inner small {
+  color: var(--text-2);
+  font-size: 1.5rem;
+}
+.pt-run[data-phase='done'] .pt-ring-inner {
+  color: var(--danger);
+}
+.pt-total {
+  margin: 0;
+  font-size: 1.7rem;
+  font-weight: 600;
+}
+.pt-by {
+  margin: 0;
+}
+.pt-stop {
+  min-height: 6.4rem;
+  font-size: 1.8rem;
+}

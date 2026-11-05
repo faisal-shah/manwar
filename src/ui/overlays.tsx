@@ -43,7 +43,9 @@ const onScreen = new Set<{ current: () => void }>();
  * Every overlay (sheet, dialog, popover, menu) calls this. `scrim` closes it
  * on a tap outside, letting the rest of the opening double tap through;
  * `content`, for a centered dialog's box (onClickCapture), drops that tap
- * inside it. The overlay also closes on idle return (closeOverlays).
+ * inside it; so do sheets and popovers on a phone, where they cover the
+ * spot that was tapped. The overlay also closes on idle return
+ * (closeOverlays).
  */
 export function useOverlay(onClose: () => void): { scrim: (e: MouseEvent) => void; content: (e: MouseEvent) => void } {
   const openingTap = useOpeningTap();
@@ -59,12 +61,25 @@ export function useOverlay(onClose: () => void): { scrim: (e: MouseEvent) => voi
     scrim: (e) => {
       if (!openingTap(e)) onClose();
     },
-    content: (e) => {
-      if (!openingTap(e)) return;
-      e.stopPropagation();
-      e.preventDefault();
-    },
+    content: (e) => dropOpeningTap(openingTap, e),
   };
+}
+
+function dropOpeningTap(openingTap: (e: MouseEvent) => boolean, e: MouseEvent): void {
+  if (!openingTap(e)) return;
+  e.stopPropagation();
+  e.preventDefault();
+}
+
+/**
+ * For a phone view that takes the place of what was tapped to open it (a
+ * More row, a list): on the view's box (onClickCapture), it drops the rest
+ * of the opening double tap, which would otherwise press whatever the view
+ * has under that spot (a preset, Sleep now, a check box).
+ */
+export function useOpeningGuard(): (e: MouseEvent) => void {
+  const openingTap = useOpeningTap();
+  return (e) => dropOpeningTap(openingTap, e);
 }
 
 /** Close every overlay on screen, as if tapped away (idle return): a PIN request among them is refused. */
@@ -111,11 +126,16 @@ export function Sheet({
   wide?: boolean;
   children: ComponentChildren;
 }) {
-  const { scrim } = useOverlay(onClose);
+  const { scrim, content } = useOverlay(onClose);
   return portal(
     <>
       <div class="scrim" onClick={scrim} />
-      <section class={`sheet${wide ? ' sheet-wide' : ''}`} role="dialog" aria-label={title}>
+      <section
+        class={`sheet${wide ? ' sheet-wide' : ''}`}
+        role="dialog"
+        aria-label={title}
+        onClickCapture={isPhone ? content : undefined}
+      >
         <header class="sheet-head">
           {onBack ? (
             <IconButton label="Back" onClick={onBack}>
@@ -177,7 +197,7 @@ export function Popover({
   children: ComponentChildren;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const { scrim } = useOverlay(onClose);
+  const { scrim, content } = useOverlay(onClose);
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
   // Place it again when the viewport changes (an on-screen keyboard that resizes the page), so it stays on screen.
   const [viewport, setViewport] = useState(0);
@@ -216,6 +236,7 @@ export function Popover({
         class="popover"
         role="dialog"
         style={{ width: `${width}rem`, left: pos?.left ?? -9999, top: pos?.top ?? 0, visibility: pos ? 'visible' : 'hidden' }}
+        onClickCapture={isPhone ? content : undefined}
       >
         {children}
       </div>

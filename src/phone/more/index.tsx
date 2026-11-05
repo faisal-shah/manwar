@@ -2,11 +2,21 @@ import { signal } from '@preact/signals';
 import { ChevronRight, Ellipsis, Smartphone } from 'lucide-preact';
 import { useBack } from '../../ui/back';
 import type { PhonePage } from '../nav';
+import { mealsItem } from '../meals';
+import { notesItem } from '../notes';
+import { timerItem } from '../timer';
+import { wallScreenItem } from '../wallscreen';
 import type { MoreItem } from './items';
 import { ThisPhone } from './ThisPhone';
 
 /** The More tab's rows, in order. */
-export const MORE_ITEMS: MoreItem[] = [{ id: 'phone', label: 'This phone', icon: Smartphone, View: ThisPhone }];
+export const MORE_ITEMS: MoreItem[] = [
+  mealsItem,
+  notesItem,
+  timerItem,
+  wallScreenItem,
+  { id: 'phone', label: 'This phone', icon: Smartphone, View: ThisPhone },
+];
 
 /** The open row's view, null for the list. */
 export const moreView = signal<string | null>(null);

@@ -3,7 +3,7 @@ import { sleepHeldUntil } from '../../core/display';
 import { data, put, upsert } from '../../data/store';
 import type { WallTimer } from '../../data/types';
 import { currentTime, nowMs } from '../../lib/clock';
-import { LEAD_MS, SLEEP_GRACE_MS, STALE_MS, validMinutes } from './logic';
+import { LEAD_MS, STALE_MS, timerSleepHold, validMinutes } from './logic';
 
 export type RunningTimer = WallTimer;
 
@@ -51,6 +51,6 @@ export function stopTimer(): void {
 export function holdSleepForTimer(): void {
   effect(() => {
     const t = stored.value;
-    sleepHeldUntil.value = t ? Math.min(t.endAt, t.stoppedAt ?? Infinity) + SLEEP_GRACE_MS : 0;
+    sleepHeldUntil.value = timerSleepHold(t);
   });
 }

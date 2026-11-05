@@ -2,6 +2,7 @@ import { signal } from '@preact/signals';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { TargetedEvent } from 'preact';
 import { ArrowDown, ArrowUp, Check, ChevronDown, ChevronUp, Ellipsis, Plus, X } from 'lucide-preact';
+import { isPhone } from '../../app/layout';
 import { asParent, pinRequest, requireParent, unlocked } from '../../core/lock';
 import { put } from '../../data/store';
 import type { List, ListItem } from '../../data/types';
@@ -49,19 +50,96 @@ type Drop = { sectionId: string | null; beforeId: string | null; y: number };
 export function ListCard({ list, compact }: { list: List; compact?: boolean }) {
   const items = itemsByList.value.get(list.id) ?? [];
   const view = groupItems(list, items, settling.value);
-  const [editing, setEditing] = useState<{ item: ListItem; anchor: DOMRect } | null>(null);
   const [menu, setMenu] = useState<DOMRect | null>(null);
-  const [addingIn, setAddingIn] = useState<string | null>(null);
   const [addingSection, setAddingSection] = useState(false);
-  const body = useRef<HTMLDivElement>(null);
-  const drag = useDrag(list, view, body, !compact);
-  const doneKey = `done:${list.id}`;
-  const reveal = useReveal(body);
 
   const fromMenu = (fn: () => Promise<unknown>) => () => {
     setMenu(null);
     void fn();
   };
+
+  return (
+    <section class={`list-card${compact ? ' compact' : ''}`} style={{ '--c': listColor(list) }} aria-label={list.title}>
+      <header class="lc-head">
+        {list.emoji && <span class="lc-emoji">{list.emoji}</span>}
+        {/* Its own direction on the box that cuts it: an Arabic title loses its end to the ellipsis, not its start. */}
+        <h3 class="lc-title" dir="auto">
+          {list.title}
+        </h3>
+        <span class="lc-count" aria-label={`${view.open} open items`}>
+          {view.open}
+        </span>
+        {!compact && (
+          <button
+            type="button"
+            class="lc-icon"
+            aria-label={`${list.title} menu`}
+            onClick={(e) => setMenu(e.currentTarget.getBoundingClientRect())}
+          >
+            <Ellipsis size="2.6rem" />
+          </button>
+        )}
+      </header>
+      <ListItems
+        list={list}
+        view={view}
+        compact={compact}
+        addingSection={addingSection}
+        onSectionDone={() => setAddingSection(false)}
+        onClearDone={() => void askClearDone(list, view.done.length)}
+      />
+      {menu && (
+        <Popover anchor={menu} width={34} onClose={() => setMenu(null)}>
+          <div class="menu">
+            <button type="button" onClick={fromMenu(() => asParent(() => (listEditor.value = { list })))}>
+              Edit list
+            </button>
+            <button type="button" onClick={fromMenu(() => asParent(() => setAddingSection(true)))}>
+              Add section
+            </button>
+            <button type="button" disabled={!view.done.length} onClick={fromMenu(() => askClearDone(list, view.done.length))}>
+              Clear done ({view.done.length})
+            </button>
+            <button type="button" class="danger" onClick={fromMenu(() => askDeleteList(list, items.length))}>
+              Delete list
+            </button>
+          </div>
+        </Popover>
+      )}
+    </section>
+  );
+}
+
+/**
+ * A list's Add item field, its sections and Done group, and the item
+ * editor: the body of a card on the wall, the whole list on a phone. It
+ * goes inside a `.list-card` (the list's colors). `view` is
+ * groupItems(list, items, settling); `addingSection` shows the Add section
+ * field focused (the menu's Add section), `onClearDone` is the Done group's
+ * Clear.
+ */
+export function ListItems({
+  list,
+  view,
+  compact,
+  addingSection,
+  onSectionDone,
+  onClearDone,
+}: {
+  list: List;
+  view: ListView;
+  compact?: boolean;
+  addingSection: boolean;
+  onSectionDone: () => void;
+  onClearDone: () => void;
+}) {
+  const items = itemsByList.value.get(list.id) ?? [];
+  const [editing, setEditing] = useState<{ item: ListItem; anchor: DOMRect } | null>(null);
+  const [addingIn, setAddingIn] = useState<string | null>(null);
+  const body = useRef<HTMLDivElement>(null);
+  const drag = useDrag(list, view, body, !compact);
+  const doneKey = `done:${list.id}`;
+  const reveal = useReveal(body);
 
   const openEditor = (item: ListItem, el: HTMLElement) => {
     if (drag.consumeClick()) return;
@@ -101,27 +179,7 @@ export function ListCard({ list, compact }: { list: List; compact?: boolean }) {
   };
 
   return (
-    <section class={`list-card${compact ? ' compact' : ''}`} style={{ '--c': listColor(list) }} aria-label={list.title}>
-      <header class="lc-head">
-        {list.emoji && <span class="lc-emoji">{list.emoji}</span>}
-        {/* Its own direction on the box that cuts it: an Arabic title loses its end to the ellipsis, not its start. */}
-        <h3 class="lc-title" dir="auto">
-          {list.title}
-        </h3>
-        <span class="lc-count" aria-label={`${view.open} open items`}>
-          {view.open}
-        </span>
-        {!compact && (
-          <button
-            type="button"
-            class="lc-icon"
-            aria-label={`${list.title} menu`}
-            onClick={(e) => setMenu(e.currentTarget.getBoundingClientRect())}
-          >
-            <Ellipsis size="2.6rem" />
-          </button>
-        )}
-      </header>
+    <>
       <AddItemField list={list} sectionId={null} onAdded={reveal} />
       <div class="lc-body scroll" ref={body}>
         {drag.state?.drop && <div class="drop-line" style={{ top: `${drag.state.drop.y}px` }} />}
@@ -175,7 +233,7 @@ export function ListCard({ list, compact }: { list: List; compact?: boolean }) {
               </button>
               <span class="ls-count">{view.done.length}</span>
               {!compact && (
-                <button type="button" class="btn btn-sm btn-ghost" onClick={() => void askClearDone(list, view.done.length)}>
+                <button type="button" class="btn btn-sm btn-ghost" onClick={onClearDone}>
                   Clear
                 </button>
               )}
@@ -192,31 +250,13 @@ export function ListCard({ list, compact }: { list: List; compact?: boolean }) {
           </div>
         )}
         {!compact && (addingSection || list.sections.length > 0 || items.length > 0) && (
-          <AddSectionField list={list} autoFocus={addingSection} onDone={() => setAddingSection(false)} />
+          <AddSectionField list={list} autoFocus={addingSection} onDone={onSectionDone} />
         )}
       </div>
       {editing && (
         <ItemEditor list={list} view={view} item={editing.item} anchor={editing.anchor} onClose={() => setEditing(null)} />
       )}
-      {menu && (
-        <Popover anchor={menu} width={34} onClose={() => setMenu(null)}>
-          <div class="menu">
-            <button type="button" onClick={fromMenu(() => asParent(() => (listEditor.value = { list })))}>
-              Edit list
-            </button>
-            <button type="button" onClick={fromMenu(() => asParent(() => setAddingSection(true)))}>
-              Add section
-            </button>
-            <button type="button" disabled={!view.done.length} onClick={fromMenu(() => askClearDone(list, view.done.length))}>
-              Clear done ({view.done.length})
-            </button>
-            <button type="button" class="danger" onClick={fromMenu(() => askDeleteList(list, items.length))}>
-              Delete list
-            </button>
-          </div>
-        </Popover>
-      )}
-    </section>
+    </>
   );
 }
 
@@ -305,7 +345,8 @@ function AddItemField({
         placeholder="Add item"
         aria-label={`Add item to ${list.title}`}
         value={text}
-        enterKeyHint="done"
+        // A phone adds one item after another with the keyboard up: its Enter key reads as a return, not Done.
+        enterKeyHint={isPhone ? 'enter' : 'done'}
         autoComplete="off"
         onPointerDown={(e) => gateFocus(e, 'Enter the PIN to add items.')}
         onFocus={(e) => gateFocus(e, 'Enter the PIN to add items.')}

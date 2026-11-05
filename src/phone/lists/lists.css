@@ -1,0 +1,200 @@
+/* The phone's Lists tab. One list reuses the wall's list body (features/lists), laid out full screen here. */
+
+.phl-lists {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.phl-row {
+  --tile: color-mix(in srgb, var(--c) 55%, var(--tint-base));
+  display: flex;
+  align-items: center;
+  gap: 1.2rem;
+  width: 100%;
+  min-height: 7.2rem;
+  padding: 1rem 1.2rem 1rem 1.2rem;
+  border-radius: 1.8rem;
+  background: var(--surface-solid);
+  box-shadow: var(--shadow-soft);
+  text-align: left;
+  color: var(--text-2);
+}
+.phl-row:active {
+  background: color-mix(in srgb, var(--c) 18%, var(--surface-solid));
+}
+.phl-tile {
+  flex: none;
+  width: 4.8rem;
+  height: 4.8rem;
+  border-radius: 1.4rem;
+  background: var(--tile);
+  color: var(--on-tint);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.6rem;
+  line-height: 1;
+}
+.phl-row-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.phl-row-title,
+.phl-row-text small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: start;
+}
+.phl-row-title {
+  color: var(--text);
+  font-size: 1.9rem;
+  font-weight: 600;
+}
+.phl-row-text small {
+  font-size: 1.45rem;
+}
+.phl-count {
+  flex: none;
+  min-width: 3.2rem;
+  height: 3.2rem;
+  padding: 0 0.9rem;
+  border-radius: 99rem;
+  font-weight: 700;
+  font-size: 1.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--c) 68%, #000);
+  color: #fff;
+  @supports (color: lch(from red l c h)) {
+    color: lch(from color-mix(in srgb, var(--c) 68%, #000) calc((50 - l) * infinity) 0 0);
+  }
+}
+.phl-new {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.8rem;
+  min-height: 6.4rem;
+  border-radius: 1.8rem;
+  border: 2px dashed var(--line-strong);
+  color: var(--accent);
+  font-size: 1.7rem;
+  font-weight: 600;
+}
+.phl-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.2rem;
+  padding-top: 4rem;
+}
+.phl-head-btn {
+  width: var(--touch);
+  height: var(--touch);
+  color: var(--text);
+}
+
+/* One list, full screen: the body under the header scrolls, the Add item field stays on top. */
+html[data-layout='phone'] .ph-body:has(> .phl-card) {
+  padding: 0;
+  overflow: hidden;
+}
+html[data-layout='phone'] .list-card.phl-card {
+  flex: none;
+  min-width: 0;
+  height: 100%;
+  border-radius: 0;
+  background: color-mix(in srgb, color-mix(in srgb, var(--c) 18%, var(--tint-base)) 70%, transparent);
+}
+html[data-layout='phone'] .phl-card .li-add {
+  margin: 1rem 1.2rem 0.6rem;
+  box-shadow: var(--shadow-soft);
+  background: var(--surface-solid);
+}
+html[data-layout='phone'] .phl-card .lc-body {
+  padding: 0.4rem 1.2rem calc(2.4rem + env(safe-area-inset-bottom, 0px));
+  overscroll-behavior-y: contain;
+}
+html[data-layout='phone'] .phl-card .ls-title {
+  font-size: 2.2rem;
+}
+html[data-layout='phone'] .phl-card .ls-add input {
+  font-size: 2.2rem;
+}
+
+/* The list's menu, a bottom sheet on the phone. */
+.phl-menu-title {
+  margin: 0 0 0.4rem;
+  padding: 0 1.6rem;
+  font-family: var(--font-display);
+  font-size: 2.2rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+html[data-layout='phone'] .menu button {
+  min-height: 5.6rem;
+  font-size: 1.8rem;
+}
+
+/* The item editor (a bottom sheet here): the fields wrap on a narrow screen, the buttons share the width. */
+html[data-layout='phone'] .item-editor .row:first-child {
+  flex-wrap: wrap;
+  column-gap: 1rem;
+}
+html[data-layout='phone'] .item-editor .field.grow {
+  flex: 1 1 15rem;
+  min-width: 0;
+}
+html[data-layout='phone'] .item-editor .field.qty {
+  flex: 0 1 11rem;
+  min-width: 9rem;
+  width: auto;
+}
+html[data-layout='phone'] .item-editor .field {
+  margin-bottom: 1.4rem;
+}
+html[data-layout='phone'] .item-editor .move-row,
+html[data-layout='phone'] .item-editor .editor-actions {
+  gap: 0.8rem;
+}
+html[data-layout='phone'] .item-editor .move-row .btn,
+html[data-layout='phone'] .item-editor .editor-actions .btn {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0 0.8rem;
+  white-space: nowrap;
+}
+html[data-layout='phone'] .item-editor .editor-actions .grow {
+  display: none;
+}
+
+/* The list editor, a full-screen sheet on the phone. */
+html[data-layout='phone'] .section-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) repeat(3, var(--touch));
+  column-gap: 0.2rem;
+  row-gap: 0.2rem;
+}
+html[data-layout='phone'] .section-row > .input {
+  grid-column: 1;
+  grid-row: 1;
+}
+html[data-layout='phone'] .section-row > .muted.small {
+  grid-column: 1;
+  grid-row: 2;
+  padding-left: 1.6rem;
+}
+.list-editor-delete {
+  display: flex;
+  justify-content: center;
+  margin-top: 2.4rem;
+}

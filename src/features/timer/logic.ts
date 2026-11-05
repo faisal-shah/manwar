@@ -1,3 +1,5 @@
+import type { WallTimer } from '../../data/types';
+
 /** Pure timer helpers (keypad input, display, color stages). */
 
 export const MAX_MINUTES = 999;
@@ -21,6 +23,10 @@ export function pressKey(value: string, key: KeypadKey): string {
 }
 
 export const validMinutes = (n: number) => Number.isInteger(n) && n >= 1 && n <= MAX_MINUTES;
+
+/** Until when the stored timer holds the wall's scheduled sleep off: a few minutes past its end, or past its stop. */
+export const timerSleepHold = (t: WallTimer | null | undefined): number =>
+  t ? Math.min(t.endAt, t.stoppedAt ?? Infinity) + SLEEP_GRACE_MS : 0;
 
 /** Remaining time as whole minutes and seconds, rounded up to the second. */
 export function splitRemaining(ms: number): { mins: number; secs: number } {

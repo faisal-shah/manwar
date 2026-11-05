@@ -188,12 +188,26 @@ export function mergeItems(list: List, rows: MergeItem[]): () => void {
   };
 }
 
-export function clearDone(list: List): number {
+/** Remove the list's checked-off items; returns them, for restoreItems (an undo). */
+export function clearDone(list: List): ListItem[] {
   const done = (itemsByList.value.get(list.id) ?? []).filter((i) => i.done);
   const b = batch();
   done.forEach((i) => b.remove('listItems', i.id));
   void b.commit();
-  return done.length;
+  return done;
+}
+
+/**
+ * Put removed items back as they were (an undo), onto lists that still
+ * exist: not onto one deleted since on another device.
+ */
+export function restoreItems(items: ListItem[]): void {
+  const live = new Set(lists.value.map((l) => l.id));
+  const back = items.filter((i) => live.has(i.listId));
+  if (!back.length) return;
+  const b = batch();
+  back.forEach((i) => b.put('listItems', i));
+  void b.commit();
 }
 
 /* ---------- Lists ---------- */
@@ -272,8 +286,13 @@ export function addSection(list: List, name: string): ListSection {
   return section;
 }
 
+/** Lists deleted on this device, so a view of one can tell its own delete from another device's. */
+const deletedHere = new Set<string>();
+export const deletedOnThisDevice = (id: string) => deletedHere.has(id);
+
 /** Delete a list and its items; if it was the default grocery list, the next grocery list (if any) takes over. */
 export function deleteList(list: List): void {
+  deletedHere.add(list.id);
   const b = batch().remove('lists', list.id);
   for (const it of itemsByList.value.get(list.id) ?? []) b.remove('listItems', it.id);
   if (list.isDefaultGrocery) {
