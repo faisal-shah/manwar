@@ -14,8 +14,8 @@ import { openDetail } from '../../features/calendar/state';
 import { Button } from '../../ui/controls';
 import { Avatar, everyoneProfile } from '../../ui/profile';
 import { buildAgenda, dayTitle, freeLabel, type AgendaBlock, type AgendaRow } from './agenda';
-import { hiddenBy, shownOf, tapPerson } from './filter';
-import { agendaStart, calView, lookingAt, shownPeople } from './state';
+import { shownOf, tapPerson } from './filter';
+import { agendaStart, calView, hiddenPeople, lookingAt, notLoaded, shownPeople } from './state';
 
 /** Days the agenda shows at first, and how many more each time the end comes near. */
 export const FIRST_DAYS = 21;
@@ -37,6 +37,7 @@ export const Agenda = memo(function Agenda() {
   const list = useRef<HTMLDivElement>(null);
   const until = addDays(start, count - 1);
   const known = loadedRange.value;
+  const notYet = notLoaded.value;
   const s = sync.value;
   // Days outside the loaded window are not shown as empty: they wait for the fetch.
   const from = known && start < known.from ? null : start;
@@ -45,8 +46,7 @@ export const Agenda = memo(function Agenda() {
 
   useEffect(() => ensureRange(start, until), [start, until]);
 
-  const everyone = profiles.value.map((p) => p.id);
-  const hidden = hiddenBy(shownPeople.value, everyone);
+  const hidden = hiddenPeople.value;
   const shown = events.value.filter((ev) => passesHidden(ev, hidden));
   const blocks = from && to && from <= to ? buildAgenda(shown, from, to, nowMinute.value, settings.value.timeFormat, t) : [];
   const colors = new Map(calendars.value.map((c) => [c.id, c.color]));
@@ -126,14 +126,14 @@ export const Agenda = memo(function Agenda() {
     <div class="phc">
       <TopRow />
       <div class="phc-list" ref={list} onScroll={() => look(true)}>
-        {!known ? (
+        {notYet ? (
           <p class="phc-state" role="status">
-            {s.error ? 'The calendar could not be loaded yet.' : 'Loading the calendar…'}
+            {notYet}
           </p>
         ) : (
           blocks.map((b) => (b.kind === 'day' ? <Day key={b.day} block={b} colors={colors} /> : <Free key={b.from} block={b} />))
         )}
-        {known && (
+        {!notYet && (
           <div class="phc-end">
             {complete ? (
               <Button variant="ghost" onClick={() => setCount((c) => c + MORE_DAYS)}>

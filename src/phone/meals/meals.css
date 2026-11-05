@@ -11,16 +11,6 @@
 .pm-tonight-meal + .pm-tonight-meal {
   margin-top: 1.2rem;
 }
-.pm-none {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.8rem 1.2rem;
-}
-.pm-none p {
-  margin: 0;
-  flex: 1 1 16rem;
-}
 .pm-meal {
   display: flex;
   align-items: center;

@@ -298,6 +298,44 @@ describe('profile filters', () => {
   });
 });
 
+describe('a view with its own people filter (the phone)', () => {
+  const hiding = (hiddenProfiles: string[]) =>
+    (store.settings.value = { ...DEFAULT_SETTINGS, filter: { ...DEFAULT_SETTINGS.filter, hiddenProfiles } });
+  const ids = (list: { id: string }[]) => list.map((e) => e.id);
+
+  it("gets a day's events under its filter, not the household's", () => {
+    const hers = ev('hers', day(1), day(1, '10:00'));
+    const his = ev('his', day(1, '11:00'), day(1, '12:00'));
+    engine.events.value = [hers, his];
+    store.data.eventMeta.value = [meta('hers', ['asiyah']), meta('his', ['hashim'])];
+    hiding(['asiyah']);
+    const d = toISODate(hers.start);
+    expect(ids(engine.eventsOn(d))).toEqual(['his']);
+    expect(ids(engine.eventsOn(d, []))).toEqual(['hers', 'his']);
+    expect(ids(engine.eventsOn(d, ['hashim']))).toEqual(['hers']);
+  });
+
+  it("lists the countdowns its filter shows, while the wall's follow the household's", () => {
+    const party = ev('party', day(3), day(3, '11:00'));
+    const fair = ev('fair', day(5), day(5, '11:00'));
+    const trip = ev('trip', day(10), day(10, '11:00'));
+    engine.events.value = [party, fair, trip];
+    store.data.eventMeta.value = [
+      meta('party', ['asiyah'], { countdown: true }),
+      meta('fair', ['*'], { countdown: true }),
+      meta('trip', ['hashim'], { countdown: true }),
+    ];
+    const evIds = (list: { ev: CalEvent }[]) => ids(list.map((c) => c.ev));
+    expect(evIds(engine.countdownsFor([]))).toEqual(['party', 'fair', 'trip']);
+    expect(evIds(engine.countdownsFor(['hashim']))).toEqual(['party', 'fair']);
+    expect(evIds(engine.countdowns.value)).toEqual(['party', 'fair', 'trip']);
+    hiding(['asiyah']);
+    expect(evIds(engine.countdowns.value)).toEqual(['fair', 'trip']);
+    expect(evIds(engine.countdownsFor([]))).toEqual(['party', 'fair', 'trip']);
+    expect(evIds(engine.countdownsFor(['hashim']))).toEqual(['party', 'fair']);
+  });
+});
+
 describe('which days an event is on', () => {
   it('shows a zero-length event at midnight on its day', () => {
     const z = ev('z', '2026-11-08T00:00', '2026-11-08T00:00');

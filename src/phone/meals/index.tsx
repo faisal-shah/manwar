@@ -20,7 +20,8 @@ import { mealsOn, planCategory, weekByDay, type PlannedMeal } from './logic';
 
 const popover = signal<{ entry: MealEntry; date: ISODate; anchor: DOMRect } | null>(null);
 
-const openPlan = (date: ISODate, category: MealCategoryId) =>
+/** The plan sheet for `category` on `date` (behind the PIN when the lock is on); the Meals view shows it. */
+export const openPlan = (date: ISODate, category: MealCategoryId) =>
   void asParent(() => (planTarget.value = { date, category }), 'Enter the PIN to plan meals.');
 
 function MealButton({ meal, date, big }: { meal: PlannedMeal; date: ISODate; big?: boolean }) {
@@ -76,7 +77,7 @@ function Tonight() {
           );
         })
       ) : (
-        <div class="pm-none">
+        <div class="ph-none">
           <p class="muted">Nothing planned for dinner.</p>
           <Button small onClick={() => openPlan(day, 'dinner')}>
             <Plus size="2rem" /> Plan dinner

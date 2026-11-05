@@ -1,5 +1,5 @@
-import { CalendarDays, ChevronRight, House, ListChecks, MessageSquareText, Timer, UtensilsCrossed } from 'lucide-preact';
-import { countdowns, eventsOn, sync } from '../../calendar/engine';
+import { CalendarDays, ChevronRight, House, ListChecks, MessageSquareText, Plus, Timer, UtensilsCrossed } from 'lucide-preact';
+import { countdownsFor, eventsOn } from '../../calendar/engine';
 import type { CalEvent } from '../../calendar/types';
 import { data, profiles } from '../../data/store';
 import { UP_FOR_GRABS } from '../../data/types';
@@ -9,6 +9,7 @@ import { plural } from '../../lib/text';
 import { daysText } from '../../features/calendar/layout';
 import { countdownEmoji, fillStyle, nowMinute, timeLabel, whoOf } from '../../features/calendar/model';
 import { Avatars } from '../../features/calendar/parts';
+import { openDetail } from '../../features/calendar/state';
 import { openIngredients } from '../../features/meals/IngredientsModal';
 import { mealOccurrences } from '../../features/meals/plan';
 import { categoryById, recipeOf, mealEmoji } from '../../features/meals/state';
@@ -20,8 +21,12 @@ import { editTask } from '../../features/tasks/actions';
 import { UFG_COLOR } from '../../features/tasks/TaskCard';
 import { progress } from '../../tasks/engine';
 import { todayOccurrences, todayProgress } from '../../tasks/state';
+import { Button } from '../../ui/controls';
 import { swallowRestOfTap } from '../../ui/overlays';
 import { Avatar } from '../../ui/profile';
+import { hiddenPeople, notLoaded } from '../calendar/state';
+import { openPlan } from '../meals';
+import { moreView } from '../more';
 import { goPhone, type PhonePage } from '../nav';
 import { showTasksOf } from '../tasks/state';
 import { capped, isNow, nextUp, type DayAgenda } from './logic';
@@ -88,19 +93,22 @@ function timerText(startAt: number, endAt: number, phase: 'lead' | 'running' | '
 
 const MAX_EVENTS = 4;
 
+/** Today's and tomorrow's events under the phone's people filter, the same the Calendar tab shows. */
 function NextUpCard() {
   const day = today.value;
   const now = nowMinute.value;
-  const next = nextUp(eventsOn(day), eventsOn(addDays(day, 1)), now);
-  const s = sync.value;
-  const loading = s.lastSync === null && s.loading;
+  const hidden = hiddenPeople.value;
+  const next = nextUp(eventsOn(day, hidden), eventsOn(addDays(day, 1), hidden), now);
+  const notYet = notLoaded.value;
   const empty =
     !next.today.allDay.length && !next.today.timed.length && !next.tomorrow?.allDay.length && !next.tomorrow?.timed.length;
   return (
     <section class="ph-card" aria-label="Calendar">
       <CardHead icon={CalendarDays} title="Next up" onMore={openCalendar} more="See all" />
-      {loading && empty ? (
-        <p class="muted pd-empty">Loading the calendar…</p>
+      {notYet ? (
+        <p class="muted pd-empty" role="status">
+          {notYet}
+        </p>
       ) : empty ? (
         <p class="muted pd-empty">Nothing else on the calendar today or tomorrow.</p>
       ) : (
@@ -138,7 +146,7 @@ function EventRow({ ev, now }: { ev: CalEvent; now: number }) {
   const who = whoOf(ev);
   return (
     <li>
-      <button type="button" class="pd-ev" style={fillStyle(ev, 'light')} onClick={openCalendar}>
+      <button type="button" class="pd-ev" style={fillStyle(ev, 'light')} onClick={(e) => openEvent(ev, e.currentTarget)}>
         <span class="pd-ev-text">
           <span class="pd-ev-time">
             {isNow(ev, now) && <span class="pd-now">Now</span>}
@@ -264,7 +272,12 @@ function DinnerCard() {
     <section class="ph-card" aria-label={cat.name}>
       <CardHead icon={UtensilsCrossed} title={`${cat.name} tonight`} />
       {meals.length === 0 ? (
-        <p class="muted pd-empty">Nothing planned. Meals are planned at the wall, on the Meals tab.</p>
+        <div class="ph-none">
+          <p class="muted">Nothing planned.</p>
+          <Button small onClick={planDinner}>
+            <Plus size="2rem" /> Plan dinner
+          </Button>
+        </div>
       ) : (
         <ul class="pd-meals">
           {meals.map((m) => {
@@ -292,9 +305,9 @@ function DinnerCard() {
   );
 }
 
-/** Every countdown in the household's window, soonest first. */
+/** The countdowns in the household's window, soonest first, under the phone's people filter. */
 function CountdownsCard() {
-  const list = countdowns.value;
+  const list = countdownsFor(hiddenPeople.value);
   if (!list.length) return null;
   return (
     <section class="ph-card" aria-label="Countdowns">
@@ -323,6 +336,25 @@ function CountdownsCard() {
 function openCalendar(): void {
   swallowRestOfTap();
   goPhone('calendar');
+}
+
+/**
+ * An event's details, on the Calendar tab (its sheets live there). Back
+ * closes them, then leaves the tab for Today, as for an event tapped on the
+ * Calendar tab itself.
+ */
+function openEvent(ev: CalEvent, el: Element): void {
+  swallowRestOfTap();
+  goPhone('calendar');
+  openDetail(ev, el);
+}
+
+/** More > Meals with the plan sheet open on tonight's dinner. */
+function planDinner(): void {
+  swallowRestOfTap();
+  goPhone('more');
+  moreView.value = 'meals';
+  openPlan(today.peek(), 'dinner');
 }
 
 /** The first task: the Tasks tab with its editor open. */

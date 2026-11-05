@@ -42,6 +42,8 @@ export function createBackStack(
   /** popstate events still to come from our own traversals. */
   let ours = 0;
   let due = false;
+  /** The page is being replaced: its entries stay as they are. */
+  let leaving = false;
 
   /*
    * Bring the browser's entries to the stack's depth. Once per task, so a
@@ -54,7 +56,7 @@ export function createBackStack(
    */
   const reconcile = () => {
     due = false;
-    if (ours > 0) return;
+    if (ours > 0 || leaving) return;
     if (held > stack.length) {
       ours++;
       h.back(held - stack.length);
@@ -99,6 +101,14 @@ export function createBackStack(
       held = Math.max(0, held - 1);
       stack.pop()?.close();
     },
+    /**
+     * The page is being replaced (a reload into another layout): nothing is
+     * given back or pushed from now on, since a traversal would cancel that
+     * navigation.
+     */
+    leave(): void {
+      leaving = true;
+    },
     /** Entries held now (tests). */
     get depth() {
       return stack.length;
@@ -129,6 +139,16 @@ function phoneStack(): ReturnType<typeof createBackStack> {
 /** On the phone, from the start: entries a reload left are gone back over before anything opens. */
 export function startBack(): void {
   phoneStack();
+}
+
+/**
+ * Replace the page with `go` (switchLayout's reload). The confirmation that
+ * asked first closes as it does, and giving its entry back would cancel
+ * the navigation: the phone's entries are left as they are.
+ */
+export function leavePage(go: () => void): void {
+  stack?.leave();
+  go();
 }
 
 /**

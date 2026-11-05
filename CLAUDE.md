@@ -277,7 +277,12 @@ sequenceDiagram
   else a short screen side under 600 CSS px is a phone. Switching stores
   and reloads, so the wall's services (display schedule, wake lock, idle
   return, seeding, remote commands) never start on a phone
-  (`app/start.ts`). `html[data-layout]` scopes the phone's CSS
+  (`app/start.ts`). More > This phone asks before it switches to the wall
+  layout, saying what changes (a paired device then asks for the PIN, and
+  the screen follows the wall's night and sleep schedule); the wall's
+  Settings > About offers the phone layout back on a paired device or a
+  screen whose short side is under 600 CSS px (`chooseLayout`'s rule).
+  `html[data-layout]` scopes the phone's CSS
   (`phone/phone.css`: rem is 62.5% of the phone's font size, and shared
   sheets, dialogs, popovers and toasts are re-laid for a narrow screen).
 - **Identity**: a paired phone's Auth user is `<hid>.phone.<deviceId>` with
@@ -293,7 +298,10 @@ sequenceDiagram
   removed while offline never hears it from its device watch; once its
   token is refused, Auth signs it out by itself, and a phone's sign-out
   this page did not ask for (`leave()`: disconnect, unpair, a refused
-  sign-in) shows the removed message too.
+  sign-in) shows the removed message too. A phone signed in as the wall
+  (not paired) is not in the wall's Phones list; This phone says to pair
+  it instead and offers Sign out (`disconnect()`, behind the PIN when one
+  is set), which signs out that device only.
 - **Pairing limits** (`functions/src/index.ts`): Add a phone asks for the
   PIN even while the wall is unlocked (`requireParent` with `fresh`),
   since what it grants outlasts the unlock. A code shown is put away
@@ -347,7 +355,10 @@ sequenceDiagram
   made then and traverses past it. It starts with the phone
   (`startBack`), going back over the entries a reload left. Use
   `useBack('view', onClose, true)` in any phone inner view that should
-  close on Back.
+  close on Back. A navigation away from the page (the switch to the wall
+  layout) goes through `leavePage`: the confirmation that asked closes as
+  it starts, and the traversal giving its entry back would cancel the
+  reload, so the stack gives nothing back from then on.
   In e2e, wait for `history.state.manwarBack` to reach the expected depth
   before `page.goBack()` (Playwright's goBack targets an entry).
 - **Double taps on the phone** (`ui/overlays.tsx`): phone sheets fade
@@ -375,7 +386,15 @@ sequenceDiagram
   and the timed ones not over, and tomorrow's once no timed event is left
   today), each person's progress (`todayProgress`; a tap opens their
   tasks), tonight's dinner from the meal plan (category `dinner`, with
-  Ingredients for a recipe) and the countdowns. The header says Today and
+  Ingredients for a recipe, or Plan dinner, which opens More > Meals with
+  the plan sheet on tonight's dinner) and the countdowns. Next up and the
+  countdowns follow the phone's people filter (`hiddenPeople` in
+  `phone/calendar/state.ts`, passed to `eventsOn(day, hidden)` and
+  `countdownsFor(hidden)`), so Today and the Calendar tab show the same
+  events, and both say the same while nothing is loaded (`notLoaded`). An
+  event tapped on Today opens its details on the Calendar tab
+  (`openDetail`): Back closes them, then leaves the tab, as for an event
+  tapped on the agenda. The header says Today and
   no button on it names a tab, so a test that opens a tab by name finds
   only the tab.
 - **Tasks** (`phone/tasks/`): one person's today, or the Up for Grabs
@@ -403,7 +422,7 @@ sequenceDiagram
   with `ensureRange`. The day at the top (`lookingAt`) gives the header
   its month and is where + adds an event; at midnight it stays in place.
   The person filter is per phone (`shownPeople`, localStorage) on the
-  wall's rule (`passesHidden`). Event details and the editor are the
+  wall's rule (`passesHidden`), and Today follows it too. Event details and the editor are the
   wall's (`CalendarOverlays`), re-laid in `phone/calendar/calendar.css`;
   on the phone the details link the location to maps and say why a
   read-only event cannot be changed (`readOnlyText`). To assign lists
@@ -435,7 +454,7 @@ sequenceDiagram
   through `PlanMealSheet` on `planTarget`, a meal's `MealPopover`, which
   has no Open recipe on a phone), Note to the wall (`phone/notes/`: from
   whom, remembered per phone, read aloud, the notes the wall shows or
-  holds, Dismiss; the draft survives Back, and a reload in sessionStorage,
+  holds, Dismiss with Undo (`restoreMessage`); the draft survives Back, and a reload in sessionStorage,
   as the update check may reload an idle phone), Wall timer
   (`phone/timer/`: presets, any minutes, the countdown, Stop or Done,
   through the server, so an offline phone says it could not reach the
