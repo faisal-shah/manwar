@@ -535,3 +535,61 @@ test('eight people in the progress strip: each pill shows a whole name or none',
   const counts = await page.locator('.cal-prog-count').evaluateAll((els) => els.map((el) => el.getBoundingClientRect().width));
   for (const w of counts) expect(w).toBeGreaterThan(0);
 });
+
+test('an Arabic title cut short keeps its first words', async ({ page }) => {
+  const name = await open(page);
+  const title = 'قائمة المشتريات الأسبوعية للعائلة الكبيرة في البيت';
+  const section = 'الخضروات والفواكه الطازجة من السوق الكبير يوم الجمعة';
+  await seedDoc(name, 'lists', {
+    id: 'ar',
+    title,
+    kind: 'grocery',
+    sections: [{ id: 's1', name: section }],
+    order: -1,
+    createdAt: 1,
+  });
+  await seedDoc(name, 'listItems', {
+    id: 'ar1',
+    listId: 'ar',
+    sectionId: 's1',
+    text: 'بصل',
+    done: false,
+    order: 0,
+    createdAt: 1,
+  });
+  await seedDoc(name, 'meals', {
+    id: 'kabsa',
+    date: '2026-11-04',
+    category: 'dinner',
+    title: 'كبسة دجاج مع الأرز البسمتي والسلطة الخضراء واللبن والخبز',
+    order: -1,
+    createdAt: 1,
+  });
+  /** Is the text cut, with its first letter drawn inside the box (not clipped off behind the ellipsis)? */
+  const firstLetterShows = (l: Locator) =>
+    l.evaluate((el) => {
+      const walk = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, (n) =>
+        n.textContent!.trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP,
+      );
+      const text = walk.nextNode()!;
+      const r = document.createRange();
+      r.setStart(text, 0);
+      r.setEnd(text, 1);
+      const a = r.getBoundingClientRect();
+      const b = el.getBoundingClientRect();
+      return el.scrollWidth > el.clientWidth && a.left >= b.left - 0.5 && a.right <= b.right + 0.5;
+    });
+  await rail(page, 'Lists').click();
+  const card = page.locator('.list-card', { has: page.locator('.lc-title', { hasText: 'قائمة' }) });
+  const head = card.locator('.ls-title', { hasText: 'الخضروات' });
+  await expect(head).toBeVisible();
+  expect(await firstLetterShows(card.locator('.lc-title'))).toBe(true);
+  expect(await firstLetterShows(head)).toBe(true);
+
+  // A meal title clamped to its lines: Chrome draws the clamp's ellipsis on a right-to-left block only
+  // when it is aligned to its start, so the bdi must not take the entry's left alignment.
+  await rail(page, 'Meals').click();
+  const meal = page.locator('[data-cell="2026-11-04|dinner"] .mg-title', { hasText: 'كبسة' });
+  await expect(meal).toBeVisible();
+  expect(await meal.evaluate((el) => [getComputedStyle(el).direction, getComputedStyle(el).textAlign])).toEqual(['rtl', 'start']);
+});

@@ -47,6 +47,8 @@
   flex: 1;
   min-width: 0;
   margin: 0;
+  /* dir=auto: an Arabic title reads from the right and is cut at its end, while one that fits stays left. */
+  text-align: left;
   font-family: var(--font-display);
   font-weight: 400;
   font-size: 3.4rem;

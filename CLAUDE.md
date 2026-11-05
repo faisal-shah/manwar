@@ -283,7 +283,11 @@ generated from it: `node scripts/icons/render.mjs` after any brand change.
 - Firestore field paths cannot contain `*`; `lastDoneKey()` maps Up for Grabs to `any`.
 - Text the family types (names, titles, list items, recipe lines, messages)
   may be Arabic: render it in a `<bdi>` (or `dir="auto"` on its own block),
-  or its punctuation and leading numbers land on the wrong side.
+  or its punctuation and leading numbers land on the wrong side. A box that
+  cuts the text with an ellipsis takes `dir="auto"` itself (an inner bdi
+  shows an Arabic title's end, cut at its start); a line-clamped one aligns
+  to `start`, since Chrome draws no clamp ellipsis on a right-to-left block
+  aligned left.
 - Column rows that scroll sideways (`.pcols`, `.tp-cards`) snap. A vertical
   scroller inside one contains the y axis only (`overscroll-behavior-y`), or
   a sideways swipe on the cards never pages the row; `useStartInView`

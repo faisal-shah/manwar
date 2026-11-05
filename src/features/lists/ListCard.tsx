@@ -103,8 +103,9 @@ export function ListCard({ list, compact }: { list: List; compact?: boolean }) {
     <section class={`list-card${compact ? ' compact' : ''}`} style={{ '--c': listColor(list) }} aria-label={list.title}>
       <header class="lc-head">
         {list.emoji && <span class="lc-emoji">{list.emoji}</span>}
-        <h3 class="lc-title">
-          <bdi>{list.title}</bdi>
+        {/* Its own direction on the box that cuts it: an Arabic title loses its end to the ellipsis, not its start. */}
+        <h3 class="lc-title" dir="auto">
+          {list.title}
         </h3>
         <span class="lc-count" aria-label={`${view.open} open items`}>
           {view.open}
@@ -129,7 +130,7 @@ export function ListCard({ list, compact }: { list: List; compact?: boolean }) {
           ) : (
             <div class="ls-group" key={g.section.id}>
               <div class="ls-head" data-drop={`head:${g.section.id}`}>
-                <button type="button" class="ls-title" onClick={() => toggleCollapsed(g.section!.id)}>
+                <button type="button" class="ls-title" dir="auto" onClick={() => toggleCollapsed(g.section!.id)}>
                   {g.section.name}
                 </button>
                 <span class="ls-count">{g.items.filter((i) => !i.done).length}</span>
