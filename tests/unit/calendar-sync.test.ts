@@ -205,4 +205,23 @@ describe('calendar sync across a change of account', () => {
     expect(asked.sort()).toEqual(['ours@gmail.com', 'school@group.calendar.google.com']);
     expect(ids().sort()).toEqual(['ours-event', 'school-event']);
   });
+
+  it('keeps a calendar hidden during a fetch off the wall when the fetch lands', async () => {
+    const school = 'school@group.calendar.google.com';
+    source.listCalendars = async () => [cal('ours@gmail.com'), cal(school)];
+    const answer = deferred();
+    source.listEvents = async (id) => {
+      await answer.promise;
+      return [ev(id, `${id.split('@')[0]}-event`)];
+    };
+    const poll = engine.refresh();
+    await settle();
+    // Hidden while the poll's requests are on their way.
+    store.settings.value = { ...store.settings.value, hiddenCalendars: [school] };
+    answer.resolve();
+    await poll;
+    expect(ids()).toEqual(['ours-event']);
+    store.settings.value = { ...store.settings.value, hiddenCalendars: [] };
+    await settle();
+  });
 });

@@ -189,9 +189,13 @@ async function fetchAll(): Promise<void> {
     if (stale()) return;
     calendars.value = cals;
     const w = fetchWindow();
-    const shown = visibleCalendars();
-    const results = await Promise.allSettled(shown.map((c) => source.listEvents(c.id, dateAt(w.from), dateAt(w.to))));
+    const asked = visibleCalendars();
+    const answers = await Promise.allSettled(asked.map((c) => source.listEvents(c.id, dateAt(w.from), dateAt(w.to))));
     if (stale()) return;
+    // A calendar hidden while its events were on the way stays off the wall.
+    const hidden = settings.peek().hiddenCalendars;
+    const shown = asked.filter((c) => !hidden.includes(c.id));
+    const results = answers.filter((_, i) => !hidden.includes(asked[i].id));
     // A calendar that fails keeps the events it had, so one bad calendar neither blanks nor freezes the wall.
     const failed = shown.filter((_, i) => results[i].status === 'rejected');
     const kept = events.value.filter((e) => failed.some((c) => c.id === e.calendarId));
