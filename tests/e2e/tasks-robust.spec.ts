@@ -58,6 +58,21 @@ async function docs(name: string, col: string): Promise<Record<string, Value>[]>
 const num = (v?: Value) => Number(v?.integerValue ?? v?.doubleValue ?? 0);
 
 /** Every balance equals the sum of that profile's ledger. */
+/**
+ * A document as the emulator has it. The page shows seeded data from its local
+ * cache before the seed reaches the server, so poll rather than read once.
+ */
+async function serverDoc(name: string, col: string, match: (d: Record<string, Value>) => boolean) {
+  let found: Record<string, Value> | undefined;
+  await expect
+    .poll(async () => {
+      found = (await docs(name, col)).find(match);
+      return !!found;
+    })
+    .toBe(true);
+  return found!;
+}
+
 async function expectLedgerBalanced(name: string) {
   const [profiles, ledger] = await Promise.all([docs(name, 'profiles'), docs(name, 'ledger')]);
   for (const p of profiles) {
@@ -205,8 +220,7 @@ test('unchecking takes back the stars it earned, even after the value changed', 
   await card(page, 'asiyah', 'Breakfast').locator('.tk-check').click();
   await expect(stars(page, 'asiyah')).toHaveText('130');
   // A parent raises the task's value afterwards.
-  const tasks = await docs('untoast', 'tasks');
-  const breakfast = tasks.find((t) => t.title.stringValue === 'Breakfast')!;
+  const breakfast = await serverDoc('untoast', 'tasks', (t) => t.title.stringValue === 'Breakfast');
   const res = await fetch(
     `${FS}/households/demo-${demoName('untoast')}/tasks/${breakfast.id.stringValue}?updateMask.fieldPaths=stars`,
     { method: 'PATCH', headers: AUTH, body: JSON.stringify({ fields: { stars: { integerValue: '5' } } }) },
@@ -317,8 +331,7 @@ test('saving an editor keeps what changed while it was open', async ({ page }) =
   await open(page, 'stale-edit', 'Rewards');
   const book = column(page, 'mamma').locator('.rw-card[data-reward="New book"]');
   await expect(book).toBeVisible({ timeout: 15_000 });
-  const rewards = await docs('stale-edit', 'rewards');
-  const id = rewards.find((r) => r.title.stringValue === 'New book')!.id.stringValue;
+  const id = (await serverDoc('stale-edit', 'rewards', (r) => r.title.stringValue === 'New book')).id.stringValue;
   await book.getByRole('button', { name: 'New book, edit' }).click();
   const sheet = page.getByRole('dialog', { name: 'Edit reward' });
   await expect(sheet).toBeVisible();
