@@ -52,6 +52,19 @@ test("a double tap on a person's row on Today opens their tasks and checks nothi
   expect(errors()).toEqual([]);
 });
 
+test('a quick tap on the tab bar right after a sheet closes still opens the tab', async ({ browser }) => {
+  const { p, errors } = await wallAndPhone(browser, 'quick-tab', { tab: 'Tasks' });
+  const page = p.page;
+  await page.getByRole('button', { name: 'Add task' }).click();
+  const sheet = page.getByRole('dialog', { name: 'Add task' });
+  await sheet.getByLabel('Title', { exact: true }).fill('Water the lawn');
+  // Add sits over the tab bar's More, and the next tap follows at once.
+  await sheet.getByRole('button', { name: 'Add', exact: true }).click();
+  await phoneTab(page, 'More');
+  await expect(page.locator('.ph-head h1')).toHaveText('More');
+  expect(errors()).toEqual([]);
+});
+
 test("a double tap on the details' Complete presses nothing under the closed sheet", async ({ browser }) => {
   const { p, errors } = await wallAndPhone(browser, 'dbl-complete', { tab: 'Tasks' });
   const page = p.page;

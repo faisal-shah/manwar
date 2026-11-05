@@ -40,7 +40,7 @@ function PhoneShell() {
       <main class="ph-body" key={page.id}>
         <page.Body />
       </main>
-      <nav class="ph-nav" aria-label="Tabs">
+      <nav class="ph-nav" aria-label="Tabs" data-tap-through>
         {PHONE_PAGES.map((p) => {
           const n = p.badge?.() ?? 0;
           return (

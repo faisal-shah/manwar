@@ -50,7 +50,10 @@ function useOpeningTap(): (e: MouseEvent) => boolean {
 /**
  * The tap being handled changes what is under the finger (a screen opens
  * in its place, a form closes and the list below moves up): the rest of
- * its double tap presses nothing. A no-op once the tap is past.
+ * its double tap presses nothing. A no-op once the tap is past. Controls
+ * inside `[data-tap-through]` (the phone's tab bar, where a tap changes
+ * nothing but the tab) lose only a tap the browser counts as a double tap's
+ * second (`detail` 2), so a quick but separate tap there always lands.
  */
 export function swallowRestOfTap(): void {
   const from = lastDown;
@@ -59,6 +62,7 @@ export function swallowRestOfTap(): void {
   const onClick = (e: MouseEvent) => {
     // Only the very next tap (the second of a double tap), not taps made since.
     if (lastDown.seq !== from.seq + 1 || !restOfTap(from, e)) return;
+    if (e.detail < 2 && e.target instanceof Element && e.target.closest('[data-tap-through]')) return;
     e.stopPropagation();
     e.preventDefault();
   };
