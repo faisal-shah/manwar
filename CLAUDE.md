@@ -284,7 +284,10 @@ generated from it: `node scripts/icons/render.mjs` after any brand change.
   `options.vnode` hook installed in `main.tsx`) gives every text `<input>`
   and `<textarea>` `dir="auto"`, so typed Arabic runs right to left and an
   empty field's placeholder stays at the left; an explicit `dir` wins.
-- Column rows that scroll sideways (`.pcols`, `.tp-cards`) snap. A vertical
+- Column rows that scroll sideways (`.pcols`, `.tp-cards`) snap. Four
+  `.pcols` columns fill the width; from five on they narrow by `--peek`
+  so the next column shows its edge (the row goes on), and Home's cards
+  overflow with part of the next one showing. A vertical
   scroller inside one contains the y axis only (`overscroll-behavior-y`), or
   a sideways swipe on the cards never pages the row; `useStartInView`
   (`tasks/DayView.tsx`) keeps a row at its start when a column is put in

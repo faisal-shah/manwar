@@ -6,8 +6,15 @@
   initial-value: 0%;
 }
 
-/* Four columns fit across the 1600-wide canvas; more scroll sideways, fewer grow to a third each. */
+/*
+ * Four columns fit across the 1600-wide canvas; fewer grow to a third each.
+ * More scroll sideways, and then the four narrow a little so the fifth
+ * peeks in at the right edge (its avatar half shown): a family of six can
+ * see that the row goes on. Scrolled to the end, the column before peeks in
+ * at the left the same way.
+ */
 .pcols {
+  --peek: 5.6rem;
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: minmax(calc((100% - 3 * var(--gap)) / 4), calc((100% - 2 * var(--gap)) / 3));
@@ -18,6 +25,9 @@
   scroll-snap-type: x mandatory;
   overscroll-behavior-x: contain;
   scrollbar-width: none;
+}
+.pcols:has(> .pcol:nth-child(5)) {
+  grid-auto-columns: calc((100% - 4 * var(--gap) - var(--peek)) / 4);
 }
 .pcols::-webkit-scrollbar {
   display: none;
