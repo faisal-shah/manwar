@@ -45,7 +45,7 @@ export function viewPeriod(view: CalendarView, focus: ISODate | null, today: ISO
   switch (view) {
     case 'schedule': {
       const n = Math.min(7, Math.max(1, Math.round(s.scheduleDays)));
-      const from = focus ?? (s.scheduleStartToday ? today : startOfWeek(today, s.weekStart));
+      const from = focus ?? scheduleHome(today, n, s);
       return { from, to: addDays(from, n - 1) };
     }
     case 'day': {
@@ -70,6 +70,18 @@ export function viewPeriod(view: CalendarView, focus: ISODate | null, today: ISO
       return { from, to: addDays(from, weeks * 7 - 1), month };
     }
   }
+}
+
+/**
+ * First day of the Schedule while it follows today: today, or the week
+ * start. Fewer than 7 days from the week start may end before today (4 days
+ * from Monday on a Saturday), so then the days run up to today instead.
+ */
+function scheduleHome(today: ISODate, n: number, s: NavSettings): ISODate {
+  if (s.scheduleStartToday) return today;
+  const weekStart = startOfWeek(today, s.weekStart);
+  const latest = addDays(today, -(n - 1));
+  return latest > weekStart ? latest : weekStart;
 }
 
 /** The focus one period earlier (-1) or later (+1); null when that lands back on today's period. */

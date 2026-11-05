@@ -158,6 +158,19 @@ describe('viewPeriod and paging', () => {
       to: '2026-11-05',
     });
   });
+  it('Schedule on the week start still shows today late in the week', () => {
+    const fewer = { ...S, weekStart: 1 as const, scheduleStartToday: false };
+    // Saturday: four days from Monday would end on Thursday.
+    expect(viewPeriod('schedule', null, '2026-11-07', fewer)).toEqual({ from: '2026-11-04', to: '2026-11-07' });
+    expect(viewPeriod('schedule', null, '2026-11-08', { ...fewer, scheduleDays: 1 })).toEqual({
+      from: '2026-11-08',
+      to: '2026-11-08',
+    });
+    // Paging away and back returns to the period with today.
+    const next = pageFocus('schedule', null, '2026-11-07', fewer, 1);
+    expect(next).toBe('2026-11-08');
+    expect(pageFocus('schedule', next, '2026-11-07', fewer, -1)).toBeNull();
+  });
   it('Schedule pages by its day count and returns to following today', () => {
     const next = pageFocus('schedule', null, TODAY, S, 1);
     expect(next).toBe('2026-11-08');
