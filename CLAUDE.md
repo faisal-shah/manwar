@@ -565,7 +565,13 @@ generated from it: `node scripts/icons/render.mjs` after any brand change.
   be undefined (a field that focuses as it mounts raises the keyboard, and
   with a PIN set the PIN pad, wherever it appears).
 - Overlays (`Sheet`, `Modal`, `Popover`, the calendar `Menu`) portal to
-  `document.body` and register through `useOverlay(onClose)`: its `scrim`
+  `document.body`, register through `useOverlay(onClose)` and spread its
+  `box` on the dialog element. On the phone that makes the box modal
+  (`aria-modal`, `useModalFocus`): it takes focus once the render's effects
+  ran and only when nothing in it has focus (a `useAutoFocus` field keeps
+  it, and the keyboard), and gives focus back to what had it when it
+  closes, if that is still in the page. The wall keeps focus where it is.
+  A `Popover` that shows a title takes it as `label`. `useOverlay`'s `scrim`
   handler lets the second tap of the double tap that opened the overlay
   through, and one that opens under that tap (a centered dialog; on the
   phone every sheet and popover) puts `content` on its box

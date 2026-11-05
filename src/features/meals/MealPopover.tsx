@@ -49,11 +49,13 @@ export function MealPopover({
     });
 
   return (
-    <Popover anchor={anchor} width={50} onClose={onClose}>
+    <Popover anchor={anchor} width={50} onClose={onClose} label={entry.title}>
       <div class="meal-pop" style={cat ? { '--c': cat.color } : undefined}>
         <header class="mp-head">
           {emoji && <span class="mp-emoji">{emoji}</span>}
-          <h2 class="mp-title">{entry.title}</h2>
+          <h2 class="mp-title">
+            <bdi>{entry.title}</bdi>
+          </h2>
           <IconButton label="Edit meal" class="mp-btn" onClick={edit}>
             <Pencil size="2.2rem" />
           </IconButton>

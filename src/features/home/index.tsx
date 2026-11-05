@@ -97,7 +97,7 @@ function Customize() {
 }
 
 function CustomizeMenu({ onClose }: { onClose: () => void }) {
-  const { scrim } = useOverlay(onClose);
+  const { scrim, box } = useOverlay(onClose);
   const hidden = settings.value.homeHiddenPanes;
   const toggle = (id: HomePane) =>
     asParent(() => {
@@ -106,7 +106,7 @@ function CustomizeMenu({ onClose }: { onClose: () => void }) {
   return (
     <>
       <div class="popover-scrim" onClick={scrim} />
-      <div class="customize-menu" role="dialog" aria-label="Customize Home">
+      <div {...box} class="customize-menu" role="dialog" aria-label="Customize Home">
         {PANES.map((p) => {
           const on = !hidden.includes(p.id);
           return (

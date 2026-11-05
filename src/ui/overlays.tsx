@@ -1,5 +1,5 @@
 import { signal } from '@preact/signals';
-import type { ComponentChildren } from 'preact';
+import type { ComponentChildren, RefObject } from 'preact';
 import { createPortal } from 'preact/compat';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { ArrowLeft, X } from 'lucide-preact';
@@ -108,18 +108,61 @@ export function useOpeningTapGuard(): {
 /** The onClose of every overlay on screen, for closeOverlays(). */
 const onScreen = new Set<{ current: () => void }>();
 
+/** What an overlay spreads on its dialog box (`useOverlay`). */
+export interface OverlayBox<T extends HTMLElement> {
+  ref: RefObject<T | null>;
+  tabIndex?: number;
+  'aria-modal'?: 'true';
+}
+
 /**
- * Every overlay (sheet, dialog, popover, menu) calls this. `scrim` closes it
- * on a tap outside, letting the rest of the opening double tap through;
- * `content`, for the box of one that opens under that tap (onClickCapture),
- * drops it inside. The overlay also closes on idle return (closeOverlays).
+ * On the phone an overlay is modal: it takes focus as it opens, so a screen
+ * reader and the keyboard are in it and not on the covered page, and gives
+ * focus back to what had it (the button that opened it) as it closes. A
+ * field in it that focuses itself as it mounts (useAutoFocus, an effect of
+ * the overlay or of its parent) keeps focus and its keyboard: the box takes
+ * focus only after every effect of that render ran, and only when nothing
+ * in it has focus. The wall keeps focus where it is.
  */
-export function useOverlay(onClose: () => void): { scrim: (e: MouseEvent) => void; content: (e: MouseEvent) => void } {
+function useModalFocus<T extends HTMLElement>(box: RefObject<T | null>): void {
+  // Read in the first render, before anything in the overlay can take focus.
+  const opener = useRef(isPhone ? document.activeElement : null).current;
+  useEffect(() => {
+    if (!isPhone) return;
+    queueMicrotask(() => {
+      const el = box.current;
+      if (el && !el.contains(document.activeElement)) el.focus({ preventScroll: true });
+    });
+  }, []);
+  useLayoutEffect(() => {
+    if (!isPhone) return;
+    const el = box.current;
+    return () => {
+      const now = document.activeElement;
+      // Not when focus has moved on elsewhere (another overlay took it).
+      const lost = !now || now === document.body || !!el?.contains(now);
+      if (lost && opener instanceof HTMLElement && opener.isConnected) opener.focus({ preventScroll: true });
+    };
+  }, []);
+}
+
+/**
+ * Every overlay (sheet, dialog, popover, menu) calls this and spreads `box`
+ * on its dialog element. `scrim` closes it on a tap outside, letting the
+ * rest of the opening double tap through; `content`, for the box of one
+ * that opens under that tap (onClickCapture), drops it inside. The overlay
+ * also closes on idle return (closeOverlays). On the phone, Back closes it
+ * and it is modal (useModalFocus).
+ */
+export function useOverlay<T extends HTMLElement = HTMLDivElement>(
+  onClose: () => void,
+): { scrim: (e: MouseEvent) => void; content: (e: MouseEvent) => void; box: OverlayBox<T> } {
   const { opened, isOpeningTap } = useOpeningTap();
   const close = useRef(onClose);
   close.current = onClose;
-  // On the phone, Back closes it.
+  const ref = useRef<T>(null);
   useBack('overlay', onClose, isPhone);
+  useModalFocus(ref);
   useEffect(() => {
     onScreen.add(close);
     return () => void onScreen.delete(close);
@@ -132,6 +175,7 @@ export function useOverlay(onClose: () => void): { scrim: (e: MouseEvent) => voi
       if (!isOpeningTap(e)) onClose();
     },
     content: (e) => void (isOpeningTap(e) && drop(e)),
+    box: isPhone ? { ref, tabIndex: -1, 'aria-modal': 'true' } : { ref },
   };
 }
 
@@ -179,11 +223,12 @@ export function Sheet({
   wide?: boolean;
   children: ComponentChildren;
 }) {
-  const { scrim, content } = useOverlay(onClose);
+  const { scrim, content, box } = useOverlay<HTMLElement>(onClose);
   return portal(
     <>
       <div class="scrim" onClick={scrim} />
       <section
+        {...box}
         class={`sheet${wide ? ' sheet-wide' : ''}`}
         role="dialog"
         aria-label={title}
@@ -223,7 +268,7 @@ export function Modal({
   return portal(
     <>
       <div class="scrim top" onClick={taps.scrim} />
-      <div class="modal" role="dialog" aria-label={title} onClickCapture={taps.content}>
+      <div {...taps.box} class="modal" role="dialog" aria-label={title} onClickCapture={taps.content}>
         {title && <h2>{title}</h2>}
         <div class="scroll" style={{ minHeight: 0 }}>
           {children}
@@ -237,20 +282,23 @@ export function Modal({
 /**
  * Floating card anchored beside an element's rect (event details, task
  * details, menus). Opens to whichever side has room; tap outside closes.
+ * `label` names it, for one that shows a title (the event's, the task's).
  */
 export function Popover({
   anchor,
   onClose,
   width = 44,
+  label,
   children,
 }: {
   anchor: DOMRect;
   onClose: () => void;
   width?: number;
+  label?: string;
   children: ComponentChildren;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const { scrim, content } = useOverlay(onClose);
+  const { scrim, content, box } = useOverlay(onClose);
+  const ref = box.ref;
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
   // Place it again when the viewport changes (an on-screen keyboard that resizes the page), so it stays on screen.
   const [viewport, setViewport] = useState(0);
@@ -285,9 +333,10 @@ export function Popover({
     <>
       <div class="popover-scrim" onClick={scrim} />
       <div
-        ref={ref}
+        {...box}
         class="popover"
         role="dialog"
+        aria-label={label}
         onClickCapture={isPhone ? content : undefined}
         style={{ width: `${width}rem`, left: pos?.left ?? -9999, top: pos?.top ?? 0, visibility: pos ? 'visible' : 'hidden' }}
       >

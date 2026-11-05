@@ -214,6 +214,10 @@ html[data-layout='phone'] {
 }
 
 /* Shared overlays on a narrow screen */
+/* A dialog's box takes focus as it opens (useModalFocus): no ring around the whole sheet. */
+html[data-layout='phone'] [aria-modal='true']:focus {
+  outline: none;
+}
 html[data-layout='phone'] .sheet,
 html[data-layout='phone'] .sheet-wide {
   width: 100%;

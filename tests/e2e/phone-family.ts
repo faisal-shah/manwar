@@ -53,7 +53,12 @@ export const wallStars = (page: Page, col: string) => page.locator(`[data-column
 /** The household's document path in the emulator (`timers/wall`, `profiles/mamma`). */
 const docUrl = (household: string, path: string) => `${FS}/households/demo-${household}/${path}`;
 
-type Field = { stringValue: string } | { integerValue: string } | { booleanValue: boolean } | { mapValue: unknown };
+type Field =
+  | { stringValue: string }
+  | { integerValue: string }
+  | { booleanValue: boolean }
+  | { mapValue: unknown }
+  | { arrayValue: { values?: Field[] } };
 
 /** Write (create or replace) a document straight to the emulator. */
 export async function writeDoc(household: string, path: string, fields: Record<string, Field>): Promise<void> {

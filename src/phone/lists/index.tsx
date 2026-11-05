@@ -148,7 +148,7 @@ function ListMenu({ list }: { list: List }) {
         <Ellipsis size="2.8rem" />
       </IconButton>
       {menu && (
-        <Popover anchor={menu} width={34} onClose={() => setMenu(null)}>
+        <Popover anchor={menu} width={34} onClose={() => setMenu(null)} label={list.title}>
           <div class="menu phl-menu" style={{ '--c': listColor(list) }}>
             <p class="phl-menu-title" dir="auto">
               {list.emoji && `${list.emoji} `}

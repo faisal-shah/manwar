@@ -29,7 +29,7 @@ function Details({ d }: { d: NonNullable<typeof detailsFor.value> }) {
   const by = done ? profileById.value.get(o.state!.by) : undefined;
   const rep = repeatSummary(t);
   return (
-    <Popover anchor={d.anchor} onClose={close} width={46}>
+    <Popover anchor={d.anchor} onClose={close} width={46} label={t.title}>
       <div class="tk-pop" data-testid="task-details">
         <div class="tk-pop-head">
           {t.emoji && (

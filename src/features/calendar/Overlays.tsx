@@ -60,10 +60,11 @@ function DayPopup({ day, anchor, onClose }: { day: ISODate; anchor: DOMRect; onC
   const it = itemsByDay(day, day).get(day)!;
   const events = dayEvents(it);
   const d = fromISODate(day);
+  const title = `${monthLong(d.getMonth())} ${d.getDate()}`;
   return (
-    <Popover anchor={anchor} onClose={onClose} width={44}>
+    <Popover anchor={anchor} onClose={onClose} width={44} label={title}>
       <div class="cal-day-popup" data-popup={day}>
-        <h2 class="serif">{`${monthLong(d.getMonth())} ${d.getDate()}`}</h2>
+        <h2 class="serif">{title}</h2>
         <span class="muted">{countLabel(events.length, false)}</span>
         <div class="cal-day-popup-items">
           {it.meals.map((m) => (

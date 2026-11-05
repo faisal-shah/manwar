@@ -117,13 +117,15 @@ function RedeemedDialog({ r }: { r: Redeemed }) {
           <span style={{ '--a': `${b.a}deg`, '--d': `${b.d}rem`, fontSize: `${b.s}rem`, animationDelay: `${b.delay}ms` }}>★</span>
         ))}
       </div>
-      <div class="rw-dialog" role="dialog" aria-label="Reward redeemed" onClickCapture={taps.content}>
+      <div {...taps.box} class="rw-dialog" role="dialog" aria-label="Reward redeemed" onClickCapture={taps.content}>
         <span class="rw-dialog-emoji" aria-hidden="true">
           {r.reward.emoji ?? '🎁'}
         </span>
-        <h2 class="serif">Great work! {r.reward.title} redeemed</h2>
+        <h2 class="serif">
+          Great work! <bdi>{r.reward.title}</bdi> redeemed
+        </h2>
         <p class="muted">
-          By {p?.name ?? 'someone'} for {plural(-r.entry.delta, 'star')} on {longDay(r.entry.at)}.
+          By <bdi>{p?.name ?? 'someone'}</bdi> for {plural(-r.entry.delta, 'star')} on {longDay(r.entry.at)}.
         </p>
         <Button variant="primary" onClick={close}>
           Done

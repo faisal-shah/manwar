@@ -90,7 +90,7 @@ export function EventDetail({ ev, anchor, onClose }: { ev: CalEvent; anchor: DOM
   };
 
   return (
-    <Popover anchor={anchor} onClose={onClose} width={48}>
+    <Popover anchor={anchor} onClose={onClose} width={48} label={ev.title}>
       <div class="ev-detail" data-detail={ev.key}>
         <header class="evd-head">
           <h2 class="serif">
