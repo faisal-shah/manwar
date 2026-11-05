@@ -100,6 +100,9 @@ describe('calendar sync across a change of account', () => {
     expect(ids()).toEqual(['swim_x']);
     const saved = JSON.parse(storage.get('manwar.events.v1')!);
     expect([saved.household, saved.events[0].originalStart]).toEqual(['gOurs', Date.parse('2026-11-21T15:30:00Z')]);
+    // With when the calendar answered.
+    expect(Object.keys(saved.syncedAt)).toEqual(['ours@gmail.com']);
+    expect(saved.at - saved.syncedAt['ours@gmail.com']).toBeLessThan(1000);
 
     // A sync that is out when the tablet switches to a third account must not land.
     const gate = deferred();
@@ -139,11 +142,14 @@ describe('calendar sync across a change of account', () => {
 
   it('reads its own snapshot back, a moved occurrence with its original start as a date', async () => {
     const at = Date.parse('2026-11-23T22:00:00Z');
+    // School had been failing for three hours when the snapshot was kept.
+    const schoolAt = Date.now() - 3 * 3_600_000;
     storage.set(
       'manwar.events.v1',
       JSON.stringify({
         household: 'gOurs',
-        calendars: [cal('ours@gmail.com')],
+        calendars: [cal('ours@gmail.com'), cal('school@group.calendar.google.com')],
+        syncedAt: { 'ours@gmail.com': Date.now(), 'school@group.calendar.google.com': schoolAt },
         events: [
           {
             ...ev('ours@gmail.com', 'swim_x', { seriesId: 'swim' }),
@@ -165,6 +171,9 @@ describe('calendar sync across a change of account', () => {
     expect(ids()).toEqual(['swim_x']);
     expect(engine.events.value[0].originalStart).toEqual(new Date(at - 2 * 86_400_000));
     expect(engine.sync.value.error).toBe('Failed to fetch');
+    // Each calendar is as old as its own last fetch, not the snapshot's.
+    expect(engine.sync.value.failing.map((f) => f.at)).toEqual([expect.any(Number), schoolAt]);
+    expect(engine.sync.value.failing[0].at).toBeGreaterThan(schoolAt);
   });
 
   it('remembers a calendar that never loaded as never loaded, after a reload', async () => {
@@ -253,9 +262,31 @@ describe('calendar sync across a change of account', () => {
     await settle();
   });
 
-  it('keeps a far countdown of a calendar hidden during its lookup off the wall', async () => {
+  it('takes the countdowns past the window of a calendar hidden elsewhere off at once', async () => {
     const school = 'school@group.calendar.google.com';
     const camp = ev(school, 'camp', {
+      allDay: true,
+      start: new Date(Date.now() + 200 * 86_400_000),
+      end: new Date(Date.now() + 201 * 86_400_000),
+    });
+    source.listCalendars = async () => [cal('ours@gmail.com'), cal(school)];
+    source.listEvents = async () => [];
+    source.nextOccurrence = async (c, id) => (c === school && id === 'camp' ? camp : null);
+    store.data.eventMeta.value = [{ id: engine.metaKey(school, 'camp'), profiles: [], countdown: true, updatedAt: 0 }];
+    store.settings.value = { ...store.settings.value, countdownWindow: 'always' };
+    await engine.refresh();
+    await settle();
+    expect(engine.countdowns.value.map((c) => c.ev.id)).toEqual(['camp']);
+    store.settings.value = { ...store.settings.value, hiddenCalendars: [school] };
+    expect(engine.countdowns.value).toEqual([]);
+    store.settings.value = { ...store.settings.value, hiddenCalendars: [], countdownWindow: '3m' };
+    store.data.eventMeta.value = [];
+    await settle();
+  });
+
+  it('keeps a far countdown of a calendar hidden during its lookup off the wall', async () => {
+    const school = 'school@group.calendar.google.com';
+    const trip = ev(school, 'trip', {
       allDay: true,
       start: new Date(Date.now() + 200 * 86_400_000),
       end: new Date(Date.now() + 201 * 86_400_000),
@@ -265,15 +296,15 @@ describe('calendar sync across a change of account', () => {
     const lookup = deferred();
     source.nextOccurrence = async () => {
       await lookup.promise;
-      return camp;
+      return trip;
     };
     // Switching to Always fetches once (nothing to count down to yet).
     store.settings.value = { ...store.settings.value, countdownWindow: 'always' };
     await settle();
-    store.data.eventMeta.value = [{ id: engine.metaKey(school, 'camp'), profiles: [], countdown: true, updatedAt: 0 }];
+    store.data.eventMeta.value = [{ id: engine.metaKey(school, 'trip'), profiles: [], countdown: true, updatedAt: 0 }];
     const poll = engine.refresh();
     await settle();
-    // Hidden while Google is asked for the camp's next occurrence.
+    // Hidden while Google is asked for the trip's next occurrence (asked hourly: not looked up before).
     store.settings.value = { ...store.settings.value, hiddenCalendars: [school] };
     lookup.resolve();
     await poll;

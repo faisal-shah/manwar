@@ -464,4 +464,22 @@ describe('countdowns past the fetched window', () => {
     expect(asked).toEqual([]);
     expect(store.data.eventMeta.value.find((m) => m.id === flakyMeta.id)?.countdown).toBe(true);
   });
+
+  it('does not bring back a countdown deleted while Google was asked about it', async () => {
+    let answer!: (ev: CalEvent | null) => void;
+    source.listCalendars = async () => [CAL];
+    source.listEvents = async () => [];
+    source.nextOccurrence = () => new Promise((r) => (answer = r));
+    store.data.eventMeta.value = [meta('recital', ['asiyah'], { countdown: true })];
+    store.settings.value = { ...DEFAULT_SETTINGS, countdownWindow: 'always' };
+    const done = engine.refresh();
+    await new Promise((r) => setTimeout(r, 0));
+    // The recital is deleted on a phone (its meta goes with it) before Google's "none" arrives.
+    store.data.eventMeta.value = [];
+    server.clear();
+    answer(null);
+    await done;
+    expect(store.data.eventMeta.value).toEqual([]);
+    expect(server.has(engine.metaKey('fam', 'recital'))).toBe(false);
+  });
 });

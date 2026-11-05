@@ -85,6 +85,18 @@ test('Tasks: an Up for Grabs column that appears opens on screen', async ({ brow
   await expect(page.locator('.pcols > .pcol').first()).toHaveAttribute('aria-label', 'Up for Grabs');
   await page.waitForTimeout(300);
   expect(await page.locator('.pcols').evaluate((el) => el.scrollLeft)).toBe(0);
+  // Home's task pane does the same.
+  await rail(page, 'Home').click();
+  const pane = page.locator('.tp-cards');
+  await expect(pane.locator('.tp-card').first()).toHaveAttribute('aria-label', 'Up for Grabs');
+  expect(await pane.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
+  await pane.getByRole('button', { name: 'Complete Take out trash' }).click();
+  await page.locator('.modal button', { hasText: 'Hashim!' }).click();
+  await expect(pane.locator('.tp-card').first()).not.toHaveAttribute('aria-label', 'Up for Grabs');
+  await page.locator('.toast', { hasText: 'Take out trash' }).getByRole('button', { name: 'Undo' }).click();
+  await expect(pane.locator('.tp-card').first()).toHaveAttribute('aria-label', 'Up for Grabs');
+  await page.waitForTimeout(300);
+  expect(await pane.evaluate((el) => el.scrollLeft)).toBe(0);
   await ctx.close();
 });
 
@@ -177,6 +189,16 @@ test('Tasks: a kid cannot take back stars that were already spent', async ({ bro
   await col.getByRole('button', { name: 'Uncheck Tidy toys' }).click();
   await expect(balance).toHaveText('1');
   await expect(page.locator('.modal .pin-keys')).toHaveCount(0);
+  // The Undo on a check-off asks too once the stars are gone: another tablet spends them while its toast is up.
+  await col.getByRole('button', { name: 'Complete Water the plants' }).click();
+  await expect(balance).toHaveText('2');
+  await seedDoc(name, 'profiles', { id: 'p1', name: 'Maryam', color: '#F66850', order: 0, stars: 0, createdAt: 1 });
+  await expect(balance).toHaveText('0');
+  await page.locator('.toast', { hasText: 'Water the plants' }).getByRole('button', { name: 'Undo' }).click();
+  await expect(pad).toContainText('Those stars were spent');
+  await pad.getByRole('button', { name: 'Cancel' }).click();
+  await expect(col.getByRole('button', { name: 'Uncheck Water the plants' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(balance).toHaveText('0');
   await ctx.close();
 });
 

@@ -195,6 +195,45 @@ test('filters profiles, events and the progress cal-strip', async ({ page }) => 
   expect(errors).toEqual([]);
 });
 
+/** Two tablets change different filters, one of them offline: each writes only its own switch, so both stay. */
+test('keeps both tablets’ filter changes', async ({ browser }) => {
+  test.setTimeout(90_000);
+  const opts = { viewport: { width: 1600, height: 1000 }, timezoneId: 'America/Chicago' };
+  const [kitchen, hall] = [await browser.newContext(opts), await browser.newContext(opts)];
+  const a = await kitchen.newPage();
+  const errors = await open(a);
+  const b = await hall.newPage();
+  await b.goto(a.url());
+  await expect(b.locator('[data-event="family@demo::reading_20261104"]')).toBeVisible({ timeout: 20_000 });
+  const filterSwitch = async (p: Page, label: string) => {
+    if (!(await p.locator('.cal-menu').isVisible())) await p.locator('.cal-filter-btn').click();
+    return p.locator('.cal-menu .cal-filter-row', { hasText: label }).getByRole('switch');
+  };
+  // The hall tablet turns the forecast off while its Wi-Fi is down; the kitchen turns meals off meanwhile.
+  await hall.setOffline(true);
+  await (await filterSwitch(b, 'Weather forecast')).click();
+  await expect(await filterSwitch(b, 'Weather forecast')).toHaveAttribute('aria-checked', 'false');
+  await (await filterSwitch(a, 'Meals')).click();
+  await expect(await filterSwitch(a, 'Meals')).toHaveAttribute('aria-checked', 'false');
+  // The kitchen's change reaches the server before the hall's comes back online.
+  await a.waitForTimeout(1500);
+  await hall.setOffline(false);
+  // A third tablet reads the server: both switches are off.
+  await b.waitForTimeout(3000);
+  const c = await kitchen.newPage();
+  await c.goto(a.url());
+  await expect(c.locator('[data-event="family@demo::reading_20261104"]')).toBeVisible({ timeout: 20_000 });
+  await expect(await filterSwitch(c, 'Meals')).toHaveAttribute('aria-checked', 'false');
+  await expect(await filterSwitch(c, 'Weather forecast')).toHaveAttribute('aria-checked', 'false');
+  for (const p of [a, b]) {
+    await expect(await filterSwitch(p, 'Meals')).toHaveAttribute('aria-checked', 'false');
+    await expect(await filterSwitch(p, 'Weather forecast')).toHaveAttribute('aria-checked', 'false');
+  }
+  expect(errors).toEqual([]);
+  await kitchen.close();
+  await hall.close();
+});
+
 test('deletes an event, toggles a countdown, and prefills the day from Week', async ({ page }) => {
   const errors = await open(page);
   const dentist = page.locator('[data-event="family@demo::dentist"]');

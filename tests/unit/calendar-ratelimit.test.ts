@@ -37,6 +37,7 @@ vi.hoisted(() => {
   };
 });
 
+const store = await import('../../src/data/store');
 const engine = await import('../../src/calendar/engine');
 
 const CAL: CalendarInfo = { id: 'fam', name: 'Family', color: '#2D7F86', accessRole: 'owner', primary: true };
@@ -140,6 +141,24 @@ describe('calendar sync under a rate limit', () => {
     expect(engine.events.value.map((e) => e.id).sort()).toEqual(['dentist', 'play']);
     await engine.refresh();
     expect(asked).toBe(1);
+  });
+
+  it('pauses when Google limits a countdown looked up past the window', async () => {
+    const { DEFAULT_SETTINGS } = await import('../../src/data/settings');
+    source.nextOccurrence = async () => {
+      throw new RateLimited('busy', null);
+    };
+    store.data.eventMeta.value = [{ id: engine.metaKey('fam', 'trip'), profiles: [], countdown: true, updatedAt: 0 }];
+    store.settings.value = { ...DEFAULT_SETTINGS, countdownWindow: 'always' };
+    try {
+      await engine.refresh();
+      expect(asked).toBe(1);
+      await engine.refresh();
+      expect(asked).toBe(1);
+    } finally {
+      store.data.eventMeta.value = [];
+      store.settings.value = DEFAULT_SETTINGS;
+    }
   });
 
   it('does not hold back a save, and Google taking the save resumes the sync', async () => {

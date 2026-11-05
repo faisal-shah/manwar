@@ -1273,6 +1273,29 @@ describe('google calendar: series edits and the occurrences changed elsewhere', 
     expect(patched().recurrence).toEqual(['RRULE:FREQ=WEEKLY', 'EXDATE;VALUE=DATE:20261115']);
   });
 
+  it('moves them with the new series when the time changes from one lesson on', async () => {
+    // The Dec 5 lesson was deleted on an iPhone; from Nov 21 the lessons are at 10:00.
+    routes.push((c) =>
+      c.method === 'GET'
+        ? { body: master(['RRULE:FREQ=WEEKLY;BYDAY=SA', 'EXDATE;TZID=America/Chicago:20261205T093000']) }
+        : undefined,
+    );
+    routes.push((c) => (c.method === 'POST' ? { body: { id: 'swim2' } } : undefined));
+    routes.push((c) => (c.method === 'PATCH' ? { body: { id: 'swim' } } : undefined));
+    const later: EventDraft = {
+      title: 'Swim lesson',
+      allDay: false,
+      start: new Date('2026-11-21T10:00'),
+      end: new Date('2026-11-21T10:45'),
+      keepRecurrence: true,
+    };
+    await googleSource.update(occ, later, 'following');
+    expect(calls.find((c) => c.method === 'POST')!.body.recurrence).toEqual([
+      'RRULE:FREQ=WEEKLY;BYDAY=SA',
+      'EXDATE;TZID=America/Chicago:20261205T100000',
+    ]);
+  });
+
   it('counts what a COUNT rule has used by where the series had each occurrence', async () => {
     // COUNT=10 from Oct 31; the Nov 28 lesson was moved to Friday Nov 20, before the split at Nov 21.
     const inst = (orig: string, start = orig, status = 'confirmed') =>

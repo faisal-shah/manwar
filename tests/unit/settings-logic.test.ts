@@ -42,10 +42,11 @@ describe('profile order', () => {
   });
 
   it('keeps moving the same row when taps repeat on one spot', () => {
-    // e moves up from index 4; the finger stays on index 4, which now holds d's button.
+    // e moves up from index 4; the finger stays on index 4, which now holds d's button. Each tap comes
+    // within MOVE_RUN_MS of the last, the run as a whole takes longer.
     let ids = ['a', 'b', 'c', 'd', 'e'];
     let run = null as ReturnType<typeof moveTarget>['run'] | null;
-    for (const at of [0, 250, 500]) {
+    for (const at of [0, 500, 1000]) {
       const t = moveTarget(ids, 4, -1, run, at);
       ids = moveId(ids, t.index, t.index - 1);
       run = t.run;
@@ -57,7 +58,7 @@ describe('profile order', () => {
     const run = { id: 'e', dir: -1 as const, spot: 4, at: 0 };
     const ids = ['a', 'b', 'c', 'e', 'd'];
     expect(moveTarget(ids, 4, -1, run, 300).index).toBe(3);
-    expect(moveTarget(ids, 3, -1, run, 300).index).toBe(3);
+    expect(moveTarget(ids, 2, -1, run, 300).index).toBe(2);
     expect(moveTarget(ids, 4, 1, run, 300).index).toBe(4);
     expect(moveTarget(ids, 4, -1, run, MOVE_RUN_MS + 1).index).toBe(4);
     // The row the run moved is gone (deleted meanwhile): the tap moves what it landed on.
