@@ -131,6 +131,30 @@ test('the on-screen keyboard keeps the scale, and the sheet ends above it', asyn
   await expect.poll(() => rem(page)).toBeLessThan(full);
 });
 
+test("with large text, Home's week cells show whole titles and times", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await open(page);
+  await textSize(page, 'Large');
+  await rail(page, 'Home').click();
+  const pane = page.locator('.home-pane').first();
+  await expect(pane.locator('.weekv')).toBeVisible();
+  await expect(pane.locator('.cal-week-cell .ev-card').first()).toBeVisible();
+  const cut = await pane
+    .locator('.cal-week-cell')
+    .evaluateAll((cells) =>
+      cells.flatMap((c) =>
+        [...c.querySelectorAll<HTMLElement>('.ev-title, .ev-time, .cal-week-count')]
+          .filter((el) => el.getBoundingClientRect().width > 0 && el.scrollWidth > el.clientWidth + 1)
+          .map((el) => el.textContent),
+      ),
+    );
+  expect(cut).toEqual([]);
+  // The time line still says when, and each card still shows whose it is.
+  const card = pane.locator('.cal-week-cell[data-day="2026-11-04"] .ev-card', { hasText: 'Handwriting' });
+  await expect(card.locator('.ev-time')).toHaveText('10:45 AM', { useInnerText: true });
+  await expect(card.locator('.avatar')).toBeVisible();
+});
+
 test('with the keyboard up, a list field low on the screen scrolls the list, not the page', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await open(page);

@@ -33,7 +33,10 @@ export function WeekView({ nav }: { nav: CalNav }) {
                 <DayWeather day={d} size={2.8} />
               </div>
               <div class="cal-wc-row">
-                <span class="cal-week-count">{countLabel(events.length, d === t)}</span>
+                <span class="cal-week-count">
+                  {countLabel(events.length, false)}
+                  {d === t && events.length > 0 && <span class="cal-week-today"> today</span>}
+                </span>
                 <AddOn day={d} />
               </div>
             </header>
@@ -42,7 +45,7 @@ export function WeekView({ nav }: { nav: CalNav }) {
                 <MealPill key={m.key} item={m} badge />
               ))}
               {events.map((ev) => (
-                <EventCard key={ev.key} ev={ev} />
+                <EventCard key={ev.key} ev={ev} day={d} />
               ))}
             </div>
           </section>

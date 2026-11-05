@@ -468,6 +468,9 @@
   /* A narrow Week cell cuts "11:45 AM - 12:15 PM" mid-letter otherwise. */
   text-overflow: ellipsis;
 }
+.ev-time-short {
+  display: none;
+}
 
 /* ---------- Day labels and weather ---------- */
 
@@ -781,6 +784,43 @@
 }
 .cal-week-cell .ev-card .ev-time {
   font-size: 1.4rem;
+}
+/*
+ * Narrow day cells (the Home pane at large text): the title gets the card's
+ * whole width and two lines, and the line under it holds the start time and
+ * the avatars, so "Handwri…" and "11:15 - 11:4…" read whole. The event count
+ * drops "today" (the red circle says it) and a meal pill its category badge
+ * (its outline is in the category color, as on Skylight's schedule).
+ */
+@container (max-width: 18rem) {
+  .cal-week-cell .ev-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 0.6rem;
+    row-gap: 0.3rem;
+    padding: 0.7rem 0.8rem 0.7rem 1rem;
+  }
+  .cal-week-cell .ev-card .ev-text {
+    display: contents;
+  }
+  .cal-week-cell .ev-card .ev-title {
+    grid-column: 1 / -1;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.2;
+  }
+  .cal-week-cell .ev-time-full,
+  .cal-week-cell .cal-week-today,
+  .cal-week-cell .cal-meal-badge {
+    display: none;
+  }
+  .cal-week-cell .ev-time-short {
+    display: inline;
+  }
 }
 .cal-week-cell.cal-past-day > * {
   opacity: 0.55;
