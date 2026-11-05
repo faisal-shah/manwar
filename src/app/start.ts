@@ -12,6 +12,7 @@ import { ready } from '../data/store';
 import { session } from '../data/session';
 import { holdSleepForTimer } from '../features/timer/state';
 import { startPhoneTheme } from '../phone/theme';
+import { startBack } from '../ui/back';
 import { isPhone } from './layout';
 import { startIdleReturn } from './nav';
 
@@ -22,8 +23,10 @@ import { startIdleReturn } from './nav';
  */
 export function startApp(): void {
   trackActivity();
-  if (isPhone) startPhoneTheme();
-  else {
+  if (isPhone) {
+    startPhoneTheme();
+    startBack();
+  } else {
     keepScaleWithKeyboard();
     startDisplay();
     startRelock();

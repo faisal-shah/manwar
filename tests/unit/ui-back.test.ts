@@ -1,90 +1,172 @@
 import { describe, expect, it } from 'vitest';
 import { createBackStack } from '../../src/ui/back';
 
-/** A browser history: pushState grows it, back() pops it and fires popstate (later, as browsers do). */
+/**
+ * A browser history as Chrome runs it: pushState adds an entry after the
+ * current one at once; a traversal is applied later (then popstate), to the
+ * entry `n` back from where it was asked, even when a push came in between.
+ * Each entry records how many entries the app said it held there.
+ */
 function fakeHistory() {
-  let length = 1;
-  const pending: (() => void)[] = [];
+  const depths = [0];
+  let index = 0;
+  const traversals: (() => void)[] = [];
+  const tasks: (() => void)[] = [];
   let onPop: () => void = () => {};
   return {
     h: {
-      push: () => void length++,
-      back: () => {
-        length--;
-        pending.push(() => onPop());
+      push: (depth: number) => {
+        depths.length = index + 1;
+        depths.push(depth);
+        index++;
+      },
+      back: (n: number) => {
+        const target = Math.max(0, index - n);
+        traversals.push(() => {
+          index = target;
+          onPop();
+        });
       },
     },
+    later: (fn: () => void) => void tasks.push(fn),
     listen: (fn: () => void) => (onPop = fn),
+    /** The current task's microtasks. */
+    tick: () => {
+      while (tasks.length) tasks.shift()!();
+    },
+    /** The traversals asked for so far land. */
+    land: () => traversals.splice(0).forEach((t) => t()),
+    /** The end of the current task: microtasks, then the traversals the browser applies. */
+    settle: () => {
+      while (tasks.length || traversals.length) {
+        while (tasks.length) tasks.shift()!();
+        traversals.shift()?.();
+      }
+    },
     /** The person presses Back. */
     pressBack: () => {
-      length--;
+      index = Math.max(0, index - 1);
       onPop();
     },
-    flush: () => pending.splice(0).forEach((f) => f()),
-    get length() {
-      return length;
+    /** Entries above the app's own, by where the history is. */
+    get depth() {
+      return depths[index];
     },
   };
 }
 
+function setup(held = 0) {
+  const f = fakeHistory();
+  const s = createBackStack(f.h, { later: f.later, held });
+  f.listen(() => s.popped());
+  return { f, s };
+}
+
 describe('back stack', () => {
   it('closes the top overlay on Back, one per press', () => {
-    const f = fakeHistory();
-    const s = createBackStack(f.h);
-    f.listen(() => s.popped());
+    const { f, s } = setup();
     const closed: string[] = [];
     s.open(() => closed.push('sheet'));
     s.open(() => closed.push('confirm'));
-    expect(f.length).toBe(3);
+    f.settle();
+    expect(f.depth).toBe(2);
     f.pressBack();
     expect(closed).toEqual(['confirm']);
     f.pressBack();
     expect(closed).toEqual(['confirm', 'sheet']);
     expect(s.depth).toBe(0);
-    expect(f.length).toBe(1);
+    expect(f.depth).toBe(0);
   });
 
   it('gives the entry back when an overlay closes another way, without taking that for a Back', () => {
-    const f = fakeHistory();
-    const s = createBackStack(f.h);
-    f.listen(() => s.popped());
+    const { f, s } = setup();
     const closed: string[] = [];
     s.open(() => closed.push('sheet'));
     const releaseConfirm = s.open(() => closed.push('confirm'));
+    f.settle();
     releaseConfirm();
-    f.flush();
+    f.settle();
     expect(closed).toEqual([]);
-    expect(f.length).toBe(2);
+    expect(f.depth).toBe(1);
     // The next Back closes the sheet, not nothing.
     f.pressBack();
     expect(closed).toEqual(['sheet']);
   });
 
   it('does nothing when an overlay closed by Back releases its entry as it unmounts', () => {
-    const f = fakeHistory();
-    const s = createBackStack(f.h);
-    f.listen(() => s.popped());
+    const { f, s } = setup();
     let release = () => {};
     release = s.open(() => release());
+    f.settle();
     f.pressBack();
-    f.flush();
-    expect(f.length).toBe(1);
+    f.settle();
+    expect(f.depth).toBe(0);
     expect(s.depth).toBe(0);
   });
 
   it('keeps the history and the stack the same depth through mixed closes', () => {
-    const f = fakeHistory();
-    const s = createBackStack(f.h);
-    f.listen(() => s.popped());
+    const { f, s } = setup();
     const a = s.open(() => a());
     const b = s.open(() => b());
     const c = s.open(() => c());
+    f.settle();
     b();
+    f.settle();
     f.pressBack(); // closes c
-    f.flush();
+    f.settle();
     a();
-    f.flush();
+    f.settle();
     expect(s.depth).toBe(0);
-    expect(f.length).toBe(1);
+    expect(f.depth).toBe(0);
+  });
+
+  it('keeps one entry when a view closes and another opens at once (a sheet swapped for the editor)', () => {
+    const { f, s } = setup();
+    const closed: string[] = [];
+    s.open(() => closed.push('tab'));
+    const sheet = s.open(() => closed.push('sheet'));
+    f.settle();
+    expect(f.depth).toBe(2);
+    sheet();
+    s.open(() => closed.push('editor'));
+    f.settle();
+    expect(f.depth).toBe(2);
+    f.pressBack();
+    expect(closed).toEqual(['editor']);
+    f.pressBack();
+    expect(closed).toEqual(['editor', 'tab']);
+    expect(f.depth).toBe(0);
+  });
+
+  it('opens nothing over its own traversal still on its way, and catches up when it lands', () => {
+    const { f, s } = setup();
+    const closed: string[] = [];
+    s.open(() => closed.push('tab'));
+    const sheet = s.open(() => closed.push('sheet'));
+    f.settle();
+    sheet();
+    f.tick();
+    // The traversal giving the sheet's entry back has not landed when the editor opens (in a later task).
+    s.open(() => closed.push('editor'));
+    f.tick();
+    f.land();
+    f.settle();
+    expect(f.depth).toBe(2);
+    f.pressBack();
+    expect(closed).toEqual(['editor']);
+    expect(f.depth).toBe(1);
+  });
+
+  it('goes back over the entries a reload left behind', () => {
+    const { f, s } = setup(0);
+    f.h.push(1);
+    f.h.push(2);
+    // The page reloads at depth 2 with nothing open.
+    const reloaded = createBackStack(f.h, { later: f.later, held: 2 });
+    f.listen(() => reloaded.popped());
+    s.open(() => {});
+    f.settle();
+    expect(f.depth).toBe(0);
+    expect(reloaded.depth).toBe(0);
   });
 });
