@@ -12,6 +12,7 @@ import {
   MAX_TASK_STARS,
   STAR_CHOICES,
   draftFrom,
+  savedFields,
   taskFrom,
   validateDraft,
   type AfterUnit,
@@ -57,20 +58,7 @@ function TaskEditor({ task, onClose }: { task: Task | null; onClose: () => void 
       // Deleted on another device while the PIN pad was up: nothing to save onto.
       if (task && !data.tasks.value.some((t) => t.id === task.id)) return;
       const out = taskFrom(draft, base ?? { id: newId(), order, createdAt: currentTime() });
-      void saveEdited('tasks', out, !task, [
-        'kind',
-        'title',
-        'emoji',
-        'notes',
-        'assignees',
-        'upForGrabs',
-        'stars',
-        'date',
-        'time',
-        'repeat',
-        'repeatAfterDone',
-        'parts',
-      ]);
+      void saveEdited('tasks', out, !task, savedFields(draft, base));
       toast(task ? `Saved "${out.title}"` : `Added "${out.title}"`);
       onClose();
     }, 'Enter the PIN to save the task.');

@@ -82,10 +82,41 @@ export function validateDraft(d: Draft): string | null {
   return null;
 }
 
+/** Does the edited task keep the completion history (lastDone) it had? Only while it stays repeat-after-done. */
+const keepsLastDone = (d: Draft, base: Partial<Task> | null) =>
+  d.kind === 'chore' && d.repeatMode === 'after' && !!base?.repeatAfterDone;
+
+const EDITED_FIELDS = [
+  'kind',
+  'title',
+  'emoji',
+  'notes',
+  'assignees',
+  'upForGrabs',
+  'stars',
+  'date',
+  'time',
+  'repeat',
+  'repeatAfterDone',
+  'parts',
+] as const satisfies readonly (keyof Task)[];
+
+/**
+ * The fields an edit writes. lastDone is left to the check-offs (one on
+ * another tablet may have moved it meanwhile) while the chore stays
+ * repeat-after-done; otherwise it is deleted, since a completion date from
+ * before would date the next occurrence when the chore repeats after done
+ * again.
+ */
+export function savedFields(d: Draft, base: Partial<Task> | null): (keyof Task)[] {
+  return keepsLastDone(d, base) ? [...EDITED_FIELDS] : [...EDITED_FIELDS, 'lastDone'];
+}
+
 /**
  * The Task to save. Fields that do not apply to the kind are dropped (a
  * routine has no time, Up for Grabs or repeat-after-done; a chore no parts),
- * and the identity, order and completion history of `base` are kept.
+ * and the identity, order and archived flag of `base` are kept, with its
+ * completion history while it stays repeat-after-done.
  */
 export function taskFrom(d: Draft, base: Pick<Task, 'id' | 'order' | 'createdAt'> & Partial<Task>): Task {
   const chore = d.kind === 'chore';
@@ -107,6 +138,6 @@ export function taskFrom(d: Draft, base: Pick<Task, 'id' | 'order' | 'createdAt'
     order: base.order,
     createdAt: base.createdAt,
     archived: base.archived,
-    lastDone: chore && d.repeatMode === 'after' ? base.lastDone : undefined,
+    lastDone: keepsLastDone(d, base) ? base.lastDone : undefined,
   };
 }

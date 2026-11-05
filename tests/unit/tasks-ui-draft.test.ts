@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Task } from '../../src/data/types';
-import { draftFrom, taskFrom, validateDraft, type Draft } from '../../src/features/tasks/draft';
+import { draftFrom, savedFields, taskFrom, validateDraft, type Draft } from '../../src/features/tasks/draft';
 
 const TODAY = '2026-11-04';
 const base = { id: 'x', order: 7, createdAt: 1 };
@@ -48,13 +48,40 @@ describe('task draft', () => {
   });
 
   it('saves a repeat-after-done chore and keeps its completion history', () => {
-    const t = taskFrom(fresh({ repeatMode: 'after', after: { every: 3, unit: 'day' } }), {
-      ...base,
-      lastDone: { a: '2026-11-02' },
-    });
+    const stored = { ...base, repeatAfterDone: { every: 1, unit: 'week' as const }, lastDone: { a: '2026-11-02' } };
+    const d = fresh({ repeatMode: 'after', after: { every: 3, unit: 'day' } });
+    const t = taskFrom(d, stored);
     expect(t.repeatAfterDone).toEqual({ every: 3, unit: 'day' });
     expect(t.repeat).toBeUndefined();
     expect(t.lastDone).toEqual({ a: '2026-11-02' });
+    // Left to the check-offs: one on another tablet meanwhile is not overwritten.
+    expect(savedFields(d, stored)).not.toContain('lastDone');
+  });
+
+  it('starts the completion history over when the repeat mode changes', () => {
+    const after: Task = {
+      id: 'x',
+      kind: 'chore',
+      title: 'Water plants',
+      assignees: ['a'],
+      upForGrabs: false,
+      stars: 1,
+      date: '2026-06-01',
+      repeatAfterDone: { every: 1, unit: 'week' },
+      lastDone: { a: '2026-06-03' },
+      order: 1,
+      createdAt: 1,
+    };
+    // To a schedule: the old completion date is deleted, not left behind.
+    const toSchedule = { ...draftFrom(after, TODAY, 'morning'), repeatMode: 'schedule' as const };
+    expect(taskFrom(toSchedule, after).lastDone).toBeUndefined();
+    expect(savedFields(toSchedule, after)).toContain('lastDone');
+    // Back to repeat-after-done months later (a task saved with the June date still on it): due on its date,
+    // not a week after June 3 and five months late.
+    const scheduled: Task = { ...after, repeatAfterDone: undefined, repeat: { every: 1, unit: 'day' } };
+    const back = { ...draftFrom(scheduled, TODAY, 'morning'), repeatMode: 'after' as const, date: TODAY };
+    expect(taskFrom(back, scheduled).lastDone).toBeUndefined();
+    expect(savedFields(back, scheduled)).toContain('lastDone');
   });
 
   it('drops chore-only fields when converted to a routine, and limits its repeat to days or weeks', () => {
