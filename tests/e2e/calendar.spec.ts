@@ -250,6 +250,38 @@ test('an end time set past midnight and back again keeps the event on its day', 
   expect(errors).toEqual([]);
 });
 
+test('deleting a moved occurrence and the ones after it removes the moved one too', async ({ page }) => {
+  const errors = await open(page);
+  await pickView(page, 'Day');
+  const day = (n: number) => page.locator('.cal-mini-day', { hasText: new RegExp(`^${n}$`) }).first();
+  const lesson = (d: string) => page.locator(`[data-event="family@demo::swim_${d}"]`);
+  // Move Saturday's lesson to Monday, for this week only.
+  await day(14).click();
+  // Assigned to Hashim by the demo seed, so the editor can save it.
+  await expect(lesson('20261114')).not.toHaveClass(/ev-unassigned/, { timeout: 20_000 });
+  await lesson('20261114').click();
+  await page.locator('.ev-detail').getByRole('button', { name: 'Edit' }).click();
+  const sheet = page.locator('.sheet');
+  await sheet.locator('input[name="startDate"]').fill('2026-11-16');
+  await sheet.getByRole('button', { name: 'Save', exact: true }).click();
+  await page.locator('.modal').getByRole('button', { name: 'This event', exact: true }).click();
+  await expect(page.locator('.toast')).toContainText('Event saved');
+  await expect(lesson('20261114')).toHaveCount(0);
+  // From Monday on, no more lessons.
+  await day(16).click();
+  await lesson('20261114').click();
+  await page.locator('.ev-detail').getByRole('button', { name: 'Delete' }).click();
+  await page.locator('.modal').getByRole('button', { name: 'This and following events' }).click();
+  await expect(page.locator('.toast', { hasText: 'Event deleted' })).toBeVisible();
+  await expect(lesson('20261114')).toHaveCount(0);
+  await day(21).click();
+  await expect(page.locator('.dayv-head')).toContainText('Nov 21');
+  await expect(lesson('20261121')).toHaveCount(0);
+  await day(7).click();
+  await expect(lesson('20261107')).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
 test('keeps an event card on screen when its profile picker opens near the bottom', async ({ page }) => {
   const errors = await open(page);
   await page.locator('[data-event="family@demo::isha_20261107"]').click();
