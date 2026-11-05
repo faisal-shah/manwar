@@ -156,6 +156,18 @@ generated from it: `node scripts/icons/render.mjs` after any brand change.
   `logic.ts`, `plan.ts`, `ingredients.ts` (unit-tested); the ingredients
   modal merges into the default grocery list without duplicates;
   `MealCategoriesEditor` is mounted by Settings.
+  - "Already on the list" (`itemKey`) and recipe search ignore case,
+    accents and Arabic diacritics (`lib/text.ts` `fold`); an emoji-only
+    item is its own key. Ingredient lines lose pasted bullets and "1."
+    numbering (`stripMarker`) on save and on display.
+  - The `isDefaultGrocery` flag only ever passes to a grocery list (on
+    delete, or to a new grocery list when none has it); with none, the
+    next Add to grocery list makes a "Grocery List".
+  - `IngredientsHost` is mounted once in `app/tabs.tsx` `Overlays`, so
+    `openIngredients` works from any tab (the planned-meal toast).
+  - Editing one occurrence of a repeating meal goes through
+    `plan.editOccurrence`; moving it to another day shifts a weekly
+    rule's weekdays with it.
 - `features/home`, `features/settings`, `features/messages`, `features/timer`:
   a running timer holds off scheduled sleep (`sleepHeldUntil` in
   `core/display.ts`).
