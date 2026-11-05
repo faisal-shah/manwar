@@ -427,9 +427,10 @@ generated from it: `node scripts/icons/render.mjs` after any brand change.
 - Overlays (`Sheet`, `Modal`, `Popover`, the calendar `Menu`) portal to
   `document.body` and register through `useOverlay(onClose)`: its `scrim`
   handler lets the second tap of the double tap that opened the overlay
-  through, and the overlay puts `content` on its box (onClickCapture) so
-  that tap presses nothing in it (a PIN key, OK, the phone editor's X
-  where the header's + was). Use it for any custom overlay. `openEditor`
+  through, and one that opens under that tap (a centered dialog; on the
+  phone every sheet and popover) puts `content` on its box
+  (onClickCapture) so it presses nothing in it (a PIN key, OK, the phone
+  editor's X where the header's + was). Use it for any custom overlay. `openEditor`
   refuses only the second tap of a double tap on Save (`tapMark`,
   `secondTapOf`), since the wall's + sits under it. Idle return closes every registered overlay (`closeOverlays()`).
   The sleep screen uses `useScrimClose` (the same rule) and, after a waking

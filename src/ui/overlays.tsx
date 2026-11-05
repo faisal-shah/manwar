@@ -18,9 +18,10 @@ const portal = (node: ComponentChildren) => createPortal(node, document.body);
  * and would close it again at once; so a scrim ignores a tap that comes
  * soon after the overlay opened and close to the tap that opened it. An
  * overlay can also open under that tap (a centered dialog, and on the
- * phone every sheet: the editor's X sits where the header's + was), so the
- * second tap can land on a control in it (a PIN key, Close): an overlay
- * ignores it inside too.
+ * phone every sheet and popover: the editor's X sits where the header's +
+ * was), so the second tap can land on a control in it (a PIN key, Close):
+ * those ignore it inside too. The wall's sheets and popovers open beside
+ * what was tapped.
  */
 export const DOUBLE_TAP_MS = 450;
 const DOUBLE_TAP_REM = 6;
@@ -68,8 +69,8 @@ const onScreen = new Set<{ current: () => void }>();
 /**
  * Every overlay (sheet, dialog, popover, menu) calls this. `scrim` closes it
  * on a tap outside, letting the rest of the opening double tap through;
- * `content`, for its box (onClickCapture), drops that tap inside it. The
- * overlay also closes on idle return (closeOverlays).
+ * `content`, for the box of one that opens under that tap (onClickCapture),
+ * drops it inside. The overlay also closes on idle return (closeOverlays).
  */
 export function useOverlay(onClose: () => void): { scrim: (e: MouseEvent) => void; content: (e: MouseEvent) => void } {
   const openingTap = useOpeningTap();
@@ -141,7 +142,12 @@ export function Sheet({
   return portal(
     <>
       <div class="scrim" onClick={scrim} />
-      <section class={`sheet${wide ? ' sheet-wide' : ''}`} role="dialog" aria-label={title} onClickCapture={content}>
+      <section
+        class={`sheet${wide ? ' sheet-wide' : ''}`}
+        role="dialog"
+        aria-label={title}
+        onClickCapture={isPhone ? content : undefined}
+      >
         <header class="sheet-head">
           {onBack ? (
             <IconButton label="Back" onClick={onBack}>
@@ -241,7 +247,7 @@ export function Popover({
         ref={ref}
         class="popover"
         role="dialog"
-        onClickCapture={content}
+        onClickCapture={isPhone ? content : undefined}
         style={{ width: `${width}rem`, left: pos?.left ?? -9999, top: pos?.top ?? 0, visibility: pos ? 'visible' : 'hidden' }}
       >
         {children}
