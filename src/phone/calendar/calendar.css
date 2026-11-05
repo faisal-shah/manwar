@@ -6,7 +6,8 @@
  */
 
 .ph-body:has(> .phc) {
-  padding: 0;
+  /* Clear of a landscape notch (phone.css). */
+  padding: 0 var(--safe-r) 0 var(--safe-l);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -450,7 +451,7 @@ html[data-layout='phone'] .popover-scrim:has(+ .popover .ev-detail) {
   animation: fade-in 0.15s ease;
 }
 html[data-layout='phone'] .popover:has(.ev-detail) {
-  padding: 2rem 1.6rem calc(1.6rem + env(safe-area-inset-bottom));
+  padding: 2rem calc(var(--safe-r) + 1.6rem) calc(1.6rem + env(safe-area-inset-bottom)) calc(var(--safe-l) + 1.6rem);
 }
 html[data-layout='phone'] .evd-head h2 {
   font-size: 2.6rem;

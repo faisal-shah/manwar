@@ -135,6 +135,39 @@
 }
 
 /*
+ * On its side (the short-screen rule in phone.css): the chips and the
+ * person's head shrink so the tasks show under them. The chip already shows
+ * whose list it is, so the head keeps the name and its pills on one line.
+ */
+@media (max-height: 500px) and (min-aspect-ratio: 4/3) {
+  .pt-chips {
+    padding: 0.4rem 1.6rem 0.6rem;
+  }
+  .pt-chip {
+    min-height: 4.8rem;
+    padding-block: 0.2rem;
+  }
+  .pt-list .pcol-head {
+    padding: 0.2rem 0 0.8rem;
+  }
+  .pt-list .pcol-head > .avatar {
+    display: none;
+  }
+  .pt-list .pcol-id {
+    flex-direction: row;
+    align-items: center;
+    gap: 1.2rem;
+  }
+  .pt-list .pcol-name {
+    flex: 0 1 auto;
+    font-size: 2.2rem;
+  }
+  .pt-list .pcol-pills {
+    flex: 1;
+  }
+}
+
+/*
  * The wall's task overlays on a narrow screen: the claim dialog's faces
  * wrap, the details sheet keeps its tags apart, the editor's rows wrap
  * whole (a toggle stays beside its label) and its segments share the width.

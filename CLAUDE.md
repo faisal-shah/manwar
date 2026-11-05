@@ -324,6 +324,14 @@ sequenceDiagram
   where the parent was; overlays and the agenda's day are not kept, and
   only ids are (no household data at rest), so a list deleted while the
   page was away closes with a toast that names no title.
+  On a short landscape screen (`max-height: 500px` and wider than 4:3)
+  the header, status line and tab bar shrink, its labels beside the
+  icons, and Lists and Tasks tighten their own heads; controls stay at
+  least 4.8rem. With
+  `viewport-fit=cover`, content keeps all four safe-area insets
+  (`--safe-l`, `--safe-r` for the landscape notch) and backgrounds run to
+  the edges; a feature's CSS that zeroes the body's padding puts the side
+  insets back (the open list, the agenda).
 - **Back gesture** (`ui/back.ts`): on the phone each open overlay
   (`useOverlay` calls `useBack`) or inner view holds one history entry;
   Back closes the top one, and a view closed another way gives its entry
@@ -466,9 +474,15 @@ so `1rem` = 10 design px. Use rem for every size. Tokens are CSS variables in
   focus and only the height shrank, `--app-h` keeps the full height and the
   field is scrolled into view. The phone's scale does not follow the
   viewport, so there only the field is kept in view
-  (`keepFieldAboveKeyboard`). Test it by focusing a field and shrinking the
-  viewport height (`tests/e2e/layout-fit.spec.ts`, and the editor in
-  `tests/e2e/phone-calendar.spec.ts`).
+  (`keepFieldAboveKeyboard`). Safari on iPhone has no interactive-widget:
+  its keyboard shrinks only the visual viewport, so the phone follows
+  `visualViewport` and puts its gaps to the page in `--vv-top` and
+  `--vv-bottom` (0 where the page resizes, and while pinch-zoomed);
+  `phone/phone.css` ends the shell, sheets, popovers, dialogs and toasts
+  above them. Test it by focusing a field and shrinking the viewport
+  height (`tests/e2e/layout-fit.spec.ts`, and the editor in
+  `tests/e2e/phone-calendar.spec.ts`), or on the phone with a stand-in
+  `visualViewport` (`tests/e2e/phone-overlays.spec.ts`).
 - **The + button** covers the bottom-right corner. A scroller that can pass
   under it ends with `padding-bottom: var(--fab-clear)`; Month gives the
   corner day fewer lines (`useFit` in `views/Month.tsx`).

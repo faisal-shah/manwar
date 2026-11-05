@@ -1,10 +1,11 @@
-import { expect as baseExpect, test, type Page } from '@playwright/test';
-import { phone, wall } from './phone-helpers';
+import { expect as baseExpect, devices, test, type Page } from '@playwright/test';
+import { newContext, phone, wall } from './phone-helpers';
 import { RUN, writeDoc } from './phone-family';
 
 /*
  * The wall's sheets, dialogs and popovers as the phone shows them: modal
- * for focus, and family text in its own direction.
+ * for focus, above an on-screen keyboard that does not resize the page
+ * (Safari on iPhone), and family text in its own direction.
  */
 
 const expect = baseExpect.configure({ timeout: 15_000 });
@@ -89,6 +90,63 @@ test("the wall's overlays leave focus where it is and are not marked modal", asy
   await expect(w.locator('.popover')).not.toHaveAttribute('aria-modal', /.*/);
   await expect(opener).toBeFocused();
   expect(errors).toEqual([]);
+});
+
+/**
+ * Safari on iPhone: the keyboard shrinks only the visual viewport, never the
+ * page. A stand-in visualViewport the test drives, before the app starts.
+ */
+const SAFARI_KEYBOARD = `(() => {
+  const vv = new EventTarget();
+  let kb = 0;
+  for (const [k, get] of Object.entries({
+    height: () => innerHeight - kb, width: () => innerWidth, offsetTop: () => 0, offsetLeft: () => 0,
+    pageTop: () => 0, pageLeft: () => 0, scale: () => 1,
+  })) Object.defineProperty(vv, k, { get });
+  Object.defineProperty(window, 'visualViewport', { get: () => vv, configurable: true });
+  window.__keyboard = (px) => { kb = px; vv.dispatchEvent(new Event('resize')); };
+})()`;
+
+test('with a keyboard that leaves the page its height, the sheet ends above it with the field and Add in view', async ({
+  browser,
+}) => {
+  const hh = name('safari');
+  const w = await wall(browser, hh);
+  await expect(w.page.locator('.rail .badge')).toHaveText('3', { timeout: 30_000 });
+  const ctx = await newContext(browser, { ...devices['iPhone 13'], timezoneId: 'America/Chicago' });
+  await ctx.addInitScript(SAFARI_KEYBOARD);
+  const p = await ctx.newPage();
+  const errors: string[] = [];
+  p.on('pageerror', (e) => errors.push(String(e)));
+  await p.goto(`/?demo=${hh}&layout=phone&now=2026-11-04T11:44`);
+  await tab(p, 'Calendar').click();
+  await expect(p.locator('.phc-day').first()).toBeVisible();
+  await p.getByRole('button', { name: 'Add event' }).click();
+  const sheet = p.locator('.sheet');
+  const notes = sheet.locator('textarea[name="notes"]');
+  // Notes low on the screen, then tapped.
+  await sheet.locator('.sheet-body').evaluate((body) => {
+    const field = body.querySelector('textarea')!;
+    body.scrollTop += field.getBoundingClientRect().bottom - body.getBoundingClientRect().bottom + 4;
+  });
+  await p.waitForTimeout(500);
+  await notes.click();
+  const full = p.viewportSize()!.height;
+  const kb = Math.round(full * 0.42);
+  await p.evaluate((px) => (window as unknown as { __keyboard: (n: number) => void }).__keyboard(px), kb);
+  await p.waitForTimeout(400);
+  const above = full - kb;
+  const save = (await sheet.getByRole('button', { name: 'Add', exact: true }).boundingBox())!;
+  expect(save.y + save.height).toBeLessThanOrEqual(above + 0.5);
+  const box = (await notes.boundingBox())!;
+  expect(box.y).toBeGreaterThanOrEqual(0);
+  expect(box.y + 30).toBeLessThanOrEqual(above);
+  await expect(notes).toBeFocused();
+  // The tab bar is above it too, as when the page resizes; and all of it comes back when the keyboard goes.
+  expect((await p.locator('.ph-nav').boundingBox())!.y + 1).toBeLessThanOrEqual(above);
+  await p.evaluate(() => (window as unknown as { __keyboard: (n: number) => void }).__keyboard(0));
+  await expect.poll(async () => Math.round((await sheet.boundingBox())!.height)).toBe(full);
+  expect([...w.errors, ...errors]).toEqual([]);
 });
 
 test('Arabic in a meal’s card and the redeemed dialog keeps its direction', async ({ browser }) => {

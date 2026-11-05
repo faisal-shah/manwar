@@ -3,14 +3,28 @@
  * (62.5% of the browser's, so the phone's own text-size setting scales it),
  * not the wall's canvas scale. Shared components (sheets, dialogs, popovers,
  * toasts) are re-laid for a narrow screen here, under [data-layout='phone'].
+ *
+ * Edges: with viewport-fit=cover the page reaches under the notch and the
+ * home bar, so content keeps the safe-area insets on all four sides (the
+ * sides matter in landscape) while backgrounds run to the edges.
+ * `--vv-top` and `--vv-bottom` (core/viewport.ts) are what an on-screen
+ * keyboard that does not resize the page (Safari on iPhone) takes off the
+ * top and bottom; the shell, sheets, popovers, dialogs and toasts end
+ * above it.
  */
 html[data-layout='phone'] {
   font-size: 62.5%;
+  --vv-top: 0px;
+  --vv-bottom: 0px;
+  --safe-l: env(safe-area-inset-left, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
+  /* The tab bar's height above the home bar (toasts sit over it). */
+  --nav-h: 6rem;
 }
 
 .ph {
   position: fixed;
-  inset: 0;
+  inset: var(--vv-top) 0 var(--vv-bottom);
   display: flex;
   flex-direction: column;
   background: linear-gradient(180deg, var(--bg-top), var(--bg-bottom));
@@ -20,7 +34,7 @@ html[data-layout='phone'] {
   align-items: center;
   gap: 0.8rem;
   min-height: 5.6rem;
-  padding: calc(env(safe-area-inset-top) + 0.8rem) 1.2rem 0.4rem 1.6rem;
+  padding: calc(env(safe-area-inset-top) + 0.8rem) calc(var(--safe-r) + 1.2rem) 0.4rem calc(var(--safe-l) + 1.6rem);
 }
 .ph-head h1 {
   flex: 1;
@@ -40,7 +54,7 @@ html[data-layout='phone'] {
   display: flex;
   flex-wrap: wrap;
   gap: 0.4rem 1.2rem;
-  margin: 0 1.6rem 0.8rem;
+  margin: 0 calc(var(--safe-r) + 1.6rem) 0.8rem calc(var(--safe-l) + 1.6rem);
   padding: 0.6rem 1.2rem;
   border-radius: 1.2rem;
   background: var(--surface-strong);
@@ -57,14 +71,14 @@ html[data-layout='phone'] {
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior-y: contain;
-  padding: 0.4rem 1.6rem 2.4rem;
+  padding: 0.4rem calc(var(--safe-r) + 1.6rem) 2.4rem calc(var(--safe-l) + 1.6rem);
   -webkit-overflow-scrolling: touch;
 }
 .ph-nav {
   display: flex;
   border-top: 1px solid var(--line);
   background: var(--sheet);
-  padding-bottom: env(safe-area-inset-bottom);
+  padding: 0 var(--safe-r) env(safe-area-inset-bottom) var(--safe-l);
 }
 .ph-nav button {
   position: relative;
@@ -75,7 +89,7 @@ html[data-layout='phone'] {
   align-items: center;
   justify-content: center;
   gap: 0.2rem;
-  min-height: 6rem;
+  min-height: var(--nav-h);
   font-size: 1.2rem;
   font-weight: 500;
   color: var(--text-2);
@@ -181,7 +195,8 @@ html[data-layout='phone'] {
   flex-direction: column;
   align-items: center;
   gap: 2rem;
-  padding: calc(env(safe-area-inset-top) + 4rem) 2.4rem calc(env(safe-area-inset-bottom) + 2.4rem);
+  padding: calc(env(safe-area-inset-top) + 4rem) calc(var(--safe-r) + 2.4rem) calc(env(safe-area-inset-bottom) + 2.4rem)
+    calc(var(--safe-l) + 2.4rem);
 }
 .ph-pair form {
   width: 100%;
@@ -220,11 +235,12 @@ html[data-layout='phone'] [aria-modal='true']:focus {
 }
 html[data-layout='phone'] .sheet,
 html[data-layout='phone'] .sheet-wide {
+  top: var(--vv-top);
+  bottom: var(--vv-bottom);
   width: 100%;
   min-width: 0;
   border-radius: 0;
-  padding-top: env(safe-area-inset-top);
-  padding-bottom: env(safe-area-inset-bottom);
+  padding: env(safe-area-inset-top) var(--safe-r) env(safe-area-inset-bottom) var(--safe-l);
 }
 /*
  * A sheet on the phone opens under the finger: it fades in where it will
@@ -245,10 +261,12 @@ html[data-layout='phone'] .sheet-foot {
   padding: 1.2rem 1.6rem;
 }
 html[data-layout='phone'] .modal {
+  /* Centered in what the keyboard leaves. */
+  top: calc(50% + (var(--vv-top) - var(--vv-bottom)) / 2);
   min-width: 0;
-  width: calc(100vw - 3.2rem);
+  width: calc(100vw - 3.2rem - var(--safe-l) - var(--safe-r));
   max-width: 48rem;
-  max-height: 86dvh;
+  max-height: calc((100dvh - var(--vv-top) - var(--vv-bottom)) * 0.86);
   padding: 2.4rem 2rem;
 }
 html[data-layout='phone'] .modal h2 {
@@ -279,11 +297,11 @@ html[data-layout='phone'] .popover {
   left: 0 !important;
   right: 0;
   top: auto !important;
-  bottom: 0;
+  bottom: var(--vv-bottom);
   width: auto !important;
-  max-height: 85dvh;
+  max-height: calc((100dvh - var(--vv-top) - var(--vv-bottom)) * 0.85);
   border-radius: 2.4rem 2.4rem 0 0;
-  padding-bottom: calc(2.4rem + env(safe-area-inset-bottom));
+  padding: 2.4rem calc(var(--safe-r) + 2.4rem) calc(2.4rem + env(safe-area-inset-bottom)) calc(var(--safe-l) + 2.4rem);
 }
 /* A popover is a bottom sheet here: dim what it covers, as a sheet does. */
 html[data-layout='phone'] .popover-scrim {
@@ -291,10 +309,99 @@ html[data-layout='phone'] .popover-scrim {
   animation: fade-in 0.15s ease;
 }
 html[data-layout='phone'] .toasts {
-  left: 1.2rem;
-  right: 1.2rem;
-  bottom: calc(7.2rem + env(safe-area-inset-bottom));
+  left: calc(var(--safe-l) + 1.2rem);
+  right: calc(var(--safe-r) + 1.2rem);
+  bottom: calc(var(--nav-h) + 1.2rem + env(safe-area-inset-bottom) + var(--vv-bottom));
 }
 html[data-layout='phone'] .toast {
   justify-content: space-between;
+}
+
+/*
+ * A phone on its side is short: the header, the status line and the tab bar
+ * (its labels beside the icons) shrink, so the tab keeps most of the screen.
+ * Controls stay at least 4.8rem. The aspect ratio leaves out a phone held
+ * upright with the keyboard up, which resizes the page to about square.
+ */
+@media (max-height: 500px) and (min-aspect-ratio: 4/3) {
+  html[data-layout='phone'] {
+    --nav-h: 4.8rem;
+  }
+  html[data-layout='phone'] .ph-head {
+    --touch: 4.8rem;
+    min-height: 4.8rem;
+    padding-top: calc(env(safe-area-inset-top) + 0.2rem);
+    padding-bottom: 0.2rem;
+  }
+  html[data-layout='phone'] .ph-head h1 {
+    font-size: 2.2rem;
+  }
+  html[data-layout='phone'] .ph-status {
+    margin-bottom: 0.4rem;
+    padding: 0.2rem 1rem;
+    font-size: 1.3rem;
+  }
+  html[data-layout='phone'] .ph-nav button {
+    flex-direction: row;
+    gap: 0.6rem;
+    font-size: 1.4rem;
+  }
+  html[data-layout='phone'] .ph-nav .badge {
+    position: static;
+  }
+  /* A toast as wide as the screen would cover most of what is left: it keeps to the left, as on the wall. */
+  html[data-layout='phone'] .toasts {
+    right: auto;
+    max-width: 56rem;
+  }
+
+  /*
+   * The PIN pad side by side: what it asks on the left, the keys on the
+   * right, sized by the height there is (four rows of keys and the dialog's
+   * padding) and wider than tall, so Cancel and Delete keep their words.
+   */
+  html[data-layout='phone'] .modal:has(.pin-keys) {
+    --key: clamp(4.8rem, calc(((100dvh - var(--vv-top) - var(--vv-bottom)) * 0.94 - 3.2rem - 3 * 0.6rem) / 4), 7.2rem);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: 1fr auto 1fr;
+    column-gap: 2.4rem;
+    width: calc(100vw - 3.2rem - var(--safe-l) - var(--safe-r));
+    max-width: 72rem;
+    max-height: calc((100dvh - var(--vv-top) - var(--vv-bottom)) * 0.94);
+    padding: 1.6rem 2.4rem;
+  }
+  html[data-layout='phone'] .modal:has(.pin-keys) > h2 {
+    grid-column: 1;
+    grid-row: 1;
+    align-self: end;
+    margin-bottom: 0.8rem;
+    text-align: center;
+  }
+  html[data-layout='phone'] .modal:has(.pin-keys) > .scroll {
+    display: contents;
+  }
+  html[data-layout='phone'] .modal:has(.pin-keys) .scroll > p {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  html[data-layout='phone'] .modal:has(.pin-keys) .pin-dots {
+    grid-column: 1;
+    grid-row: 3;
+    align-self: start;
+    margin: 1.6rem 0 0;
+  }
+  html[data-layout='phone'] .modal:has(.pin-keys) .pin-keys {
+    grid-column: 2;
+    grid-row: 1 / span 3;
+    grid-template-columns: repeat(3, calc(var(--key) * 1.5));
+    gap: 0.6rem;
+  }
+  html[data-layout='phone'] .modal:has(.pin-keys) .pin-keys button {
+    width: auto;
+    height: var(--key);
+    min-height: 0;
+    aspect-ratio: auto;
+    border-radius: 99rem;
+  }
 }

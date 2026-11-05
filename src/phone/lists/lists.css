@@ -104,8 +104,8 @@
 
 /* One list, full screen: the body under the header scrolls, the Add item field stays on top. */
 html[data-layout='phone'] .ph-body:has(> .phl-card) {
-  /* Clear of a landscape notch: the list reaches the screen edges otherwise. */
-  padding: 0 env(safe-area-inset-right, 0px) 0 env(safe-area-inset-left, 0px);
+  /* Clear of a landscape notch (phone.css): the list reaches the screen edges otherwise. */
+  padding: 0 var(--safe-r) 0 var(--safe-l);
   overflow: hidden;
 }
 html[data-layout='phone'] .list-card.phl-card {
@@ -129,6 +129,34 @@ html[data-layout='phone'] .phl-card .ls-title {
 }
 html[data-layout='phone'] .phl-card .ls-add input {
   font-size: 2.2rem;
+}
+/* On its side (the short-screen rule in phone.css): the field, the section heads and the rows shrink to a finger's 4.8rem. */
+@media (max-height: 500px) and (min-aspect-ratio: 4/3) {
+  html[data-layout='phone'] .phl-card {
+    --touch: 4.8rem;
+  }
+  html[data-layout='phone'] .phl-card .li-add {
+    min-height: 4.8rem;
+    margin: 0.6rem 1.2rem 0.2rem;
+  }
+  html[data-layout='phone'] .phl-card .li-add-input {
+    height: 4.8rem;
+  }
+  html[data-layout='phone'] .phl-card .lc-body {
+    gap: 0.6rem;
+  }
+  html[data-layout='phone'] .phl-card .ls-head {
+    margin-top: 0.2rem;
+  }
+  html[data-layout='phone'] .phl-card .ls-title {
+    font-size: 2rem;
+  }
+  html[data-layout='phone'] .phl-card .li-row {
+    min-height: 4.8rem;
+  }
+  html[data-layout='phone'] .phl-card .li-text {
+    padding-block: 0.6rem;
+  }
 }
 
 /* The list's menu, a bottom sheet on the phone. */

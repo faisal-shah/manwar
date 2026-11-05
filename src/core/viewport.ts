@@ -49,17 +49,39 @@ export function keepScaleWithKeyboard(): void {
 
 /**
  * The phone: its scale is the phone's own text size, not the viewport, so
- * only the field being typed in needs following. When the on-screen
- * keyboard shrinks the page (resizes-content), the field is scrolled back
- * into view inside its sheet, as the wall does.
+ * only the field being typed in needs following. Chrome on Android resizes
+ * the page to the space above the on-screen keyboard (resizes-content).
+ * Safari on iPhone has no interactive-widget: the page keeps its height and
+ * only the visual viewport shrinks above the keyboard (and pans to the
+ * field), so the shell, sheets and toasts, fixed to the page, would end
+ * under the keyboard. The visual viewport's gaps to the page's top and
+ * bottom go in `--vv-top` and `--vv-bottom` (both 0 where the page itself
+ * resizes), and phone.css ends those above the keyboard. Whenever the
+ * space shrinks while a field has focus, the field is scrolled back into
+ * view inside its sheet, as the wall does.
  */
 export function keepFieldAboveKeyboard(): void {
   if (started) return;
   started = true;
-  let h = window.innerHeight;
-  window.addEventListener('resize', () => {
+  const root = document.documentElement;
+  const vv = window.visualViewport;
+  const visible = () => vv?.height ?? window.innerHeight;
+  let h = visible();
+  const follow = () => {
+    if (vv) {
+      // Pinch-zoomed (Safari zooms past user-scalable=no), the page is magnified, not under a keyboard.
+      const zoomed = Math.abs(vv.scale - 1) > 0.01;
+      const top = zoomed ? 0 : Math.max(0, Math.round(vv.offsetTop));
+      const bottom = zoomed ? 0 : Math.max(0, Math.round(window.innerHeight - vv.offsetTop - vv.height));
+      root.style.setProperty('--vv-top', `${top}px`);
+      root.style.setProperty('--vv-bottom', `${bottom}px`);
+    }
     const field = typing();
-    if (field && window.innerHeight < h) requestAnimationFrame(() => field.scrollIntoView({ block: 'nearest' }));
-    h = window.innerHeight;
-  });
+    const now = visible();
+    if (field && now < h) requestAnimationFrame(() => field.scrollIntoView({ block: 'nearest' }));
+    h = now;
+  };
+  window.addEventListener('resize', follow);
+  vv?.addEventListener('resize', follow);
+  vv?.addEventListener('scroll', follow);
 }
