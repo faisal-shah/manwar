@@ -155,6 +155,9 @@ flowchart LR
   Google accepting a save, and Sync now, resume the sync (`syncNow`).
 - **Tasks**: `tasks/engine.ts` is pure (occurrences from schedules; late
   chores; Up for Grabs; repeat-after-done via `Task.lastDone`), unit-tested.
+  A new repeat-after-done chore added in the evening starts tomorrow
+  (`withRepeatMode` in `features/tasks/draft.ts`, shown in the editor), so
+  it is not late the next morning.
   `tasks/state.ts` has the reactive views and the writes. Stars use an
   append-only ledger (`ledger` collection) plus `Profile.stars` kept equal
   to the sum by `batch().stars()` in the same batch. Undo writes a reversing

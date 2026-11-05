@@ -1,4 +1,5 @@
 import type { HHMM, ISODate, PartOfDay, Repeat, Task, TaskKind } from '../../data/types';
+import { addDays } from '../../lib/date';
 
 /** The task editor's working copy, and its conversion to and from a Task (pure). */
 
@@ -22,6 +23,8 @@ export interface Draft {
   after: { every: number; unit: AfterUnit };
   parts: PartOfDay[];
   notes: string;
+  /** The date was moved to tomorrow by withRepeatMode, not picked (editor only, never saved). */
+  autoDate?: boolean;
 }
 
 export const MAX_TASK_STARS = 1000;
@@ -60,6 +63,28 @@ export function draftFrom(task: Task | null, todayISO: ISODate, defaultPart: Par
     parts: task.parts?.length ? [...task.parts] : [defaultPart],
     notes: task.notes ?? '',
   };
+}
+
+/**
+ * A new chore's repeat mode, and its date with it. A chore that repeats
+ * after it is done, added in the evening, is first due tomorrow: due today
+ * it would be late before anyone could do it, the next morning. The date
+ * moves only while it is today's default (not one the parent picked), and
+ * goes back to today if the chore stops repeating after done. Editing an
+ * existing chore never moves its date.
+ */
+export function withRepeatMode(
+  d: Draft,
+  repeatMode: RepeatMode,
+  isNew: boolean,
+  todayISO: ISODate,
+  part: PartOfDay,
+): Partial<Draft> {
+  if (!isNew) return { repeatMode };
+  if (repeatMode === 'after' && part === 'evening' && d.date === todayISO && d.autoDate !== false)
+    return { repeatMode, date: addDays(todayISO, 1), autoDate: true };
+  if (repeatMode !== 'after' && d.autoDate) return { repeatMode, date: todayISO, autoDate: undefined };
+  return { repeatMode };
 }
 
 /** Routines repeat by day or week only. */

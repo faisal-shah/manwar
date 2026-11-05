@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Task } from '../../src/data/types';
-import { draftFrom, savedFields, taskFrom, validateDraft, type Draft } from '../../src/features/tasks/draft';
+import { draftFrom, savedFields, taskFrom, validateDraft, withRepeatMode, type Draft } from '../../src/features/tasks/draft';
 
 const TODAY = '2026-11-04';
 const base = { id: 'x', order: 7, createdAt: 1 };
@@ -15,6 +15,27 @@ describe('task draft', () => {
   it('starts a new chore for today with one star', () => {
     const d = draftFrom(null, TODAY, 'evening');
     expect([d.kind, d.date, d.stars, d.repeatMode, d.parts]).toEqual(['chore', TODAY, 1, 'none', ['evening']]);
+  });
+
+  it('starts a chore that repeats after it is done tomorrow when it is added in the evening', () => {
+    const TOMORROW = '2026-11-05';
+    const evening = draftFrom(null, TODAY, 'evening');
+    const after = { ...evening, ...withRepeatMode(evening, 'after', true, TODAY, 'evening') };
+    expect([after.repeatMode, after.date]).toEqual(['after', TOMORROW]);
+    // Back to Once or On a schedule: the date it was given goes back to today.
+    expect(withRepeatMode(after, 'none', true, TODAY, 'evening')).toMatchObject({ repeatMode: 'none', date: TODAY });
+    expect(withRepeatMode(after, 'schedule', true, TODAY, 'evening')).toMatchObject({ date: TODAY });
+    // A date the parent picked stays.
+    const picked = { ...after, date: '2026-11-08', autoDate: false };
+    expect(withRepeatMode(picked, 'none', true, TODAY, 'evening').date).toBeUndefined();
+    const chosenFirst = { ...evening, date: '2026-11-07', autoDate: false };
+    expect(withRepeatMode(chosenFirst, 'after', true, TODAY, 'evening').date).toBeUndefined();
+    // Before the evening, or when editing a chore, the date stays where it is.
+    const morning = draftFrom(null, TODAY, 'morning');
+    expect(withRepeatMode(morning, 'after', true, TODAY, 'morning').date).toBeUndefined();
+    expect(withRepeatMode(evening, 'after', false, TODAY, 'evening').date).toBeUndefined();
+    // The saved chore carries the date, not the editor's flag.
+    expect(taskFrom({ ...after, title: 'Clean the fish tank', assignees: ['a'] }, base)).not.toHaveProperty('autoDate');
   });
 
   it('validates title, assignees, parts and stars', () => {

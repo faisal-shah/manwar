@@ -409,3 +409,30 @@ test('a skipped repeat-after-done chore comes round again', async ({ page }) => 
   await expect(sheets).not.toHaveClass(/skipped/);
   await expect(sheets).toContainText('1 day late');
 });
+
+test('a chore that repeats after it is done, added after dinner, is not late the next morning', async ({ page }) => {
+  const name = demoName('after-evening');
+  await page.goto(`/?demo=${name}&now=2026-11-04T20:40`);
+  await expect(page.locator('.shell')).toBeVisible({ timeout: 20_000 });
+  await page.locator('.rail button', { hasText: 'Tasks' }).click();
+  await expect(column(page, 'asiyah').locator('.tk-card').first()).toBeVisible({ timeout: 15_000 });
+  await page.locator('.fab').click();
+  const sheet = page.locator('.sheet');
+  await sheet.getByRole('textbox', { name: 'Title' }).fill('Clean the fish tank');
+  await sheet.locator('.picker button', { hasText: 'Asiyah' }).click();
+  await sheet.getByRole('tab', { name: 'After it is done' }).click();
+  await expect(sheet.getByLabel('Date')).toHaveValue('2026-11-05');
+  await expect(sheet).toContainText('First due tomorrow');
+  await sheet.getByRole('button', { name: 'Add', exact: true }).click();
+  await expect(sheet).toHaveCount(0);
+  await expect
+    .poll(async () => (await docs('after-evening', 'tasks')).some((t) => t.title?.stringValue === 'Clean the fish tank'))
+    .toBe(true);
+
+  await page.goto(`/?demo=${name}&now=2026-11-05T07:15`);
+  await expect(page.locator('.shell')).toBeVisible({ timeout: 20_000 });
+  await page.locator('.rail button', { hasText: 'Tasks' }).click();
+  const tank = card(page, 'asiyah', 'Clean the fish tank');
+  await expect(tank).toBeVisible({ timeout: 15_000 });
+  await expect(tank).not.toContainText('late');
+});
