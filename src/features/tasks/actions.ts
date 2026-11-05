@@ -22,8 +22,13 @@ import { plural } from '../../lib/text';
 export const claimRequest = signal<{ o: Occurrence; day: string; origin: DOMRect } | null>(null);
 /** Task details popover. */
 export const detailsFor = signal<{ o: Occurrence; day: string; anchor: DOMRect } | null>(null);
-/** Task editor sheet: a task to edit, 'new', or closed. */
-export const editing = signal<Task | 'new' | null>(null);
+/** A new task; `for` is the list it is added from (a profile or UP_FOR_GRABS), which it starts out in. */
+export interface NewTask {
+  new: true;
+  for?: string;
+}
+/** Task editor sheet: a task to edit, a new one, or closed. */
+export const editing = signal<Task | NewTask | null>(null);
 
 /** The same occurrence with the current task and state (an Undo pressed after later writes). */
 export function fresh(o: Occurrence): Occurrence {
@@ -163,8 +168,9 @@ export function archiveTask(task: Task): void {
   }, 'Enter the PIN to delete a task.');
 }
 
-export const editTask = (task: Task | 'new') =>
+/** Open the editor on a task, or on a new one (for `forList`, the list it is added from). */
+export const editTask = (task: Task | 'new', forList?: string) =>
   void asParent(() => {
     detailsFor.value = null;
-    editing.value = task;
+    editing.value = task === 'new' ? { new: true, for: forList } : task;
   }, 'Enter the PIN to add or change tasks.');

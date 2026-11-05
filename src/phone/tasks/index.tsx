@@ -204,9 +204,15 @@ function UpForGrabs({ occ }: { occ: Occurrence[] }) {
   );
 }
 
+/** The header's +: a new task for the person shown (or up for grabs). */
 function AddTask() {
+  const who = shownPerson(
+    tasksFor.value,
+    profiles.value.map((p) => p.id),
+    todayOccurrences.value.some((o) => o.profileId === UP_FOR_GRABS),
+  );
   return (
-    <IconButton label="Add task" class="ph-add" onClick={() => editTask('new')}>
+    <IconButton label="Add task" class="ph-add" onClick={() => editTask('new', who ?? undefined)}>
       <Plus size="2.6rem" />
     </IconButton>
   );

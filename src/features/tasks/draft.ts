@@ -1,4 +1,4 @@
-import type { HHMM, ISODate, PartOfDay, Repeat, Task, TaskKind } from '../../data/types';
+import { UP_FOR_GRABS, type HHMM, type ISODate, type PartOfDay, type Repeat, type Task, type TaskKind } from '../../data/types';
 import { addDays } from '../../lib/date';
 
 /** The task editor's working copy, and its conversion to and from a Task (pure). */
@@ -63,6 +63,16 @@ export function draftFrom(task: Task | null, todayISO: ISODate, defaultPart: Par
     parts: task.parts?.length ? [...task.parts] : [defaultPart],
     notes: task.notes ?? '',
   };
+}
+
+/**
+ * A new task added from one list (the phone's Tasks tab shows one person,
+ * or the Up for Grabs chores): it starts out for that person, or up for
+ * grabs; `owner` undefined leaves the draft as it is.
+ */
+export function draftForList(d: Draft, owner: string | undefined): Draft {
+  if (!owner) return d;
+  return owner === UP_FOR_GRABS ? { ...d, kind: 'chore', upForGrabs: true } : { ...d, assignees: [owner] };
 }
 
 /**

@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import type { Task } from '../../src/data/types';
-import { draftFrom, savedFields, taskFrom, validateDraft, withRepeatMode, type Draft } from '../../src/features/tasks/draft';
+import { UP_FOR_GRABS, type Task } from '../../src/data/types';
+import {
+  draftForList,
+  draftFrom,
+  savedFields,
+  taskFrom,
+  validateDraft,
+  withRepeatMode,
+  type Draft,
+} from '../../src/features/tasks/draft';
 
 const TODAY = '2026-11-04';
 const base = { id: 'x', order: 7, createdAt: 1 };
@@ -156,5 +164,25 @@ describe('task draft', () => {
       archived: undefined,
       lastDone: undefined,
     });
+  });
+});
+
+describe('a new task from one list', () => {
+  const blank = draftFrom(null, TODAY, 'morning');
+
+  it('is for the person whose list it is added from, and saves as theirs', () => {
+    const d = draftForList(blank, 'b');
+    expect([d.assignees, d.upForGrabs]).toEqual([['b'], false]);
+    expect(taskFrom({ ...d, title: 'Fold laundry' }, base).assignees).toEqual(['b']);
+  });
+
+  it('from Up for Grabs is a chore up for grabs, with nobody to choose', () => {
+    const d = draftForList({ ...blank, kind: 'routine' }, UP_FOR_GRABS);
+    expect([d.kind, d.upForGrabs, d.assignees]).toEqual(['chore', true, []]);
+    expect(validateDraft({ ...d, title: 'Sweep' })).toBeNull();
+  });
+
+  it('from no list is left as it is', () => {
+    expect(draftForList(blank, undefined)).toBe(blank);
   });
 });

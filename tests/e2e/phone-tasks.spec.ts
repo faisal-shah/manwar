@@ -188,7 +188,9 @@ test('the header + adds a chore, and the details edit it', async ({ browser }) =
   await page.getByRole('button', { name: 'Add task' }).click();
   const sheet = page.getByRole('dialog', { name: 'Add task' });
   await sheet.getByLabel('Title', { exact: true }).fill('Fold laundry');
-  await sheet.getByRole('button', { name: 'Asiyah' }).click();
+  // Added from Asiyah's list, it starts out hers.
+  await expect(sheet.getByRole('button', { name: 'Asiyah' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(sheet.getByRole('button', { name: 'Mamma' })).toHaveAttribute('aria-pressed', 'false');
   await sheet.getByRole('button', { name: '★ 5' }).click();
   await sheet.getByRole('tab', { name: 'On a schedule' }).click();
   await sheet.getByRole('button', { name: 'Add', exact: true }).click();
@@ -207,6 +209,15 @@ test('the header + adds a chore, and the details edit it', async ({ browser }) =
   await expect(wallCard(w.page, 'asiyah', 'Fold the laundry')).toBeVisible();
   // Every overlay gave its history entry back: Back leaves the Tasks tab.
   await backSettled(page, 1);
+
+  // From the Up for Grabs list, a new chore is up for grabs.
+  await chip(page, '*').click();
+  await page.getByRole('button', { name: 'Add task' }).click();
+  await expect(sheet.getByRole('switch', { name: 'Up for Grabs' })).toHaveAttribute('aria-checked', 'true');
+  await sheet.getByLabel('Title', { exact: true }).fill('Sweep the porch');
+  await sheet.getByRole('button', { name: 'Add', exact: true }).click();
+  await expect(phoneCard(page, 'Sweep the porch')).toBeVisible();
+  await expect(wallCard(w.page, '*', 'Sweep the porch')).toBeVisible();
   expect(errors()).toEqual([]);
 });
 

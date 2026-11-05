@@ -11,6 +11,7 @@ import { archiveTask, editing } from './actions';
 import {
   MAX_TASK_STARS,
   STAR_CHOICES,
+  draftForList,
   draftFrom,
   savedFields,
   taskFrom,
@@ -28,14 +29,21 @@ import { pluralWord } from '../../lib/text';
 export function EditorHost() {
   const e = editing.value;
   if (!e) return null;
-  const task = e === 'new' ? null : e;
-  return <TaskEditor key={task?.id ?? 'new'} task={task} onClose={() => (editing.value = null)} />;
+  const task = 'new' in e ? null : e;
+  return (
+    <TaskEditor
+      key={task?.id ?? 'new'}
+      task={task}
+      forList={'new' in e ? e.for : undefined}
+      onClose={() => (editing.value = null)}
+    />
+  );
 }
 
 const PARTS: PartOfDay[] = ['morning', 'afternoon', 'evening'];
 
-function TaskEditor({ task, onClose }: { task: Task | null; onClose: () => void }) {
-  const [d, setD] = useState<Draft>(() => draftFrom(task, today.value, currentPart.value));
+function TaskEditor({ task, forList, onClose }: { task: Task | null; forList?: string; onClose: () => void }) {
+  const [d, setD] = useState<Draft>(() => draftForList(draftFrom(task, today.value, currentPart.value), forList));
   const stored = task && data.tasks.value.find((t) => t.id === task.id);
   useCloseWhenGone(!!task && (!stored || !!stored.archived), onClose, `"${task?.title}" was deleted on another device.`);
   const [pickEmoji, setPickEmoji] = useState(false);
