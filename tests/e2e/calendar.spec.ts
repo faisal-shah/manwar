@@ -376,3 +376,44 @@ for (const [name, area] of [
     await ctx.close();
   });
 }
+
+/** One finger: sideways pages every view, also over its scrolling lists; up and down still scrolls. */
+test('pages with a sideways swipe over the scrolling parts of each view', async ({ browser }) => {
+  const ctx = await browser.newContext({
+    viewport: { width: 1600, height: 1000 },
+    hasTouch: true,
+    timezoneId: 'America/Chicago',
+  });
+  const page = await ctx.newPage();
+  const errors = await open(page);
+  const cdp = await ctx.newCDPSession(page);
+  const drag = async (sel: string, dx: number, dy: number) => {
+    const box = (await page.locator(sel).first().boundingBox())!;
+    const x = box.x + box.width / 2 - dx / 2;
+    const y = box.y + Math.min(box.height / 2, 150) - dy / 2;
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y, id: 1 }] });
+    for (let i = 1; i <= 10; i++)
+      await cdp.send('Input.dispatchTouchEvent', {
+        type: 'touchMove',
+        touchPoints: [{ x: x + (dx * i) / 10, y: y + (dy * i) / 10, id: 1 }],
+      });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  };
+  const body = page.locator('.cal-body');
+  const scroller = page.locator('.sched-scroll');
+  const top = await scroller.evaluate((el) => el.scrollTop);
+  await drag('.sched-scroll', 0, 300);
+  await expect.poll(() => scroller.evaluate((el) => el.scrollTop)).toBeLessThan(top - 100);
+  await expect(body).toHaveAttribute('data-from', '2026-11-04');
+  await drag('.sched-scroll', -500, 0);
+  await expect(body).toHaveAttribute('data-from', '2026-11-08');
+  await page.getByRole('button', { name: 'Today' }).click();
+  await pickView(page, 'Week');
+  await drag('.cal-week-items', -500, 0);
+  await expect(body).toHaveAttribute('data-from', '2026-11-08');
+  await pickView(page, 'Day');
+  await drag('.dayv-items', 500, 0);
+  await expect(body).toHaveAttribute('data-from', '2026-11-07');
+  expect(errors).toEqual([]);
+  await ctx.close();
+});

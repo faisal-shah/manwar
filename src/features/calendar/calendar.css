@@ -28,6 +28,10 @@
   touch-action: pan-y;
   overflow: hidden;
 }
+/* Scrollers reset touch-action, so each one inside the body leaves sideways swipes to the pager too. */
+.cal-body .scroll {
+  touch-action: pan-y;
+}
 .cal-page {
   height: 100%;
 }
