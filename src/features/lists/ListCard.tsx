@@ -54,6 +54,7 @@ export function ListCard({ list, compact }: { list: List; compact?: boolean }) {
   const body = useRef<HTMLDivElement>(null);
   const drag = useDrag(list, view, body, !compact);
   const doneKey = `done:${list.id}`;
+  const reveal = useReveal(body);
 
   const fromMenu = (fn: () => Promise<unknown>) => () => {
     setMenu(null);
@@ -73,6 +74,7 @@ export function ListCard({ list, compact }: { list: List; compact?: boolean }) {
       <div
         key={item.id}
         class={`li-row${checked ? ' checked' : ''}${lifted ? ' lifted' : ''}`}
+        data-item={item.id}
         data-drop={item.done ? undefined : `item:${item.id}`}
         data-section={sectionOf(list, item) ?? ''}
         style={lifted ? { transform: `translateY(${drag.state!.dy}px)` } : undefined}
@@ -115,7 +117,7 @@ export function ListCard({ list, compact }: { list: List; compact?: boolean }) {
           </button>
         )}
       </header>
-      <AddItemField list={list} sectionId={null} />
+      <AddItemField list={list} sectionId={null} onAdded={reveal} />
       <div class="lc-body scroll" ref={body}>
         {drag.state?.drop && <div class="drop-line" style={{ top: `${drag.state.drop.y}px` }} />}
         {view.groups.map((g) =>
@@ -153,7 +155,7 @@ export function ListCard({ list, compact }: { list: List; compact?: boolean }) {
                 </button>
               </div>
               {addingIn === g.section.id && (
-                <AddItemField list={list} sectionId={g.section.id} autoFocus onDone={() => setAddingIn(null)} />
+                <AddItemField list={list} sectionId={g.section.id} autoFocus onAdded={reveal} onDone={() => setAddingIn(null)} />
               )}
               {!collapsed.value.has(g.section.id) && g.items.map(row)}
             </div>
@@ -239,15 +241,35 @@ export async function askDeleteList(list: List, n: number): Promise<boolean> {
   return deleted;
 }
 
+/**
+ * Scroll a row into view once it is on screen: the item just added (at the
+ * top of its section, which may be scrolled away in a long list), reopened,
+ * or already on the list. Gives up after a moment if it never shows (its
+ * section collapsed).
+ */
+function useReveal(body: { current: HTMLDivElement | null }) {
+  const [target, setTarget] = useState<{ id: string; until: number } | null>(null);
+  useEffect(() => {
+    if (!target) return;
+    const el = body.current?.querySelector<HTMLElement>(`[data-item="${target.id}"]`);
+    if (el) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    if (el || Date.now() > target.until) setTarget(null);
+  });
+  return (id: string) => setTarget({ id, until: Date.now() + 1500 });
+}
+
 function AddItemField({
   list,
   sectionId,
   autoFocus,
+  onAdded,
   onDone,
 }: {
   list: List;
   sectionId: string | null;
   autoFocus?: boolean;
+  /** The item added, reopened or found already on the list. */
+  onAdded: (id: string) => void;
   onDone?: () => void;
 }) {
   const [text, setText] = useState('');
@@ -263,6 +285,7 @@ function AddItemField({
       const p = list.kind === 'grocery' ? parseIngredient(raw) : null;
       const r = addItem(list, p?.name ?? raw, sectionId, p?.qty);
       if (r.kind === 'already') toast(`${r.item.text} is already on ${list.title}.`);
+      onAdded(r.item.id);
       setText('');
     }, 'Enter the PIN to add items.');
   };

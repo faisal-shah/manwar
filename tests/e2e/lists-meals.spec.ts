@@ -249,6 +249,24 @@ test('grocery items made of emoji, or starting with a percentage, are added as t
   await expect(card.locator('.lc-count')).toHaveText('10');
 });
 
+test('a long list scrolls to the item just added, or to the one already on it', async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 600 });
+  await open(page, 'reveal', 'Lists');
+  const card = groceryCard(page);
+  const body = card.locator('.lc-body');
+  const field = card.getByLabel('Add item to Grocery List');
+  await body.evaluate((el) => (el.scrollTop = el.scrollHeight));
+  await field.fill('Zucchini');
+  await field.press('Enter');
+  await expect(card.locator('.li-row', { hasText: 'Zucchini' })).toBeInViewport();
+  await body.evaluate((el) => (el.scrollTop = 0));
+  await expect(card.locator('.li-row', { hasText: 'Pita bread' })).not.toBeInViewport();
+  await field.fill('pita bread');
+  await field.press('Enter');
+  await expect(page.locator('.toast')).toContainText('Pita bread is already on Grocery List.');
+  await expect(card.locator('.li-row', { hasText: 'Pita bread' })).toBeInViewport();
+});
+
 test('unchecking an item while it settles shows it unchecked at once', async ({ page }) => {
   await open(page, 'settle-uncheck', 'Lists');
   const box = groceryCard(page).locator('.li-row', { hasText: 'Bananas' }).getByRole('checkbox');
