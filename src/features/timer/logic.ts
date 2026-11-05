@@ -24,9 +24,22 @@ export function pressKey(value: string, key: KeypadKey): string {
 
 export const validMinutes = (n: number) => Number.isInteger(n) && n >= 1 && n <= MAX_MINUTES;
 
+/** A new run of `minutes`, started at `now`: it counts down after the lead-in. */
+export function newRun(run: string, minutes: number, now: number, startedBy?: string): WallTimer {
+  if (!validMinutes(minutes)) throw new Error(`newRun: minutes must be 1-${MAX_MINUTES}, got ${minutes}`);
+  const startAt = now + LEAD_MS;
+  return { id: 'wall', run, minutes, startAt, endAt: startAt + minutes * 60_000, startedBy };
+}
+
+/** When the document's run was stopped, if it was (a stop for another run does not count). */
+export const stoppedAt = (t: WallTimer): number | undefined => t.stopped?.[t.run];
+
+/** The run is on the wall at `now`: not stopped, and not left over (ended more than STALE_MS ago, nobody dismissed it). */
+export const onWall = (t: WallTimer, now: number): boolean => stoppedAt(t) === undefined && now - t.endAt < STALE_MS;
+
 /** Until when the stored timer holds the wall's scheduled sleep off: a few minutes past its end, or past its stop. */
 export const timerSleepHold = (t: WallTimer | null | undefined): number =>
-  t ? Math.min(t.endAt, t.stoppedAt ?? Infinity) + SLEEP_GRACE_MS : 0;
+  t ? Math.min(t.endAt, stoppedAt(t) ?? Infinity) + SLEEP_GRACE_MS : 0;
 
 /** Remaining time as whole minutes and seconds, rounded up to the second. */
 export function splitRemaining(ms: number): { mins: number; secs: number } {

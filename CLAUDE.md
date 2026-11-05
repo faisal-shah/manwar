@@ -69,7 +69,10 @@ flowchart LR
   (`src/data/types.ts` is the model; `Collections` in `store.ts` maps names
   to types). `data.<collection>` signals hold live snapshots; writes
   (`put`/`patch`/`remove`/`batch()`) apply locally at once, so UI code does
-  not await them. `settings/main` is one document merged over
+  not await them. `transaction()` is the one that does not queue: a read
+  and write on the server for a phone acting on the wall (the timer), it
+  fails at once offline (one retry, not Firestore's five), so the phone
+  can say so. `settings/main` is one document merged over
   `DEFAULT_SETTINGS` (`data/settings.ts`). Firestore ends a listener for
   good on an error, so `listen()` in the store reports it (`loadError`,
   shown on the loading screen, and as Not syncing in the top bar once the
@@ -225,7 +228,10 @@ flowchart LR
   localStorage and the backlight is not touched until the settings load, so
   a reload at night does not light the screen. The rule itself (woken, then
   Sleep now until the window's end or 7:00, then a timer's hold, then the
-  window) is pure in `core/sleep.ts`, shared with the phone's guess.
+  window) is pure in `core/sleep.ts`, shared with the phone's guess. A new
+  timer run ends Sleep now (`holdSleepForTimer`, `endForcedSleep`), so a
+  timer started from a phone shows on the wall; the run already there when
+  the wall opens does not, as it may be older than the Sleep now.
 - **Activity** (`core/activity.ts`): the one source of "someone is using the
   wall" (pointer, key and input events; the on-screen keyboard sends no
   pointer events). Idle return, relock, sleep and the update check read it.
@@ -372,7 +378,8 @@ sequenceDiagram
   has no Open recipe on a phone), Note to the wall (`phone/notes/`: from
   whom, remembered per phone, read aloud, the notes the wall shows or
   holds, Dismiss; the draft survives Back), Wall timer (`phone/timer/`:
-  presets, any minutes, the countdown, Stop or Done; a timer replaced
+  presets, any minutes, the countdown, Stop or Done, through the server,
+  so an offline phone says it could not reach the wall; a timer replaced
   elsewhere is a new view) and Wall screen (`phone/wallscreen/`: Sleep now,
   Wake up, what was last asked and by whom). What the wall's screen is
   doing is a guess (`wallAsleepGuess`, by the wall's own rule in
@@ -380,8 +387,12 @@ sequenceDiagram
   touch on the wall is not shared), said as "likely"; the note view offers
   Wake the wall when a note waits behind a sleeping screen.
 - **Shared with the wall through Firestore**: the timer (`timers/wall`,
-  `features/timer/state.ts`; stopping stamps `stoppedAt`, and the wall's
-  sleep hold is derived from the document) and the screen
+  `features/timer/state.ts`: each start is a new `run` written over the
+  last, and a stop is stamped under its run's id in `stopped`, so a stop
+  that lands late stops nothing newer; the wall writes at once, a phone
+  through `transaction()`, which also refuses a start over a timer the
+  phone had not seen; the wall's sleep hold is derived from the document)
+  and the screen
   (`commands/display`: a phone asks the wall to sleep or wake;
   `followDisplayCommands` applies each nonce once, only within 10 minutes
   of being sent).

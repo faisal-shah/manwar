@@ -1,19 +1,43 @@
 import './timer.css';
+import { signal } from '@preact/signals';
 import { useState } from 'preact/hooks';
 import type { TargetedEvent } from 'preact';
 import { AlarmClock, Timer as TimerIcon } from 'lucide-preact';
+import { errorMessage, isNetworkError } from '../../data/errors';
 import { pairedDevice } from '../../data/session';
 import { settings } from '../../data/store';
 import type { WallTimer } from '../../data/types';
 import { STAGE_COLORS, formatDuration, timerStage, validMinutes } from '../../features/timer/logic';
-import { startTimer, stopTimer, timer, timerPhase } from '../../features/timer/state';
+import { startTimerFromPhone, stopTimerFromPhone, timer, timerPhase } from '../../features/timer/state';
 import { nowMs, today } from '../../lib/clock';
 import { formatTime, toISODate } from '../../lib/date';
 import { Button } from '../../ui/controls';
-import { useOpeningTapGuard } from '../../ui/overlays';
+import { toast, useOpeningTapGuard } from '../../ui/overlays';
 import type { MoreItem } from '../more/items';
 import { senderName } from '../wallscreen';
 import { PRESETS, clockLeft, minutesField } from './logic';
+
+/** A start or stop on its way to the server: the buttons wait for its answer. */
+const asking = signal(false);
+
+/**
+ * Ask the server to start or stop the wall's timer. `request` resolves
+ * false when the wall's timer is not what this phone showed, which
+ * `refused` explains; true once done (the view follows the snapshot).
+ */
+async function ask(request: () => Promise<boolean>, refused: string): Promise<boolean> {
+  if (asking.peek()) return false;
+  asking.value = true;
+  try {
+    if (await request()) return true;
+    toast(refused);
+  } catch (e) {
+    toast(isNetworkError(e) ? "Could not reach the wall. Check this phone's connection and try again." : errorMessage(e));
+  } finally {
+    asking.value = false;
+  }
+  return false;
+}
 
 /** More > Wall timer: start the wall's timer, watch it, stop it. */
 function TimerView() {
@@ -22,8 +46,8 @@ function TimerView() {
   const phase = timerPhase.value;
   return (
     <div class="ph-stack" {...guard}>
-      {/* Keyed by its start, so a timer started elsewhere in its place is a new view (and drops the tap that started it). */}
-      {t && phase ? <Running key={t.startAt} t={t} phase={phase} /> : <StartTimer />}
+      {/* Keyed by its run, so a timer started elsewhere in its place is a new view (and drops the tap that started it). */}
+      {t && phase ? <Running key={t.run} t={t} phase={phase} /> : <StartTimer />}
       <p class="muted pt-note">The wall shows the timer full screen and chimes when it ends.</p>
     </div>
   );
@@ -67,7 +91,12 @@ function Running({ t, phase }: { t: WallTimer; phase: 'lead' | 'running' | 'done
         </p>
         {by && <p class="muted pt-by">Started by {by}</p>}
       </section>
-      <Button variant={phase === 'done' ? 'primary' : 'danger'} class="pt-stop" onClick={stopTimer}>
+      <Button
+        variant={phase === 'done' ? 'primary' : 'danger'}
+        class="pt-stop"
+        disabled={asking.value}
+        onClick={() => void ask(() => stopTimerFromPhone(t), 'The wall started another timer meanwhile.')}
+      >
         {phase === 'done' ? 'Done' : 'Stop timer'}
       </Button>
     </div>
@@ -77,10 +106,10 @@ function Running({ t, phase }: { t: WallTimer; phase: 'lead' | 'running' | 'done
 function StartTimer() {
   const [value, setValue] = useState('');
   const minutes = Number(value);
-  const start = (m: number) => {
-    startTimer(m, pairedDevice() ?? undefined);
-    setValue('');
+  const start = async (m: number) => {
     if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    const started = await ask(() => startTimerFromPhone(m, pairedDevice() ?? undefined), 'A timer was just started on the wall.');
+    if (started) setValue('');
   };
   return (
     <>
@@ -88,7 +117,14 @@ function StartTimer() {
         <h2 class="ph-card-title">Start the wall's timer</h2>
         <div class="pt-presets">
           {PRESETS.map((m) => (
-            <button type="button" class="pt-preset" key={m} aria-label={`${m} minutes`} onClick={() => start(m)}>
+            <button
+              type="button"
+              class="pt-preset"
+              key={m}
+              aria-label={`${m} minutes`}
+              disabled={asking.value}
+              onClick={() => void start(m)}
+            >
               <span class="num">{m}</span>
               <small>min</small>
             </button>
@@ -100,7 +136,7 @@ function StartTimer() {
           class="pt-other"
           onSubmit={(e) => {
             e.preventDefault();
-            if (validMinutes(minutes)) start(minutes);
+            if (validMinutes(minutes)) void start(minutes);
           }}
         >
           <label class="field-label" for="pt-minutes">
@@ -123,7 +159,7 @@ function StartTimer() {
               }}
             />
             <span class="pt-unit">min</span>
-            <Button variant="primary" type="submit" disabled={!validMinutes(minutes)}>
+            <Button variant="primary" type="submit" disabled={!validMinutes(minutes) || asking.value}>
               Start
             </Button>
           </div>

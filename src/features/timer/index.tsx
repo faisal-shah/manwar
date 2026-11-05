@@ -119,7 +119,7 @@ export function TimerOverlay() {
   const stage = timerStage(fraction);
   return (
     <div class="timer-layer" data-phase={phase} role="dialog" aria-label="Timer">
-      <button type="button" class="timer-close" aria-label="Stop timer" onClick={stopTimer}>
+      <button type="button" class="timer-close" aria-label="Stop timer" onClick={() => stopTimer(t)}>
         <X size="3.6rem" strokeWidth={2} />
       </button>
       {phase === 'done' ? (
@@ -129,7 +129,7 @@ export function TimerOverlay() {
             <span>Time's up</span>
           </div>
           <p class="timer-done-sub">{formatDuration(t.minutes)} timer</p>
-          <Button variant="primary" class="timer-done-btn" onClick={stopTimer}>
+          <Button variant="primary" class="timer-done-btn" onClick={() => stopTimer(t)}>
             Done
           </Button>
         </div>

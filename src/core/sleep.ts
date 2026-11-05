@@ -29,7 +29,7 @@ export function sleepNowEnd(sleep: TimeWindow, at: number): number {
 export interface SleepState {
   /** Awake until this instant (a tap, Wake up). */
   wokenUntil: number;
-  /** Asleep until this instant (Sleep now). */
+  /** Asleep until this instant (Sleep now, until a timer starts). */
   forcedUntil: number;
   /** Scheduled sleep waits until this instant (a timer). */
   heldUntil: number;

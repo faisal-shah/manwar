@@ -1,14 +1,15 @@
 import { asleepAt, sleepNowEnd, WAKE_MS } from '../../core/sleep';
 import type { DisplayCommand, TimeWindow, WallTimer } from '../../data/types';
-import { timerSleepHold } from '../../features/timer/logic';
+import { LEAD_MS, timerSleepHold } from '../../features/timer/logic';
 import { addDays, formatTime, monthShort, toISODate, type TimeFormat } from '../../lib/date';
 
 /**
  * Whether the wall is asleep at `t`, as far as a phone can tell: by the
  * wall's own rule (core/sleep.ts) from what it shares, the last Sleep now or
- * Wake up a phone sent, the timer (which holds scheduled sleep off) and the
- * sleep window. A touch on the wall, or its own Sleep now, is not shared,
- * so this is a guess, said as one.
+ * Wake up a phone sent, the timer (which holds scheduled sleep off, and
+ * ends a Sleep now sent before it started) and the sleep window. A touch on
+ * the wall, or its own Sleep now, is not shared, so this is a guess, said
+ * as one.
  */
 export function wallAsleepGuess(
   sleep: TimeWindow,
@@ -16,11 +17,13 @@ export function wallAsleepGuess(
   timer: WallTimer | undefined,
   t: number,
 ): boolean {
+  // A run is created LEAD_MS before it starts counting.
+  const timerSince = !!cmd && !!timer && timer.startAt - LEAD_MS > cmd.at;
   return asleepAt(
     t,
     {
       wokenUntil: cmd?.kind === 'wake' ? cmd.at + WAKE_MS : 0,
-      forcedUntil: cmd?.kind === 'sleep' ? sleepNowEnd(sleep, cmd.at) : 0,
+      forcedUntil: cmd?.kind === 'sleep' && !timerSince ? sleepNowEnd(sleep, cmd.at) : 0,
       heldUntil: timerSleepHold(timer),
     },
     sleep,

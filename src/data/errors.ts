@@ -20,10 +20,10 @@ const coded = (e: unknown): e is CodedError =>
 
 const STATUS_SUFFIX = /\s*\[\d+\]$/;
 
-/** The request never reached the server (offline, DNS, a dropped connection). */
+/** The request never reached the server (offline, DNS, a dropped connection). Firestore says 'unavailable'. */
 export function isNetworkError(e: unknown): boolean {
   if (!coded(e)) return e instanceof TypeError;
-  if (e.code === 'auth/network-request-failed') return true;
+  if (e.code === 'auth/network-request-failed' || e.code === 'unavailable') return true;
   return e.code.startsWith('functions/') && / \[0\]$/.test(e.message);
 }
 

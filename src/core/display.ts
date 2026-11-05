@@ -11,7 +11,8 @@ import { asleepAt, inWindow, sleepNowEnd, WAKE_MS } from './sleep';
  * backlight off). Night and sleep follow their daily windows; "Sleep now"
  * forces sleep until the next wake time; a tap during sleep wakes the screen
  * and it stays awake until nobody has touched it for a few minutes; a
- * running timer holds scheduled sleep off (the rule itself: core/sleep.ts).
+ * running timer holds scheduled sleep off, and a timer started during Sleep
+ * now ends it (the rule itself: core/sleep.ts).
  */
 
 const FORCED_KEY = 'manwar.sleepUntil.v1';
@@ -60,6 +61,13 @@ export function sleepNow(): void {
 export function wake(): void {
   sleepForcedUntil.value = 0;
   wokenUntil.value = currentTime() + WAKE_MS;
+  wakeScreen();
+}
+
+/** End "Sleep now" for a timer started meanwhile (from a phone): the wall shows it, and its hold keeps scheduled sleep off. */
+export function endForcedSleep(): void {
+  if (sleepForcedUntil.peek() <= currentTime()) return;
+  sleepForcedUntil.value = 0;
   wakeScreen();
 }
 
