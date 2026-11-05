@@ -100,6 +100,9 @@ describe('calendar sync across a change of account', () => {
     expect(ids()).toEqual(['swim_x']);
     const saved = JSON.parse(storage.get('manwar.events.v1')!);
     expect([saved.household, saved.events[0].originalStart]).toEqual(['gOurs', Date.parse('2026-11-21T15:30:00Z')]);
+    // With when the calendar answered.
+    expect(Object.keys(saved.syncedAt)).toEqual(['ours@gmail.com']);
+    expect(saved.at - saved.syncedAt['ours@gmail.com']).toBeLessThan(1000);
 
     // A sync that is out when the tablet switches to a third account must not land.
     const gate = deferred();
@@ -139,11 +142,14 @@ describe('calendar sync across a change of account', () => {
 
   it('reads its own snapshot back, a moved occurrence with its original start as a date', async () => {
     const at = Date.parse('2026-11-23T22:00:00Z');
+    // School had been failing for three hours when the snapshot was kept.
+    const schoolAt = Date.now() - 3 * 3_600_000;
     storage.set(
       'manwar.events.v1',
       JSON.stringify({
         household: 'gOurs',
-        calendars: [cal('ours@gmail.com')],
+        calendars: [cal('ours@gmail.com'), cal('school@group.calendar.google.com')],
+        syncedAt: { 'ours@gmail.com': Date.now(), 'school@group.calendar.google.com': schoolAt },
         events: [
           {
             ...ev('ours@gmail.com', 'swim_x', { seriesId: 'swim' }),
@@ -165,6 +171,9 @@ describe('calendar sync across a change of account', () => {
     expect(ids()).toEqual(['swim_x']);
     expect(engine.events.value[0].originalStart).toEqual(new Date(at - 2 * 86_400_000));
     expect(engine.sync.value.error).toBe('Failed to fetch');
+    // Each calendar is as old as its own last fetch, not the snapshot's.
+    expect(engine.sync.value.failing.map((f) => f.at)).toEqual([expect.any(Number), schoolAt]);
+    expect(engine.sync.value.failing[0].at).toBeGreaterThan(schoolAt);
   });
 
   it('keeps a snapshot that fits: without notes when they are too big, none rather than an old one', async () => {
