@@ -26,9 +26,16 @@ vi.mock('../../src/data/store', async () => {
     server.set(doc.id, doc);
     show(doc);
   };
+  // arrayUnion() with no elements, as the engine writes it: [] where the list is missing, the list where it is not.
+  const { arrayUnion } = await import('firebase/firestore');
+  const noElements = arrayUnion();
   const upsert = async (_coll: 'eventMeta', id: string, partial: Partial<EventMeta>) => {
     const merge = (base?: EventMeta) =>
-      Object.fromEntries(Object.entries({ ...base, ...partial }).filter(([, v]) => v !== undefined)) as unknown as EventMeta;
+      Object.fromEntries(
+        Object.entries({ ...base, ...partial })
+          .map(([k, v]) => [k, noElements.isEqual(v as never) ? ((base as never)?.[k] ?? []) : v])
+          .filter(([, v]) => v !== undefined),
+      ) as unknown as EventMeta;
     server.set(id, merge(server.get(id)));
     show(merge(data.eventMeta.value.find((d) => d.id === id)));
   };
@@ -134,6 +141,18 @@ describe('event metadata for series and occurrences', () => {
     server.set(engine.metaKey('fam', 'swim'), meta('swim', ['asiyah', 'hashim'], { countdown: true }));
     engine.setCountdown(a, false);
     expect(server.get(engine.metaKey('fam', 'swim'))).toMatchObject({ profiles: ['asiyah', 'hashim'], countdown: false });
+  });
+
+  it('a countdown turned on before another device’s assignment arrives keeps the assignment', () => {
+    const party = ev('party', day(5), day(5, '12:00'));
+    engine.events.value = [party];
+    // The other device assigned the party to Hashim; this one has no meta for it yet.
+    server.set(engine.metaKey('fam', 'party'), meta('party', ['hashim']));
+    engine.setCountdown(party, true);
+    expect(server.get(engine.metaKey('fam', 'party'))).toMatchObject({ profiles: ['hashim'], countdown: true });
+    // On this device, until the other write arrives, the event reads as nobody's.
+    expect(metaDoc('party')?.profiles).toEqual([]);
+    expect(engine.profilesOf(party)).toBeNull();
   });
 
   it('assigning the whole series keeps its countdown and drops the occurrence override', () => {

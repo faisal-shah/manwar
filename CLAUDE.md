@@ -105,7 +105,9 @@ flowchart LR
   so an occurrence waits in triage, which assigns it alone (`triageScope`)
   instead of the series);
   write through `assign`/`setCountdown`/`updateEvent`, which touch only the
-  document they mean to change. `refresh()` called during a fetch gets one
+  document they mean to change, and only its fields they change (a write
+  without profiles adds none, `arrayUnion()`, so it cannot clear an
+  assignment another tablet made that has not arrived yet). `refresh()` called during a fetch gets one
   more fetch after it (each Google request gives up after 30 seconds, so a
   dead connection cannot stall the queue or a save awaiting it), and a
   calendar that fails keeps its last events. A calendar hidden in Settings

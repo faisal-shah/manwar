@@ -1,5 +1,6 @@
 import { batch as signalBatch, computed, effect, signal } from '@preact/signals';
 import { demoMode } from '../config';
+import { listAdd } from '../data/settings';
 import { data, householdId, patch, profileById, put, remove as removeDoc, settings, upsert } from '../data/store';
 import { EVERYONE, type EventMeta, type ISODate } from '../data/types';
 import { addDays, addMonths, dateAt, diffDays, toISODate } from '../lib/date';
@@ -457,10 +458,17 @@ type MetaFields = Partial<Pick<EventMeta, 'profiles' | 'countdown' | 'emoji'>>;
 /**
  * Write `fields` (undefined clears one) into a meta document, creating it
  * when there is none. Only those fields are written, so a change another
- * device made to the others (an assignment, a countdown) is kept.
+ * device made to the others (an assignment, a countdown) is kept. A write
+ * without profiles adds none (arrayUnion of nothing): the list it creates
+ * where there is none leaves one another device wrote meanwhile alone.
  */
-function writeMeta(id: string, existing: EventMeta | undefined, fields: MetaFields): void {
-  void upsert('eventMeta', id, { ...(existing ? {} : { profiles: [] }), ...fields, id, updatedAt: currentTime() });
+function writeMeta(id: string, fields: MetaFields): void {
+  void upsert('eventMeta', id, {
+    ...(fields.profiles ? {} : { profiles: listAdd<string>() }),
+    ...fields,
+    id,
+    updatedAt: currentTime(),
+  });
 }
 
 /**
@@ -475,13 +483,13 @@ function putOwn(ev: CalEvent, fields: MetaFields): void {
     if (own) void removeDoc('eventMeta', ownKey);
     return;
   }
-  writeMeta(ownKey, own, fields);
+  writeMeta(ownKey, fields);
 }
 
 /** Write the series document (or the event's own one, for a one-off event) with `fields` changed. */
 function putSeries(ev: CalEvent, fields: MetaFields): void {
-  const { own, series, ownKey, seriesKey } = metaDocs(ev);
-  writeMeta(seriesKey ?? ownKey, seriesKey ? series : own, fields);
+  const { ownKey, seriesKey } = metaDocs(ev);
+  writeMeta(seriesKey ?? ownKey, fields);
 }
 
 /**
