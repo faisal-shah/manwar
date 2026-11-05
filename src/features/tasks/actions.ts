@@ -62,10 +62,12 @@ export function tapCheck(tapped: Occurrence, day: string, origin: DOMRect): void
 const CELEBRATED_KEY = 'manwar.celebrated.v1';
 let celebrated: { day: string; keys: string[] } = (() => {
   try {
-    return JSON.parse(localStorage.getItem(CELEBRATED_KEY) ?? '') as { day: string; keys: string[] };
+    const v = JSON.parse(localStorage.getItem(CELEBRATED_KEY) ?? '') as { day?: unknown; keys?: unknown } | null;
+    if (v && typeof v.day === 'string' && Array.isArray(v.keys)) return { day: v.day, keys: v.keys.map(String) };
   } catch {
-    return { day: '', keys: [] };
+    /* missing or unreadable: nothing celebrated yet */
   }
+  return { day: '', keys: [] };
 })();
 
 /** True the first time `key` is celebrated today (and records it). */
