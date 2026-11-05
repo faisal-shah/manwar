@@ -1,7 +1,6 @@
 import { computed, signal } from '@preact/signals';
-import { deleteField } from 'firebase/firestore';
+import { pinChange } from '../data/settings';
 import { saveSettings, settings } from '../data/store';
-import type { Settings } from '../data/types';
 import { currentTime, nowMs } from '../lib/clock';
 import { onActivity } from './activity';
 import { pinPause } from './pin';
@@ -29,9 +28,36 @@ function extend() {
   unlockedUntil.value = currentTime() + settings.value.lock.relockMinutes * 60_000;
 }
 
-let wrongPins = 0;
+/*
+ * Wrong PINs in a row and the pause they earned, kept in this tablet's
+ * storage: a kid who reloads the page (or waits for the nightly reload)
+ * gets neither a fresh pad nor a reset count.
+ */
+const PAUSE_KEY = 'manwar.pinPause.v1';
+type PauseState = { wrong: number; until: number };
+
+function loadPause(): PauseState {
+  try {
+    const v = JSON.parse(localStorage.getItem(PAUSE_KEY) ?? 'null') as Partial<PauseState> | null;
+    return { wrong: Number(v?.wrong) || 0, until: Number(v?.until) || 0 };
+  } catch {
+    return { wrong: 0, until: 0 };
+  }
+}
+
+function storePause(p: PauseState): void {
+  try {
+    if (p.wrong) localStorage.setItem(PAUSE_KEY, JSON.stringify(p));
+    else localStorage.removeItem(PAUSE_KEY);
+  } catch {
+    // No storage (private mode): the pause lasts until a reload.
+  }
+}
+
+const stored = typeof window === 'undefined' ? { wrong: 0, until: 0 } : loadPause();
+let wrongPins = stored.wrong;
 /** The PIN pad refuses entries until this instant (after repeated wrong PINs). */
-export const pinPausedUntil = signal(0);
+export const pinPausedUntil = signal(stored.until);
 
 export async function checkPin(pin: string): Promise<boolean> {
   const { pinHash, salt } = settings.value.lock;
@@ -45,6 +71,7 @@ export async function checkPin(pin: string): Promise<boolean> {
     const pause = pinPause(++wrongPins);
     if (pause) pinPausedUntil.value = currentTime() + pause;
   }
+  storePause({ wrong: wrongPins, until: pinPausedUntil.value });
   return ok;
 }
 
@@ -70,19 +97,15 @@ export async function asParent(fn: () => unknown, reason?: string): Promise<void
   if (await requireParent(reason)) await fn();
 }
 
+/** Set or remove the PIN. Writes only the PIN fields, so another tablet's relock minutes stay. */
 export async function setPin(pin: string | null): Promise<void> {
-  if (!pin) {
-    // saveSettings merges nested maps, so the PIN fields must be deleted explicitly.
-    const lock = { relockMinutes: settings.value.lock.relockMinutes, pinHash: deleteField(), salt: deleteField() };
-    await saveSettings({ lock: lock as unknown as Settings['lock'] });
-    return;
-  }
+  if (!pin) return saveSettings(pinChange(null));
   if (!/^\d{4}$/.test(pin)) throw new Error('The PIN must be 4 digits.');
   const salt = crypto.randomUUID();
   const pinHash = await hash(salt, pin);
   // Stay unlocked from the moment the lock turns on, not from the server's ack.
   extend();
-  await saveSettings({ lock: { ...settings.value.lock, salt, pinHash } });
+  await saveSettings(pinChange({ salt, pinHash }));
 }
 
 export function lockNow(): void {

@@ -70,6 +70,26 @@ test('adds, edits, reorders and deletes a profile', async ({ page }) => {
   await expect(page.locator('.profile-row', { hasText: 'Zaid' })).toHaveCount(0);
 });
 
+test('a profile avatar is picked from faces, people and animals; tasks keep their chore icons', async ({ page }) => {
+  await open(page);
+  await openSettings(page, 'Profiles');
+  await page.getByRole('button', { name: 'Add a profile' }).click();
+  const tabs = page.locator('.set-page .emoji-grid').locator('xpath=..').getByRole('tab');
+  await expect(tabs).toHaveText(['Faces', 'People', 'Animals']);
+  await expect(page.locator('.emoji-grid button', { hasText: '🧹' })).toHaveCount(0);
+  await page.getByRole('tab', { name: 'Animals' }).click();
+  await page.locator('.emoji-grid button', { hasText: '🦁' }).click();
+  await page.getByRole('textbox', { name: 'Name' }).fill('Zaid');
+  await page.getByRole('button', { name: 'Create profile' }).click();
+  await expect(page.locator('.profile-row', { hasText: 'Zaid' }).locator('.avatar')).toHaveText('🦁');
+  await page.getByRole('button', { name: 'Close' }).click();
+
+  await rail(page, 'Tasks').click();
+  await page.locator('.fab').click();
+  await page.getByRole('button', { name: 'Add an emoji' }).click();
+  await expect(page.locator('.sheet .tk-ed-picker').getByRole('tab').first()).toHaveText('Routines');
+});
+
 test('deleting a profile sends the events only it had to the unassigned queue', async ({ page }) => {
   test.setTimeout(90_000);
   await open(page);
@@ -164,6 +184,20 @@ test('hides a tab, keeping Home or Calendar on', async ({ page }) => {
   await expect(page.getByRole('switch', { name: /^Calendar/ })).toBeEnabled();
 });
 
+test('the message composer and a new event open with their text field focused', async ({ page }) => {
+  await open(page);
+  await rail(page, 'Home').click();
+  await page.getByRole('button', { name: 'Message' }).click();
+  await expect(page.getByRole('textbox', { name: 'Message' })).toBeFocused();
+  await page.keyboard.type('Hi');
+  await expect(page.getByRole('textbox', { name: 'Message' })).toHaveValue('Hi');
+  await page.locator('.sheet').getByRole('button', { name: 'Cancel' }).click();
+
+  await rail(page, 'Calendar').click();
+  await page.locator('.fab').click();
+  await expect(page.locator('.sheet input[name=title]')).toBeFocused();
+});
+
 test('posts a message that shows full screen until someone taps OK', async ({ page }) => {
   await open(page);
   await rail(page, 'Home').click();
@@ -196,6 +230,19 @@ test('runs a short timer to the end', async ({ page }) => {
   await expect(layer).toContainText("Time's up");
   await layer.getByRole('button', { name: 'Done' }).click();
   await expect(layer).toHaveCount(0);
+});
+
+test('the timer readout says one minute, not one mins', async ({ page }) => {
+  await open(page);
+  await page.clock.install();
+  await rail(page, 'Home').click();
+  await page.getByRole('button', { name: 'Timer' }).click();
+  await digit(page.locator('.modal'), '2').click();
+  await page.getByRole('button', { name: 'Start' }).click();
+  const clock = page.locator('.timer-layer .timer-clock');
+  await page.clock.fastForward('00:45');
+  await expect(clock).toHaveAttribute('aria-label', /^1 minute \d+ seconds left$/);
+  await expect(clock.locator('small').first()).toHaveText('min');
 });
 
 test('a running timer holds off scheduled sleep until 5 minutes after it ends', async ({ page }) => {

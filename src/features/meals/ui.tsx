@@ -1,7 +1,7 @@
 import { useState } from 'preact/hooks';
 import type { TargetedEvent } from 'preact';
 import { ChevronDown, ChevronUp, Repeat as RepeatIcon } from 'lucide-preact';
-import type { ISODate, MealCategory, MealCategoryId, Repeat } from '../../data/types';
+import type { ISODate, MealCategory, MealCategoryId, Recipe, Repeat } from '../../data/types';
 import { today } from '../../lib/clock';
 import { addDays, dayShort, fromISODate } from '../../lib/date';
 import { describeRepeat } from '../../lib/repeat';
@@ -21,6 +21,29 @@ export function CategoryBadge({ category, size = 3 }: { category: Pick<MealCateg
     >
       {initialOf(category.name)}
     </span>
+  );
+}
+
+/**
+ * A recipe row's lead, name and category (Recipes list, Plan meal): the
+ * emoji leads, or without one the category letter, as on Skylight's rows;
+ * the letter trails only after an emoji, so it is never shown twice.
+ */
+export function RecipeRowContent({
+  recipe,
+  category,
+  leadClass,
+}: {
+  recipe: Pick<Recipe, 'emoji' | 'name'>;
+  category: MealCategory | undefined;
+  leadClass: string;
+}) {
+  return (
+    <>
+      <span class={leadClass}>{recipe.emoji ?? (category && <CategoryBadge category={category} size={3.2} />)}</span>
+      <bdi class="grow">{recipe.name}</bdi>
+      {recipe.emoji && category && <CategoryBadge category={category} size={2.8} />}
+    </>
   );
 }
 

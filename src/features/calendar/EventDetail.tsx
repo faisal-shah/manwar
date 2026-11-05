@@ -22,10 +22,12 @@ import { Button, IconButton, Toggle } from '../../ui/controls';
 import { choose, Popover } from '../../ui/overlays';
 import { Avatar, ProfilePicker } from '../../ui/profile';
 import { assignFlow, countdownFlow, deleteFlow } from './actions';
-import { calendarName, countdownEmoji, reminderLabel, whenLabel, whoOf } from './model';
+import { reminderLabel } from './layout';
+import { calendarName, countdownEmoji, whenLabel, whoOf } from './model';
 import { plainText } from './text';
 import { Unassigned } from './parts';
 import { openEditor } from './state';
+import { plural } from '../../lib/text';
 
 const ICON = { size: '2.2rem', strokeWidth: 1.8 };
 
@@ -112,7 +114,7 @@ export function EventDetail({ ev, anchor, onClose }: { ev: CalEvent; anchor: DOM
           )}
         </header>
         {countdown && until >= 0 && (
-          <Row icon={<Timer {...ICON} />}>{until === 0 ? 'Today' : `${until} ${until === 1 ? 'day' : 'days'} until event`}</Row>
+          <Row icon={<Timer {...ICON} />}>{until === 0 ? 'Today' : `${plural(until, 'day')} until event`}</Row>
         )}
         <Row icon={<CalendarDays {...ICON} />}>{whenLabel(ev)}</Row>
         {repeat && <Row icon={<Repeat {...ICON} />}>{repeat}</Row>}

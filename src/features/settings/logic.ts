@@ -1,4 +1,5 @@
 import { NOBODY, type EventMeta, type Reward, type TabId, type Task } from '../../data/types';
+import { plural } from '../../lib/text';
 
 /* ---------- Tabs ---------- */
 
@@ -114,8 +115,6 @@ export function planProfileDelete(
   }
   return plan;
 }
-
-const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 /** The confirm text that explains a deletion before it happens. */
 export function describeProfileDelete(name: string, plan: ProfileDeletePlan): string {

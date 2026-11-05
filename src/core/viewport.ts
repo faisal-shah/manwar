@@ -12,8 +12,11 @@
  * What must not follow is the scale. When the viewport loses height at the
  * same width while a text field has focus, that is the keyboard: the root
  * keeps the full height in `--app-h` (the rem formula reads it), and the
- * focused field is scrolled into view inside its sheet. The next resize that
- * is not the keyboard (closed, rotated, a real window change) lets go.
+ * focused field is scrolled into view inside its sheet or list. The shell
+ * stays exactly the shrunk viewport's height and the rail clips what no
+ * longer fits (app/shell.css), so only that scroller moves, never the page
+ * with its top bar. The next resize that is not the keyboard (closed,
+ * rotated, a real window change) lets go.
  */
 
 const EDITABLE = 'input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), textarea, select, [contenteditable]';

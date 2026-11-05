@@ -115,6 +115,41 @@ test('Tasks: a sideways swipe on the cards brings the next columns in', async ({
   await ctx.close();
 });
 
+test('Tasks, Rewards and Home: a family of six sees the row of people continue past the edge', async ({ browser }) => {
+  const { ctx, page, name } = await tablet(browser);
+  await rail(page, 'Tasks').click();
+  await expect(page.locator('.pcols > .pcol')).toHaveCount(5, { timeout: 45_000 });
+  await seedDoc(name, 'profiles', { id: 'p5', name: 'Zaynab', color: '#7E5BA6', order: 10, stars: 0, createdAt: 10 });
+  await seedDoc(name, 'profiles', { id: 'p6', name: 'Ibrahim', color: '#CE632D', order: 11, stars: 0, createdAt: 11 });
+  /** How much of the first column past the row's edge shows, in rem, with the columns before it whole. */
+  const peek = (row: string, col: string) =>
+    page.locator(row).evaluate((el, col) => {
+      const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
+      const edge = el.getBoundingClientRect().right;
+      const cols = [...el.querySelectorAll(col)].map((c) => c.getBoundingClientRect());
+      const cut = cols.findIndex((c) => c.right > edge + 0.5);
+      return { whole: cut, shows: cut < 0 ? 0 : (edge - cols[cut].left) / rem };
+    }, col);
+  await expect(page.locator('.pcols > .pcol')).toHaveCount(7);
+  await page.waitForTimeout(400);
+  const tasks = await peek('.pcols', ':scope > .pcol');
+  expect(tasks.whole).toBe(4);
+  expect(tasks.shows).toBeGreaterThan(3);
+
+  await rail(page, 'Rewards').click();
+  await expect(page.locator('.pcols > .pcol')).toHaveCount(6);
+  const rewards = await peek('.pcols', ':scope > .pcol');
+  expect(rewards.whole).toBe(4);
+  expect(rewards.shows).toBeGreaterThan(3);
+
+  await rail(page, 'Home').click();
+  await expect(page.locator('.tp-cards > .tp-card')).toHaveCount(7);
+  const home = await peek('.tp-cards', ':scope > .tp-card');
+  expect(home.whole).toBeGreaterThan(0);
+  expect(home.shows).toBeGreaterThan(3);
+  await ctx.close();
+});
+
 test('Tasks and Home: a household with people but no tasks yet is told how to add one', async ({ browser }) => {
   const { ctx, page, name } = await tablet(browser, '&seed=none');
   await seedDoc(name, 'profiles', { id: 'p1', name: 'Yusuf', color: '#FEB306', order: 0, stars: 0, createdAt: 1 });

@@ -15,12 +15,14 @@ import {
   savedFields,
   taskFrom,
   validateDraft,
+  withRepeatMode,
   type AfterUnit,
   type Draft,
   type RepeatMode,
 } from './draft';
 import { SECTION_META } from './logic';
 import { currentPart } from './view';
+import { pluralWord } from '../../lib/text';
 
 /** Mounted by the Tasks tab and the Home pane; opened through editTask() (parent PIN). */
 export function EditorHost() {
@@ -205,7 +207,7 @@ function TaskEditor({ task, onClose }: { task: Task | null; onClose: () => void 
                   style={{ width: 'auto' }}
                   aria-label="Date"
                   value={d.date}
-                  onInput={(e) => set({ date: (e.target as HTMLInputElement).value })}
+                  onInput={(e) => set({ date: (e.target as HTMLInputElement).value, autoDate: false })}
                 />
                 <Toggle label="Due time" on={d.timed} onChange={(timed) => set({ timed })} />
                 <span>Due time</span>
@@ -229,7 +231,7 @@ function TaskEditor({ task, onClose }: { task: Task | null; onClose: () => void 
                   { value: 'schedule', label: 'On a schedule' },
                   { value: 'after', label: 'After it is done' },
                 ]}
-                onChange={(repeatMode) => set({ repeatMode })}
+                onChange={(repeatMode) => set(withRepeatMode(d, repeatMode, !task, today.value, currentPart.value))}
               />
               {d.repeatMode === 'schedule' && (
                 <RepeatEditor
@@ -246,14 +248,17 @@ function TaskEditor({ task, onClose }: { task: Task | null; onClose: () => void 
                   <Segmented<AfterUnit>
                     value={d.after.unit}
                     options={[
-                      { value: 'day', label: d.after.every === 1 ? 'day' : 'days' },
-                      { value: 'week', label: d.after.every === 1 ? 'week' : 'weeks' },
-                      { value: 'month', label: d.after.every === 1 ? 'month' : 'months' },
+                      { value: 'day', label: pluralWord(d.after.every, 'day') },
+                      { value: 'week', label: pluralWord(d.after.every, 'week') },
+                      { value: 'month', label: pluralWord(d.after.every, 'month') },
                     ]}
                     onChange={(unit) => set({ after: { ...d.after, unit } })}
                   />
                   <span class="muted">after it is done</span>
                 </div>
+              )}
+              {d.repeatMode === 'after' && d.autoDate && (
+                <span class="muted">First due tomorrow, since it is evening. Change the date above for today.</span>
               )}
             </Field>
           </>

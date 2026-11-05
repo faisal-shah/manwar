@@ -131,6 +131,51 @@ test('the on-screen keyboard keeps the scale, and the sheet ends above it', asyn
   await expect.poll(() => rem(page)).toBeLessThan(full);
 });
 
+test("with large text, Home's week cells show whole titles and times", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await open(page);
+  await textSize(page, 'Large');
+  await rail(page, 'Home').click();
+  const pane = page.locator('.home-pane').first();
+  await expect(pane.locator('.weekv')).toBeVisible();
+  await expect(pane.locator('.cal-week-cell .ev-card').first()).toBeVisible();
+  const cut = await pane
+    .locator('.cal-week-cell')
+    .evaluateAll((cells) =>
+      cells.flatMap((c) =>
+        [...c.querySelectorAll<HTMLElement>('.ev-title, .ev-time, .cal-week-count')]
+          .filter((el) => el.getBoundingClientRect().width > 0 && el.scrollWidth > el.clientWidth + 1)
+          .map((el) => el.textContent),
+      ),
+    );
+  expect(cut).toEqual([]);
+  // The time line still says when, and each card still shows whose it is.
+  const card = pane.locator('.cal-week-cell[data-day="2026-11-04"] .ev-card', { hasText: 'Handwriting' });
+  await expect(card.locator('.ev-time')).toHaveText('10:45 AM', { useInnerText: true });
+  await expect(card.locator('.avatar')).toBeVisible();
+});
+
+test('with the keyboard up, a list field low on the screen scrolls the list, not the page', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await open(page);
+  await rail(page, 'Lists').click();
+  // A section's + opens Add item at the end of that section, near the bottom of the screen.
+  await page
+    .getByRole('button', { name: /^Add to / })
+    .last()
+    .click();
+  const field = page.locator('.li-add-input:focus');
+  await expect(field).toBeVisible();
+  // The keyboard opens: the viewport shrinks to the space above it, shorter than the nav rail.
+  await page.setViewportSize({ width: 1280, height: 430 });
+  await expect.poll(async () => (await box(field)).y + (await box(field)).height).toBeLessThanOrEqual(430);
+  await page.waitForTimeout(300);
+  expect((await box(page.locator('.topbar'))).y).toBe(0);
+  expect(await page.evaluate(() => [document.documentElement.scrollTop, document.body.scrollTop])).toEqual([0, 0]);
+  // The field scrolled into view inside its list.
+  expect(await field.evaluate((el) => el.closest('.lc-body')!.scrollTop)).toBeGreaterThan(0);
+});
+
 test('a PIN pad that opens while someone types closes the keyboard, so all its keys show', async ({ page }) => {
   await page.clock.install();
   await open(page);
@@ -592,4 +637,41 @@ test('an Arabic title cut short keeps its first words', async ({ page }) => {
   const meal = page.locator('[data-cell="2026-11-04|dinner"] .mg-title', { hasText: 'كبسة' });
   await expect(meal).toBeVisible();
   expect(await meal.evaluate((el) => [getComputedStyle(el).direction, getComputedStyle(el).textAlign])).toEqual(['rtl', 'start']);
+});
+
+test('Arabic typed into a field runs right to left; an empty field keeps its placeholder on the left', async ({ page }) => {
+  await open(page);
+  const dir = (l: Locator) => l.evaluate((el) => getComputedStyle(el).direction);
+  await rail(page, 'Lists').click();
+  const add = page.getByRole('textbox', { name: 'Add item to Grocery List' }).first();
+  expect(await dir(add)).toBe('ltr');
+  await add.fill('خبز');
+  expect(await dir(add)).toBe('rtl');
+  await add.fill('2 بيض');
+  expect(await dir(add)).toBe('rtl');
+  await add.fill('Milk');
+  expect(await dir(add)).toBe('ltr');
+  await add.fill('');
+
+  await rail(page, 'Recipes').click();
+  const search = page.getByRole('textbox', { name: 'Search recipes' });
+  await search.fill('عدس');
+  expect(await dir(search)).toBe('rtl');
+  await search.fill('');
+
+  await rail(page, 'Tasks').click();
+  await page.locator('.fab').click();
+  const sheet = page.locator('.sheet');
+  const title = sheet.getByRole('textbox', { name: 'Title' });
+  await title.fill('ترتيب الغرفة');
+  expect(await dir(title)).toBe('rtl');
+  const notes = sheet.locator('textarea');
+  await notes.fill('اجمع الألعاب');
+  expect(await dir(notes)).toBe('rtl');
+  // The row around the field keeps its own direction: the emoji button stays on the left (one read, as the sheet slides in).
+  const order = await title.evaluate((el) => {
+    const btn = el.parentElement!.querySelector('.tk-ed-emoji')!;
+    return btn.getBoundingClientRect().right <= el.getBoundingClientRect().left;
+  });
+  expect(order).toBe(true);
 });

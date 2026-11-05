@@ -2,6 +2,7 @@ import { Star } from 'lucide-preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { formatStars } from './logic';
 import { openHistory } from './history-state';
+import { plural } from '../../lib/text';
 
 /** Counts toward a new value; increases wait for the flying stars to land. A new `id` jumps straight to its value. */
 function useCountUp(id: string, value: number, delay = 520, ms = 520): number {
@@ -44,7 +45,7 @@ export function StarPill({ profileId, value, large }: { profileId: string; value
       type="button"
       class={`pill star-pill${large ? ' large' : ''}`}
       data-stars-for={profileId}
-      aria-label={`${value} stars, show history`}
+      aria-label={`${plural(value, 'star')}, show history`}
       onClick={(e) => {
         e.stopPropagation();
         openHistory(profileId);

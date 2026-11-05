@@ -12,6 +12,7 @@ import { categoryById, planMeal, visibleCategories } from '../meals/state';
 import { CategoryBadge, CategoryPicker, DayPicker, RepeatRow } from '../meals/ui';
 import { deleteRecipe, recipeEditor } from './state';
 import { displayUrl, ingredientRows, instructionSteps } from './text';
+import { plural } from '../../lib/text';
 
 /** "This recipe" or "This recipe and planned meals", as on Skylight. Resolves true when deleted. */
 export async function askDeleteRecipe(recipe: Recipe): Promise<boolean> {
@@ -21,7 +22,7 @@ export async function askDeleteRecipe(recipe: Recipe): Promise<boolean> {
     const how = planned
       ? await choose(`Delete ${recipe.name}?`, [
           { value: 'recipe', label: 'Delete the recipe, keep planned meals' },
-          { value: 'all', label: `Delete the recipe and ${planned} planned meal${planned === 1 ? '' : 's'}` },
+          { value: 'all', label: `Delete the recipe and ${plural(planned, 'planned meal')}` },
         ])
       : (await confirm(`Delete ${recipe.name}?`, { body: 'This cannot be undone.', ok: 'Delete', danger: true })) && 'recipe';
     if (!how) return;

@@ -10,6 +10,7 @@ import { completeTask, occurrencesFor, skipTask, statesById, uncompleteTask, uns
 import { confirm, toast } from '../../ui/overlays';
 import { celebrate, confettiAt, flyStars } from './effects';
 import { completionEffects } from './logic';
+import { plural } from '../../lib/text';
 
 /**
  * Task actions shared by the Day view, the Week grid and the Home pane.
@@ -132,7 +133,7 @@ export function complete(o: Occurrence, by: string, day: string, origin?: DOMRec
 export function uncheck(o: Occurrence): void {
   const stars = o.state?.stars ?? 0;
   if (!uncompleteTask(o)) return;
-  toast(`${o.task.title} unchecked${stars ? `, ${stars} ${stars === 1 ? 'star' : 'stars'} taken back` : ''}`);
+  toast(`${o.task.title} unchecked${stars ? `, ${plural(stars, 'star')} taken back` : ''}`);
 }
 
 export function skip(o: Occurrence, day: string): void {

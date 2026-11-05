@@ -9,10 +9,10 @@ import { todayProgress } from '../../tasks/state';
 import { Avatar } from '../../ui/profile';
 import { countdownEmoji, fillStyle, whoOf } from './model';
 import { Menu } from './Menu';
+import { daysText } from './layout';
 import { Avatars } from './parts';
 import { countdownPopup, openDetail, openEditor } from './state';
-
-export const daysText = (days: number) => (days === 0 ? 'Today!' : `${days} ${days === 1 ? 'day' : 'days'}`);
+import { plural } from '../../lib/text';
 
 /** Under the top bar: countdown pill(s) and one task-progress pill per visible profile. */
 export function ProgressStrip() {
@@ -40,7 +40,7 @@ function ProgressPill({ profile, done, total }: { profile: Profile; done: number
       class="cal-prog"
       style={{ '--c': profile.color, '--pct': `${pct}%` }}
       onClick={() => goTo('tasks')}
-      aria-label={`${profile.name}: ${done} of ${total} tasks done`}
+      aria-label={`${profile.name}: ${done} of ${plural(total, 'task')} done`}
     >
       <Avatar profile={profile} size={3.8} />
       <span class="cal-prog-name" dir="auto">

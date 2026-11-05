@@ -1,4 +1,19 @@
-import type { ButtonHTMLAttributes, ComponentChildren } from 'preact';
+import type { ButtonHTMLAttributes, ComponentChildren, RefObject } from 'preact';
+import { useEffect, useRef } from 'preact/hooks';
+
+/**
+ * A ref that focuses its field once it is on screen (when `on`). The
+ * autofocus attribute does nothing here: a browser honours it only before
+ * anything on the page has had focus, and the button that opened the sheet
+ * already has.
+ */
+export function useAutoFocus<T extends HTMLElement>(on = true): RefObject<T | null> {
+  const ref = useRef<T>(null);
+  useEffect(() => {
+    if (on) ref.current?.focus({ preventScroll: true });
+  }, [on]);
+  return ref;
+}
 
 type BtnProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: 'primary' | 'danger' | 'ghost' | 'default';

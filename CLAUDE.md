@@ -88,10 +88,12 @@ flowchart LR
   fields it changes (`{ filter: { weather: false } }`, never the whole
   filter from this tablet's copy), and the change builders in
   `data/settings.ts` (`filterChange`, `profileShownChange`, `hiddenChange`,
-  `mealCategoryChange`, `listAdd`/`listRemove`) cover the shared lists and
-  maps. `mealCategories` is stored as a map by category id for that reason
+  `mealCategoryChange`, `windowChange`, `relockChange`, `pinChange`,
+  `listAdd`/`listRemove`) cover the shared lists and maps; a form with a
+  draft writes `changedFields(opened, draft)` (the Sleep menu).
+  `mealCategories` is stored as a map by category id for that reason
   (`categories` in `meals/state.ts` gives them in order). A merge never
-  deletes a nested key: pass `deleteField()` for that (`core/lock.ts`).
+  deletes a nested key: `pinChange(null)` passes `deleteField()` for that.
 - **Calendar events** live in the household's Google calendars. `calendar/engine.ts`
   fetches a window around today (six weeks back, four months ahead, widened
   to the days the latest view asked for with `ensureRange`), caches a snapshot
@@ -163,6 +165,9 @@ flowchart LR
   limited and pauses the sync again.
 - **Tasks**: `tasks/engine.ts` is pure (occurrences from schedules; late
   chores; Up for Grabs; repeat-after-done via `Task.lastDone`), unit-tested.
+  A new repeat-after-done chore added in the evening starts tomorrow
+  (`withRepeatMode` in `features/tasks/draft.ts`, shown in the editor), so
+  it is not late the next morning.
   `tasks/state.ts` has the reactive views and the writes. Stars use an
   append-only ledger (`ledger` collection) plus `Profile.stars` kept equal
   to the sum by `batch().stars()` in the same batch. Undo writes a reversing
@@ -194,7 +199,9 @@ flowchart LR
   stars it takes back were spent since (the balance no longer covers them):
   then it asks for the PIN (`tasks/actions.ts`). The pad blurs the focused
   field when it opens, so the on-screen keyboard closes. Repeated wrong PINs pause the pad
-  (`core/pin.ts`, in memory). The Calendar filter is a view preference and
+  (`core/pin.ts`); the miss count and the pause are kept in localStorage
+  (`manwar.pinPause.v1`, `core/lock.ts`), so a reload does not reset them.
+  The countdown reads `currentTime()`, not the once-a-second `nowMs`. The Calendar filter is a view preference and
   stays open.
 - **Display** (`core/display.ts`): night window switches to the dark theme
   and dims (Fully Kiosk), sleep window blanks the screen, a tap wakes it and
@@ -290,8 +297,15 @@ generated from it: `node scripts/icons/render.mjs` after any brand change.
   cuts the text with an ellipsis takes `dir="auto"` itself (an inner bdi
   shows an Arabic title's end, cut at its start); a line-clamped one aligns
   to `start`, since Chrome draws no clamp ellipsis on a right-to-left block
-  aligned left.
-- Column rows that scroll sideways (`.pcols`, `.tp-cards`) snap. A vertical
+  aligned left. Fields need nothing: `installAutoDirection` (`ui/bidi.ts`,
+  a Preact `options.vnode` hook installed in `main.tsx`) gives every text
+  `<input>` and `<textarea>` `dir="auto"`, so typed Arabic runs right to
+  left and an empty field's placeholder stays at the left; an explicit
+  `dir` wins.
+- Column rows that scroll sideways (`.pcols`, `.tp-cards`) snap. Four
+  `.pcols` columns fill the width; from five on they narrow by `--peek`
+  so the next column shows its edge (the row goes on), and Home's cards
+  overflow with part of the next one showing. A vertical
   scroller inside one contains the y axis only (`overscroll-behavior-y`), or
   a sideways swipe on the cards never pages the row; `useStartInView`
   (`tasks/DayView.tsx`) keeps a row at its start when a column is put in
@@ -300,6 +314,9 @@ generated from it: `node scripts/icons/render.mjs` after any brand change.
 - Up and Down buttons on a reorderable list move with their row: route taps
   through `moveTarget` (`settings/logic.ts`) so a quick run of taps on one
   spot keeps moving the row it started with.
+- `autoFocus` does nothing after the first focus on the page (the button
+  that opened a sheet has it): focus a field with `useAutoFocus`
+  (`ui/controls.tsx`), a ref that calls `focus()` once it is mounted.
 - Overlays (`Sheet`, `Modal`, `Popover`, the calendar `Menu`) portal to
   `document.body` and register through `useOverlay(onClose)`: its `scrim`
   handler lets the second tap of the double tap that opened the overlay

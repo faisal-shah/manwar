@@ -7,7 +7,7 @@ import { asParent } from '../../core/lock';
 import type { Recipe } from '../../data/types';
 import { Empty } from '../../ui/controls';
 import { categories, categoryById } from '../meals/state';
-import { CategoryBadge, CategoryPicker } from '../meals/ui';
+import { CategoryPicker, RecipeRowContent } from '../meals/ui';
 import { RecipeEditor } from './RecipeEditor';
 import { RecipeView } from './RecipeView';
 import { recipeEditor, recipeFilter, recipeSearch, recipes, selectedRecipeId } from './state';
@@ -32,9 +32,7 @@ function RecipesBody() {
         aria-current={r.id === selected?.id ? 'true' : undefined}
         onClick={() => (selectedRecipeId.value = r.id)}
       >
-        <span class="rl-emoji">{r.emoji ?? (cat && <CategoryBadge category={cat} size={3.2} />)}</span>
-        <bdi class="grow">{r.name}</bdi>
-        {cat && <CategoryBadge category={cat} size={2.8} />}
+        <RecipeRowContent recipe={r} category={cat} leadClass="rl-emoji" />
       </button>
     );
   };

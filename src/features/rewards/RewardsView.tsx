@@ -11,6 +11,7 @@ import { NoColumns } from '../tasks/DayView';
 import { editReward, redeem, redeemed, unredeem, type Redeemed } from './actions';
 import { formatStars, longDay, rewardsFor, type RewardView } from './logic';
 import { StarPill } from './StarPill';
+import { plural } from '../../lib/text';
 
 export const hideRedeemed = signal(false);
 
@@ -79,7 +80,7 @@ function RewardCard({ v, p }: { v: RewardView; p: Profile }) {
           Redeem <Star size="1.8rem" class="star-icon" /> {formatStars(r.cost)}
         </button>
       ) : (
-        <div class="rw-progress" style={{ '--p': `${v.progress * 100}%` }} aria-label={`${p.stars} of ${r.cost} stars`}>
+        <div class="rw-progress" style={{ '--p': `${v.progress * 100}%` }} aria-label={`${p.stars} of ${plural(r.cost, 'star')}`}>
           <Star size="1.6rem" />
           {formatStars(p.stars)}/{formatStars(r.cost)}
         </div>
@@ -120,8 +121,7 @@ function RedeemedDialog({ r }: { r: Redeemed }) {
         </span>
         <h2 class="serif">Great work! {r.reward.title} redeemed</h2>
         <p class="muted">
-          By {p?.name ?? 'someone'} for {(-r.entry.delta).toLocaleString()} {r.entry.delta === -1 ? 'star' : 'stars'} on{' '}
-          {longDay(r.entry.at)}.
+          By {p?.name ?? 'someone'} for {plural(-r.entry.delta, 'star')} on {longDay(r.entry.at)}.
         </p>
         <Button variant="primary" onClick={close}>
           Done

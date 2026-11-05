@@ -2,6 +2,7 @@ import { UP_FOR_GRABS, type ISODate, type PartOfDay, type Profile, type Task, ty
 import { addDays, dateAt, formatTime, fromISODate, monthShort, type TimeFormat } from '../../lib/date';
 import { describeRepeat, unitName } from '../../lib/repeat';
 import { SECTIONS, columnOf, progress, type Occurrence, type Section } from '../../tasks/engine';
+import { plural } from '../../lib/text';
 
 /**
  * Pure view logic for the Tasks tab and the Home pane: columns, sections,
@@ -93,7 +94,7 @@ export function completionEffects(column: Occurrence[], o: Occurrence): { sectio
   return { sectionDone: sec.total > 0 && sec.done === sec.total, allDone: isAllDone(after) };
 }
 
-export const lateLabel = (days: number) => (days === 1 ? '1 day late' : `${days} days late`);
+export const lateLabel = (days: number) => `${plural(days, 'day')} late`;
 
 /**
  * Card subtitle: due time and repeat summary, as on the device ("1:30 PM,

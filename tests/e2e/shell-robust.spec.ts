@@ -680,6 +680,54 @@ test('five wrong PINs pause the pad; the right PIN works after the pause', async
   await expect(page.locator('.sheet')).toBeVisible();
 });
 
+/** Set a PIN in Settings > Parental lock, lock, and open the PIN pad from the rail's Settings. */
+async function lockWithPin(page: Page, pin: string) {
+  const key = (scope: ReturnType<Page['locator']>, d: string) =>
+    scope.locator('.pin-keys button', { hasText: new RegExp(`^${d}$`) });
+  await openSettings(page, 'Parental lock');
+  await page.getByRole('button', { name: /Set a PIN/ }).click();
+  const setup = page.locator('.pin-setup');
+  for (const d of pin) await key(setup, d).click();
+  await expect(setup).toContainText('Enter the PIN again');
+  for (const d of pin) await key(setup, d).click();
+  await page.getByRole('button', { name: 'Lock now' }).click();
+  await rail(page, 'Settings').click();
+  const pad = page.locator('.modal', { hasText: 'Parent PIN' });
+  return { pad, key: (d: string) => key(pad, d) };
+}
+
+test('a 30-second PIN pause counts down from 30, not 31', async ({ page }) => {
+  await open(page);
+  const { pad, key } = await lockWithPin(page, '2468');
+  for (let i = 0; i < 4; i++) for (const d of '1111') await key(d).click();
+  for (const d of '111') await key(d).click();
+  // Every text the line shows from the fifth miss on, including the first render.
+  await page.evaluate(() => {
+    const w = window as unknown as { __pauseTexts: string[] };
+    w.__pauseTexts = [];
+    new MutationObserver(() => {
+      const t = document.querySelector('.pin-paused')?.textContent;
+      if (t && w.__pauseTexts.at(-1) !== t) w.__pauseTexts.push(t);
+    }).observe(document.body, { subtree: true, childList: true, characterData: true });
+  });
+  await key('1').click();
+  await expect(pad).toContainText('Too many wrong PINs. Try again in 2');
+  const texts = await page.evaluate(() => (window as unknown as { __pauseTexts: string[] }).__pauseTexts);
+  expect(texts[0]).toBe('Too many wrong PINs. Try again in 30 s.');
+});
+
+test('a reload does not end the PIN pause', async ({ page }) => {
+  await open(page);
+  const { pad, key } = await lockWithPin(page, '2468');
+  for (let i = 0; i < 5; i++) for (const d of '1111') await key(d).click();
+  await expect(pad).toContainText('Too many wrong PINs.');
+  await page.reload();
+  await expect(page.locator('.shell')).toBeVisible({ timeout: 20_000 });
+  await rail(page, 'Settings').click();
+  await expect(pad).toContainText(/Too many wrong PINs\. Try again in (2\d|30) s\./);
+  await expect(key('2')).toBeDisabled();
+});
+
 test('weather is fetched once per place, not on every settings change, and hides when stale', async ({ page }) => {
   await page.clock.install();
   let fetches = 0;

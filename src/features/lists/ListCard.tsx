@@ -5,7 +5,7 @@ import { ArrowDown, ArrowUp, Check, ChevronDown, ChevronUp, Ellipsis, Plus, X } 
 import { asParent, pinRequest, requireParent, unlocked } from '../../core/lock';
 import { put } from '../../data/store';
 import type { List, ListItem } from '../../data/types';
-import { Button, Chips } from '../../ui/controls';
+import { Button, Chips, useAutoFocus } from '../../ui/controls';
 import { Popover, confirm, toast } from '../../ui/overlays';
 import { parseIngredient } from '../meals/ingredients';
 import { groupItems, listColor, moveBy, reorder, sectionOf, topOrder, type ListView } from './logic';
@@ -24,6 +24,7 @@ import {
   toggleCollapsed,
   updateItem,
 } from './state';
+import { plural } from '../../lib/text';
 
 /** The list editor sheet (new list or edit), opened from the + button or a card menu. Hosted by the Lists tab body. */
 export const listEditor = signal<{ list?: List } | null>(null);
@@ -222,7 +223,7 @@ export function ListCard({ list, compact }: { list: List; compact?: boolean }) {
 async function askClearDone(list: List, n: number) {
   await asParent(async () => {
     if (
-      !(await confirm(`Clear ${n} done item${n === 1 ? '' : 's'}?`, {
+      !(await confirm(`Clear ${plural(n, 'done item')}?`, {
         body: `They are removed from ${list.title}.`,
         ok: 'Clear',
         danger: true,
@@ -236,7 +237,7 @@ async function askClearDone(list: List, n: number) {
 export async function askDeleteList(list: List, n: number): Promise<boolean> {
   let deleted = false;
   await asParent(async () => {
-    const body = n ? `The list and its ${n} item${n === 1 ? '' : 's'} are deleted.` : 'The list is deleted.';
+    const body = n ? `The list and its ${plural(n, 'item')} are deleted.` : 'The list is deleted.';
     if (!(await confirm(`Delete ${list.title}?`, { body: `${body} This cannot be undone.`, ok: 'Delete', danger: true }))) return;
     deleteList(list);
     deleted = true;
@@ -277,10 +278,7 @@ function AddItemField({
   onDone?: () => void;
 }) {
   const [text, setText] = useState('');
-  const ref = useRef<HTMLInputElement>(null);
-  useEffect(() => {
-    if (autoFocus) ref.current?.focus();
-  }, [autoFocus]);
+  const ref = useAutoFocus<HTMLInputElement>(autoFocus);
   const submit = () => {
     const raw = text.trim();
     if (!raw) return;

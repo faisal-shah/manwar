@@ -44,8 +44,13 @@ const open = (ev: CalEvent) => (e: MouseEvent) => {
   openDetail(ev, e.currentTarget as Element);
 };
 
-/** Full-width event card: title, time, avatars at the right (Day list, Week cells, day popups). */
-export function EventCard({ ev, extra }: { ev: CalEvent; extra?: ComponentChildren }) {
+/**
+ * Full-width event card: title, time, avatars at the right (Day list, Week
+ * cells, day popups). The time comes in two forms, "11:15 - 11:45 AM" and
+ * the start alone ("11:15 AM", or "until 2 AM" on the day an overnight
+ * event ends in `day`); a narrow Week cell shows the short one (calendar.css).
+ */
+export function EventCard({ ev, day, extra }: { ev: CalEvent; day?: ISODate; extra?: ComponentChildren }) {
   return (
     <button
       type="button"
@@ -58,7 +63,10 @@ export function EventCard({ ev, extra }: { ev: CalEvent; extra?: ComponentChildr
         <span class="ev-title" dir="auto">
           {ev.title}
         </span>
-        <span class="ev-time">{timeLabel(ev)}</span>
+        <span class="ev-time">
+          <span class="ev-time-full">{timeLabel(ev)}</span>
+          <span class="ev-time-short">{ev.allDay ? timeLabel(ev) : timePrefix(ev, day)}</span>
+        </span>
         {extra}
       </span>
       <EventWho ev={ev} size={3} />

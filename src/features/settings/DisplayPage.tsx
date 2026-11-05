@@ -2,7 +2,7 @@ import { Settings as SettingsIcon } from 'lucide-preact';
 import { activeTab, goTo } from '../../app/nav';
 import { TABS } from '../../app/tabs';
 import { asParent } from '../../core/lock';
-import { hiddenChange } from '../../data/settings';
+import { hiddenChange, windowChange } from '../../data/settings';
 import { saveSettings, settings } from '../../data/store';
 import type { TabId } from '../../data/types';
 import { canHideTab, fallbackTab, setTabShown } from './logic';
@@ -66,13 +66,13 @@ export function DisplayPage() {
         <ToggleRow
           label="Dark theme at night"
           on={s.night.enabled}
-          onChange={(enabled) => void change({ night: { ...s.night, enabled } })}
+          onChange={(enabled) => void change(windowChange('night', { enabled }))}
         />
         <WindowRow
           from={s.night.from}
           to={s.night.to}
           disabled={!s.night.enabled}
-          onChange={(w) => void change({ night: { ...s.night, ...w } })}
+          onChange={(w) => void change(windowChange('night', w))}
         />
       </Group>
       <Group title="Idle">

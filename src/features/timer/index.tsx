@@ -10,6 +10,7 @@ import { Modal } from '../../ui/overlays';
 import { STAGE_COLORS, formatDuration, pressKey, splitRemaining, timerStage, validMinutes, type KeypadKey } from './logic';
 import { startTimer, stopTimer, timer, timerPhase } from './state';
 import './timer.css';
+import { plural } from '../../lib/text';
 
 export { timerActive } from './state';
 
@@ -51,7 +52,7 @@ function TimerKeypad({ onClose }: { onClose: () => void }) {
         </>
       }
     >
-      <div class="timer-entry" aria-live="polite" aria-label={`${value || 0} minutes`}>
+      <div class="timer-entry" aria-live="polite" aria-label={plural(Number(value) || 0, 'minute')}>
         <span class={value ? '' : 'placeholder'}>{value || '0'}</span>
         <small>min</small>
       </div>
@@ -133,10 +134,14 @@ export function TimerOverlay() {
           </div>
           <div class="timer-readout">
             {/* Three-digit minutes take smaller numerals, so the readout stays clear of the pie. */}
-            <div class="timer-clock" data-digits={String(mins).length} aria-label={`${mins} minutes ${secs} seconds left`}>
+            <div
+              class="timer-clock"
+              data-digits={String(mins).length}
+              aria-label={`${plural(mins, 'minute')} ${plural(secs, 'second')} left`}
+            >
               <div>
                 <span class="num">{mins}</span>
-                <small>mins</small>
+                <small>min</small>
               </div>
               <div class="secs">
                 <span class="num">{String(secs).padStart(2, '0')}</span>

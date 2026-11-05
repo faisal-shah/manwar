@@ -6,12 +6,13 @@ import { asParent } from '../../core/lock';
 import { profileById, settings } from '../../data/store';
 import type { Message } from '../../data/types';
 import { nowMs } from '../../lib/clock';
-import { Button, Field } from '../../ui/controls';
+import { Button, Field, useAutoFocus } from '../../ui/controls';
 import { Sheet } from '../../ui/overlays';
 import { Avatar, ProfilePicker } from '../../ui/profile';
 import { MAX_MESSAGE_LENGTH, messageSize, timeAgo } from './logic';
 import { canSpeak, composerOpen, dismissMessage, openComposer, pending, postMessage, speak } from './state';
 import './messages.css';
+import { plural } from '../../lib/text';
 
 export { openComposer } from './state';
 
@@ -29,6 +30,7 @@ function Composer() {
   const [text, setText] = useState('');
   const [from, setFrom] = useState<string | undefined>();
   const [readAloud, setReadAloud] = useState(false);
+  const field = useAutoFocus<HTMLTextAreaElement>();
   const close = () => (composerOpen.value = false);
   const body = text.trim();
   const post = () =>
@@ -53,14 +55,13 @@ function Composer() {
     >
       <Field label="Message">
         <textarea
+          ref={field}
           class="input message-input"
-          dir="auto"
           aria-label="Message"
           maxLength={MAX_MESSAGE_LENGTH}
           placeholder="Write a note for the family"
           value={text}
           onInput={(e) => setText((e.target as HTMLTextAreaElement).value)}
-          autoFocus
         />
         <span class="message-count">
           {text.length}/{MAX_MESSAGE_LENGTH}
@@ -133,7 +134,7 @@ function Note({ m, more }: { m: Message; more: number }) {
               </button>
             )}
           </div>
-          {more > 0 && <p class="message-more">{more === 1 ? '1 more message' : `${more} more messages`} after this</p>}
+          {more > 0 && <p class="message-more">{plural(more, 'more message', 'more messages')} after this</p>}
         </div>
       </article>
     </div>

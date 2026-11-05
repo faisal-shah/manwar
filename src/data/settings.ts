@@ -1,5 +1,5 @@
-import { arrayRemove, arrayUnion } from 'firebase/firestore';
-import type { HomePane, MealCategory, MealCategoryId, Settings, SettingsPatch, TabId } from './types';
+import { arrayRemove, arrayUnion, deleteField } from 'firebase/firestore';
+import type { HomePane, MealCategory, MealCategoryId, Settings, SettingsPatch, TabId, TimeWindow } from './types';
 
 export const DEFAULT_MEAL_CATEGORIES: MealCategory[] = [
   { id: 'breakfast', name: 'Breakfast', color: '#F2B074', visible: true, showOnCalendar: false },
@@ -64,6 +64,13 @@ export function mergeSettings(stored: Partial<Settings>): Settings {
 export const listAdd = <T>(...values: T[]) => arrayUnion(...values) as unknown as T[];
 /** Elements taken out of a stored list (arrayRemove), typed as the list. */
 export const listRemove = <T>(...values: T[]) => arrayRemove(...values) as unknown as T[];
+/** A field deleted from the stored map (deleteField), typed as the field. */
+const removed = <T>() => deleteField() as unknown as T;
+
+/** The fields of `next` that differ from `was`: the change a draft made, and nothing it did not touch. */
+export function changedFields<T extends object>(was: T, next: T): Partial<T> {
+  return Object.fromEntries(Object.entries(next).filter(([k, v]) => was[k as keyof T] !== v)) as Partial<T>;
+}
 
 /** Some of the Calendar filter's switches. */
 export const filterChange = (patch: Partial<Settings['filter']>): SettingsPatch => ({ filter: patch });
@@ -81,4 +88,15 @@ export const hiddenChange = <K extends keyof HiddenLists>(key: K, value: HiddenL
 /** Some fields of one meal category. */
 export const mealCategoryChange = (id: MealCategoryId, patch: Partial<Omit<MealCategory, 'id'>>): SettingsPatch => ({
   mealCategories: { [id]: patch },
+});
+
+/** Some fields of the night or sleep window. */
+export const windowChange = (key: 'night' | 'sleep', patch: Partial<TimeWindow>): SettingsPatch => ({ [key]: patch });
+
+/** Lock again after this many idle minutes. */
+export const relockChange = (relockMinutes: number): SettingsPatch => ({ lock: { relockMinutes } });
+
+/** A new PIN (its salt and hash), or null to remove the PIN. */
+export const pinChange = (pin: { salt: string; pinHash: string } | null): SettingsPatch => ({
+  lock: pin ?? { salt: removed<string>(), pinHash: removed<string>() },
 });

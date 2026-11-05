@@ -7,6 +7,7 @@ import { Modal, Popover, useCloseWhenGone } from '../../ui/overlays';
 import { Avatar } from '../../ui/profile';
 import { archiveTask, claimRequest, complete, detailsFor, editTask, fresh, skip, tapCheck } from './actions';
 import { SECTION_META, lateLabel, repeatSummary } from './logic';
+import { plural } from '../../lib/text';
 
 /** Task details popover: when, section, repeat, who, stars, notes; Skip, Complete, Edit, Delete. */
 export function DetailsHost() {
@@ -69,7 +70,7 @@ function Details({ d }: { d: NonNullable<typeof detailsFor.value> }) {
           )}
           <li>
             <Star size="2rem" />
-            <span>{t.stars > 0 ? `${t.stars} ${t.stars === 1 ? 'star' : 'stars'}` : 'No stars'}</span>
+            <span>{t.stars > 0 ? plural(t.stars, 'star') : 'No stars'}</span>
           </li>
           <li>
             <Users size="2rem" />
@@ -147,7 +148,7 @@ function Claim({ r }: { r: NonNullable<typeof claimRequest.value> }) {
     <Modal title="Who did it?" onClose={close} actions={<Button onClick={close}>Cancel</Button>}>
       <p class="muted tk-claim-what">
         {t.emoji} {t.title}
-        {t.stars ? ` · ${t.stars} ${t.stars === 1 ? 'star' : 'stars'}` : ''}
+        {t.stars ? ` · ${plural(t.stars, 'star')}` : ''}
       </p>
       {profiles.value.length === 0 && <p class="muted">Add your family in Settings, under Profiles, to give it to someone.</p>}
       <div class="tk-claim" role="group" aria-label="Who did it">

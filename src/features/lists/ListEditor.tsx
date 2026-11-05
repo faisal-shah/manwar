@@ -11,6 +11,7 @@ import { askDeleteList } from './ListCard';
 import { moveId, moveTarget, type MoveRun } from '../settings/logic';
 import { KIND_COLORS, listColor } from './logic';
 import { createList, itemsByList, lists, updateList } from './state';
+import { plural } from '../../lib/text';
 
 const KINDS: { value: ListKind; label: string }[] = [
   { value: 'todo', label: 'To Do' },
@@ -141,7 +142,7 @@ export function ListEditor({ list, onClose }: { list?: List; onClose: () => void
                     setSections(sections.map((x) => (x.id === s.id ? { ...x, name: e.currentTarget.value } : x)))
                   }
                 />
-                {count(s.id) > 0 && <span class="muted small">{count(s.id)} items</span>}
+                {count(s.id) > 0 && <span class="muted small">{plural(count(s.id), 'item')}</span>}
                 <IconButton label={`Move ${s.name} up`} disabled={i === 0} onClick={() => moveSection(i, -1)}>
                   <ArrowUp size="2.2rem" />
                 </IconButton>

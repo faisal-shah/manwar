@@ -9,10 +9,11 @@ import { currentTime } from '../../lib/clock';
 import { fromISODate, monthShort } from '../../lib/date';
 import { Button, Field, IconButton } from '../../ui/controls';
 import { confirm, toast, useCloseWhenGone } from '../../ui/overlays';
-import { ColorSwatches, EmojiPicker, PROFILE_COLORS } from '../../ui/pickers';
+import { ColorSwatches, EmojiPicker, PROFILE_COLORS, PROFILE_EMOJI } from '../../ui/pickers';
 import { Avatar } from '../../ui/profile';
 import { describeProfileDelete, moveId, moveTarget, nameTaken, planProfileDelete, type MoveRun } from './logic';
 import { Group, PageTitle } from './parts';
+import { plural } from '../../lib/text';
 
 const REASON = 'Enter the PIN to change profiles.';
 /** Firestore batches hold at most 500 writes. */
@@ -50,7 +51,7 @@ export function ProfilesPage() {
               <span class="set-label">
                 <span class="profile-name">{p.name}</span>
                 <small>
-                  {p.birthday ? `Birthday ${formatBirthday(p.birthday)}` : 'No birthday'} · {p.stars} stars
+                  {p.birthday ? `Birthday ${formatBirthday(p.birthday)}` : 'No birthday'} · {plural(p.stars, 'star')}
                 </small>
               </span>
               <ChevronRight size="2.4rem" class="muted" />
@@ -193,7 +194,7 @@ function ProfileEditor({ profile, onDone }: { profile: Profile | null; onDone: (
         <ColorSwatches value={color} onChange={setColor} />
       </Field>
       <Field label="Avatar: an emoji, or none for the initial">
-        <EmojiPicker value={emoji} onChange={setEmoji} />
+        <EmojiPicker value={emoji} onChange={setEmoji} groups={PROFILE_EMOJI} />
       </Field>
       <Field label="Birthday">
         <div class="row">
