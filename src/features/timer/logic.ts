@@ -24,20 +24,19 @@ export function pressKey(value: string, key: KeypadKey): string {
 
 export const validMinutes = (n: number) => Number.isInteger(n) && n >= 1 && n <= MAX_MINUTES;
 
-/** A new run of `minutes`, started at `now` (by a phone, or on a wall): it counts down after the lead-in. */
-export function newRun(
-  run: string,
-  minutes: number,
-  now: number,
-  by: Pick<WallTimer, 'startedBy' | 'startedOn'> = {},
-): WallTimer {
+/** The document of the runs phones start (a wall's own runs are in `timers/<its id>`). */
+export const PHONE_TIMER = 'wall';
+
+/** A new run of `minutes` in document `id`, started at `now` (by phone `startedBy`, when one did): it counts down after the lead-in. */
+export function newRun(id: string, run: string, minutes: number, now: number, startedBy?: string): WallTimer {
   if (!validMinutes(minutes)) throw new Error(`newRun: minutes must be 1-${MAX_MINUTES}, got ${minutes}`);
   const startAt = now + LEAD_MS;
-  return { id: 'wall', run, minutes, startAt, endAt: startAt + minutes * 60_000, ...by };
+  return { id, run, minutes, startAt, endAt: startAt + minutes * 60_000, startedBy };
 }
 
-/** Whether wall `wall` shows run `t`: one it started, or one a phone started (null `wall`: a phone, which shows any). */
-export const shownOn = (t: WallTimer, wall: string | null): boolean => wall === null || !t.startedOn || t.startedOn === wall;
+/** The latest started of `runs`, or null. */
+export const latestRun = (runs: readonly WallTimer[]): WallTimer | null =>
+  runs.reduce<WallTimer | null>((a, t) => (!a || t.startAt > a.startAt ? t : a), null);
 
 /** When the document's run was stopped, if it was (a stop for another run does not count). */
 export const stoppedAt = (t: WallTimer): number | undefined => t.stopped?.[t.run];

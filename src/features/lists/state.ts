@@ -1,7 +1,7 @@
 import { computed, signal } from '@preact/signals';
 import { arrayUnion, deleteField } from 'firebase/firestore';
 import { errorMessage } from '../../data/errors';
-import { batch, data, fieldChanges, newId, patch, put } from '../../data/store';
+import { batch, data, fieldChanges, newId, patch, put, transaction } from '../../data/store';
 import type { List, ListItem, ListKind, ListSection } from '../../data/types';
 import { currentTime } from '../../lib/clock';
 import { toast } from '../../ui/overlays';
@@ -180,7 +180,7 @@ export function mergeItems(list: List, rows: MergeItem[]): () => void {
   const taken = items.map((i) => ({ id: i.id }));
   for (const { row, prior, order } of placeMerge(list, items, rows)) {
     if (prior) {
-      const changed: (keyof ListItem)[] = row.qty ? ['done', 'order', 'qty'] : ['done', 'order'];
+      const changed: (keyof ListItem)[] = row.qty ? ['done', 'doneAt', 'order', 'qty'] : ['done', 'doneAt', 'order'];
       const section = sectionOf(list, prior);
       reopens.push({
         changes: reopenedChanges(order, section, row.qty),
@@ -201,19 +201,27 @@ export function mergeItems(list: List, rows: MergeItem[]): () => void {
     created.push(item);
     taken.push({ id: item.id });
   }
-  // One batch; if an item it reopens was deleted meanwhile (the whole batch is refused), again with those items whole.
-  const commit = (whole: boolean) => {
-    const b = batch();
-    for (const r of reopens)
-      if (whole) b.put('listItems', r.whole);
-      else b.patch('listItems', r.whole.id, fieldChanges(r.changes) as Partial<ListItem>);
-    created.forEach((item) => b.put('listItems', item));
-    return b.commit();
+  /** Undone before the server answered the batch: a retry has nothing to bring back. */
+  let undone = false;
+  // One batch. When an item it reopens was deleted meanwhile, the whole batch is refused: then it runs again on the
+  // server, putting back whole only the items that are gone, so a rename made elsewhere to the others is kept.
+  const b = batch();
+  reopens.forEach((r) => b.patch('listItems', r.whole.id, fieldChanges(r.changes) as Partial<ListItem>));
+  created.forEach((item) => b.put('listItems', item));
+  const retry = async () => {
+    if (undone) return;
+    await transaction(async (tx) => {
+      const gone = await Promise.all(reopens.map(async (r) => !(await tx.get('listItems', r.whole.id))));
+      reopens.forEach((r, i) =>
+        gone[i] ? tx.put('listItems', r.whole) : tx.patch('listItems', r.whole.id, fieldChanges(r.changes) as Partial<ListItem>),
+      );
+      created.forEach((item) => tx.put('listItems', item));
+    });
   };
-  const what = `The items were not added to ${list.title}`;
-  void commit(false).catch(unlessGone(list.id, () => commit(true), what));
+  void b.commit().catch(unlessGone(list.id, retry, `The items were not added to ${list.title}`));
   const reopened = reopens.map((r) => ({ id: r.whole.id, was: r.was }));
   return () => {
+    undone = true;
     const u = batch();
     created.forEach((item) => u.remove('listItems', item.id));
     // Only the merged fields go back: a rename or move made since is kept, and an item deleted since stays deleted.

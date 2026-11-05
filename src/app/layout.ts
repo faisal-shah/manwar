@@ -8,7 +8,7 @@
  * 2. the choice stored on this device (pairing a phone stores 'phone', a
  *    wall signing in stores 'wall'; the layout switches store theirs);
  * 3. a device signed in as the household's wall (it remembers a household
- *    and is not a paired phone): a wall from before layouts were stored;
+ *    and is not a paired phone) that has no stored choice is a wall;
  * 4. otherwise the screen: a short side under 600 CSS px is a phone.
  *
  * Switching stores the choice and reloads, so the services a layout starts

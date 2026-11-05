@@ -10,13 +10,16 @@ permissions:
   contents: read
   id-token: write
 
+# A newer push replaces a pull request's run, but never stops a deploy
+# halfway (rules released, hosting not): pushes to main queue instead.
 concurrency:
   group: deploy-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build-deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
 
@@ -41,6 +44,16 @@ jobs:
       - run: npx playwright install --with-deps chromium
       # Demo mode runs against the Auth, Firestore and Functions emulators.
       - run: npx --yes firebase-tools@15 emulators:exec --only auth,firestore,functions --project demo-manwar "npx playwright test"
+        env:
+          JAVA_TOOL_OPTIONS: -Xmx1536m
+      - if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
 
       # Keyless auth: GitHub's OIDC token is exchanged for the deployer
       # service account via Workload Identity Federation (the provider only

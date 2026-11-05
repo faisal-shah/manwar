@@ -6,6 +6,7 @@ import { sleepNowEnd } from '../../core/sleep';
 import { pairedDevice } from '../../data/session';
 import { wallRequestError } from '../../data/errors';
 import { data, settings } from '../../data/store';
+import { lastRun } from '../../features/timer/state';
 import { nowMs, today } from '../../lib/clock';
 import { dateAt, formatTime } from '../../lib/date';
 import { toast } from '../../ui/overlays';
@@ -22,14 +23,7 @@ export function senderName(by: string | undefined): string | null {
 const command = computed(() => data.commands.value.find((c) => c.id === 'display'));
 
 /** The wall asleep now, as far as this phone can tell (see wallAsleepGuess). */
-export const wallSeemsAsleep = computed(() =>
-  wallAsleepGuess(
-    settings.value.sleep,
-    command.value,
-    data.timers.value.find((t) => t.id === 'wall'),
-    nowMs.value,
-  ),
-);
+export const wallSeemsAsleep = computed(() => wallAsleepGuess(settings.value.sleep, command.value, lastRun.value, nowMs.value));
 
 export async function askWall(kind: 'sleep' | 'wake'): Promise<void> {
   try {

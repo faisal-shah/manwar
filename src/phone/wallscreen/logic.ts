@@ -14,7 +14,7 @@ import { addDays, formatTime, monthShort, toISODate, type TimeFormat } from '../
 export function wallAsleepGuess(
   sleep: TimeWindow,
   cmd: DisplayCommand | undefined,
-  timer: WallTimer | undefined,
+  timer: WallTimer | null | undefined,
   t: number,
 ): boolean {
   // A run is created LEAD_MS before it starts counting.

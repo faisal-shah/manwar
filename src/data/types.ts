@@ -208,10 +208,14 @@ export interface Device {
   lastSeenAt?: number;
 }
 
-/** The wall's one timer (`timers/wall`), shared so a phone can start, watch or stop it. */
+/**
+ * A timer run, shared so a phone can start, watch or stop it: a wall's own
+ * in `timers/<that tablet's id>`, a phone's in `timers/wall`
+ * (features/timer/state.ts).
+ */
 export interface WallTimer {
-  id: 'wall';
-  /** This run of the timer: every start is a new run, written over the last. */
+  id: string;
+  /** This run of the timer: every start is a new run, written over the last in its document. */
   run: string;
   minutes: number;
   /** End of the "3, 2, 1" lead-in; the timer runs from here. */
@@ -219,12 +223,6 @@ export interface WallTimer {
   endAt: number;
   /** The phone that started it, when one did (Device id). */
   startedBy?: string;
-  /**
-   * The wall that started it, when one did (that tablet's own id). Only that
-   * wall shows it: a household with a second tablet keeps the timer to the
-   * tablet it was set on. A run a phone starts shows on every wall.
-   */
-  startedOn?: string;
   /**
    * When runs were stopped or dismissed, by run id (the document stays, so
    * the wall knows when sleep may resume). Only the document's own run

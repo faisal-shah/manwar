@@ -250,9 +250,9 @@ flowchart LR
 ## Phone companion
 
 Parents' phones open the same URL and get a different app on the same
-household data (`src/phone/`). Only the wall pairs and removes phones; a
-paired phone is a parent's, so in the phone layout it never asks for the
-PIN.
+household data (`src/phone/`). Only the wall pairs phones and removes
+them (a phone may unpair itself); a paired phone is a parent's, so in the
+phone layout it never asks for the PIN.
 
 ```mermaid
 sequenceDiagram
@@ -276,8 +276,8 @@ sequenceDiagram
   the URL, else the choice stored on the device (pairing stores 'phone', a
   wall stores 'wall' once signed in), else a device that remembers a
   household it opened as the wall (`manwar.claims.v1` without a device: a
-  wall from before layouts were stored, so a small tablet or a larger
-  display size never turns it into a phone), else a short screen side
+  wall with no stored choice, so a small tablet or a larger display size
+  never turns it into a phone), else a short screen side
   under 600 CSS px is a phone. Switching stores
   and reloads, so the wall's services (display schedule, wake lock, idle
   return, seeding, remote commands) never start on a phone

@@ -57,7 +57,8 @@ const CHECK_MS = 30 * 60_000;
  * New deploys. The service worker checks for a new version every 30 minutes;
  * once one is waiting it is applied (page reload) as soon as nothing would be
  * interrupted: right away before sign-in, otherwise after two idle minutes
- * with no sheet, dialog, popover or running timer on screen, and no change
+ * with no sheet, dialog, popover or running timer on screen (a note on the
+ * wall is no reason to wait: it shows again, not announced again), and no change
  * made here still on its way to the server (a phone keeps those in memory
  * only, so a reload would lose them).
  */
@@ -65,7 +66,7 @@ function startUpdates(): void {
   let waiting = false;
   const safe = () =>
     session.value.state !== 'signedIn' ||
-    (idleFor() > IDLE_MS && !document.querySelector('[role="dialog"]') && unsentWrites.peek() === 0);
+    (idleFor() > IDLE_MS && !document.querySelector('[role="dialog"]:not(.message-layer)') && unsentWrites.peek() === 0);
   const tryApply = () => {
     if (waiting && safe()) void update(true);
   };

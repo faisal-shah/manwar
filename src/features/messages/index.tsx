@@ -6,6 +6,7 @@ import { asParent } from '../../core/lock';
 import { profileById, settings } from '../../data/store';
 import type { Message } from '../../data/types';
 import { nowMs } from '../../lib/clock';
+import { stored } from '../../lib/stored';
 import { Button, Field, useAutoFocus } from '../../ui/controls';
 import { Sheet } from '../../ui/overlays';
 import { Avatar, ProfilePicker } from '../../ui/profile';
@@ -92,16 +93,26 @@ function Composer() {
 /** The sticky note's paper color (Skylight yellow), tinted for dark mode in messages.css. */
 const NOTE_COLOR = '#FBD97F';
 const SPEAK_AFTER_CHIME_MS = 1700;
-/** Messages already announced on this wall (chime, read aloud). */
-const announced = new Set<string>();
+/**
+ * Messages already announced on this wall (chime, read aloud), kept for the
+ * session: a reload (an update applied with a note on the wall) does not
+ * announce it again. The latest few are enough.
+ */
+const announced = stored<string[]>(
+  'manwar.announced.v1',
+  [],
+  (v): v is string[] => Array.isArray(v) && v.every((x) => typeof x === 'string'),
+  'session',
+);
+const ANNOUNCED_KEPT = 50;
 
 function Note({ m, more }: { m: Message; more: number }) {
   const author = m.from ? profileById.value.get(m.from) : undefined;
   // A message that arrives while the wall sleeps waits, silent behind the sleep screen, until someone wakes it.
   const asleep = sleeping.value;
   useEffect(() => {
-    if (asleep || announced.has(m.id)) return;
-    announced.add(m.id);
+    if (asleep || announced.peek().includes(m.id)) return;
+    announced.value = [...announced.peek(), m.id].slice(-ANNOUNCED_KEPT);
     playChime();
     if (!m.readAloud || !settings.value.sounds) return;
     const id = setTimeout(() => speak(m.text), SPEAK_AFTER_CHIME_MS);

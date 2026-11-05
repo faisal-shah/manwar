@@ -22,9 +22,11 @@ export function PairScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const loading = s.state === 'loading' || s.state === 'waiting' || s.state === 'signedIn';
-  // Signed in, the household opens once the server has answered (store.ts ready): say so if that takes a while.
-  const since = useRef(currentTime());
-  const slow = s.state === 'signedIn' && nowMs.value - since.current > SLOW_MS;
+  // Signed in, the household opens once the server has answered (store.ts ready): say so if that takes a while,
+  // counted from when this state began (the pairing form may have been open for minutes).
+  const since = useRef({ state: s.state, at: currentTime() });
+  if (since.current.state !== s.state) since.current = { state: s.state, at: currentTime() };
+  const slow = s.state === 'signedIn' && nowMs.value - since.current.at > SLOW_MS;
   const pair = async (e: Event) => {
     e.preventDefault();
     if (busy) return;

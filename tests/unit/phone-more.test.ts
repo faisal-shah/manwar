@@ -1,7 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { asleepAt, inWindow, sleepNowEnd, WAKE_MS } from '../../src/core/sleep';
 import type { DisplayCommand, List, ListItem, MealCategory, MealEntry, TimeWindow, WallTimer } from '../../src/data/types';
-import { LEAD_MS, SLEEP_GRACE_MS, STALE_MS, newRun, onWall, stoppedAt, timerSleepHold } from '../../src/features/timer/logic';
+import {
+  LEAD_MS,
+  SLEEP_GRACE_MS,
+  STALE_MS,
+  latestRun,
+  newRun,
+  onWall,
+  stoppedAt,
+  timerSleepHold,
+} from '../../src/features/timer/logic';
 import { listSummary, summaryLine } from '../../src/phone/lists/logic';
 import { mealsOn, planCategory, weekByDay } from '../../src/phone/meals/logic';
 import { clockLeft, minutesField } from '../../src/phone/timer/logic';
@@ -43,7 +52,7 @@ describe('the sleep rule', () => {
 });
 
 describe('timer runs', () => {
-  const t = newRun('r2', 10, 1000, { startedBy: 'phone1' });
+  const t = newRun('wall', 'r2', 10, 1000, 'phone1');
   it('starts after the lead-in, from the phone that started it', () => {
     expect(t).toEqual({
       id: 'wall',
@@ -53,7 +62,13 @@ describe('timer runs', () => {
       endAt: 1000 + LEAD_MS + 600_000,
       startedBy: 'phone1',
     });
-    expect(() => newRun('r3', 0, 1000)).toThrow();
+    expect(() => newRun('wall', 'r3', 0, 1000)).toThrow();
+  });
+  it('takes the latest started of several runs', () => {
+    const own = newRun('tablet', 'r5', 5, 9000);
+    expect(latestRun([t, own])).toBe(own);
+    expect(latestRun([own, t])).toBe(own);
+    expect(latestRun([])).toBeNull();
   });
   it('is stopped only by a stop for its own run', () => {
     expect(stoppedAt(t)).toBeUndefined();
@@ -90,11 +105,11 @@ describe("the phone's guess at the wall's screen", () => {
   });
   it('is awake for a timer started after Sleep now, and asleep for one started before it', () => {
     const sleep = cmd('sleep', '2026-11-04T11:44');
-    const after = newRun('r1', 10, at('2026-11-04T11:50'));
+    const after = newRun('wall', 'r1', 10, at('2026-11-04T11:50'));
     expect(wallAsleepGuess(OFF, sleep, after, at('2026-11-04T11:55'))).toBe(false);
     // Past the timer's hold, the wall follows its (here, disabled) window: Sleep now is over.
     expect(wallAsleepGuess(OFF, sleep, after, after.endAt + SLEEP_GRACE_MS)).toBe(false);
-    const before = newRun('r1', 30, at('2026-11-04T11:40'));
+    const before = newRun('wall', 'r1', 30, at('2026-11-04T11:40'));
     expect(wallAsleepGuess(OFF, sleep, before, at('2026-11-04T11:55'))).toBe(true);
   });
   it('says what was asked and when', () => {

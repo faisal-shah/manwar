@@ -445,6 +445,12 @@ test('a message posted while the wall sleeps chimes only once someone wakes it',
   await page.locator('.sleep-screen').click();
   await expect(page.getByRole('dialog', { name: 'Message' })).toContainText('Lights out!');
   await expect.poll(tones).toBeGreaterThan(0);
+
+  // A reload (an update applied while the note shows) shows it again, without a second chime.
+  await page.reload();
+  await expect(page.getByRole('dialog', { name: 'Message' })).toContainText('Lights out!', { timeout: 20_000 });
+  await page.waitForTimeout(1000);
+  expect(await tones()).toBe(0);
 });
 
 test('a sleep or night window with the same From and To says it never turns on', async ({ page }) => {

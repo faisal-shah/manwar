@@ -178,6 +178,18 @@ test('a paired phone is a member of its household while its device document exis
   expect(await read(p, `households/${A}/private/google`)).toBe(403);
 });
 
+test("a phone's batch of many writes passes: its device check counts once (Clear done on a long list)", async () => {
+  const ids = Array.from({ length: 40 }, (_, i) => `bulk${i}`);
+  for (const id of ids) expect(await put('owner', `households/${A}/listItems/${id}`, { id, text: id })).toBe(200);
+  expect(
+    await commit(
+      phone(A, PHONE),
+      ids.map((id) => ({ remove: `households/${A}/listItems/${id}` })),
+    ),
+  ).toBe(200);
+  expect(await read('owner', `households/${A}/listItems/bulk0`)).toBe(404);
+});
+
 test('a removed phone (no device document) is refused everywhere at once', async () => {
   const p = phone(A, GONE);
   expect(await read(p, `households/${A}`)).toBe(403);

@@ -43,13 +43,17 @@ const stored = async (household: string, path: string) => {
   const res = await fetch(`${FS}/households/demo-${household}/${path}`, { headers: OWNER });
   return res.status === 200 ? ((await res.json()) as { fields: Record<string, Record<string, string>> }) : null;
 };
-/** The stored timer: its run, minutes, and the runs stopped. */
+/** The latest stored timer run (a wall's own document or the phones' `timers/wall`): its run, minutes, and the runs stopped. */
 async function timerDoc(household: string) {
-  const f = (await stored(household, 'timers/wall'))!.fields as unknown as {
+  type Fields = {
     run: { stringValue: string };
     minutes: { integerValue: string };
+    startAt: { integerValue: string };
     stopped?: { mapValue: { fields?: Record<string, unknown> } };
   };
+  const res = await fetch(`${FS}/households/demo-${household}/timers`, { headers: OWNER });
+  const docs = ((await res.json()) as { documents?: { fields: Fields }[] }).documents ?? [];
+  const f = docs.map((d) => d.fields).sort((a, b) => Number(b.startAt.integerValue) - Number(a.startAt.integerValue))[0];
   return {
     run: f.run.stringValue,
     minutes: Number(f.minutes.integerValue),
