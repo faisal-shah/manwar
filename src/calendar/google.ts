@@ -1,6 +1,6 @@
 import { dropGoogleToken, googleAccessToken } from '../data/session';
 import { addDays, diffDays, fromISODate, toISODate } from '../lib/date';
-import { endSeriesBefore, recurrenceCount, shiftExdates, toRRule, withCount, type SeriesShift } from './rrule';
+import { endSeriesBefore, fromWall, recurrenceCount, shiftExdates, toRRule, wallOf, withCount, type SeriesShift } from './rrule';
 import {
   RateLimited,
   eventKey,
@@ -297,11 +297,11 @@ function keepExdates(body: Partial<GEvent>, lines: string[]): Partial<GEvent> {
 /** Where an occurrence sits in its series: its original start, which a moved occurrence no longer shows. */
 const seriesStart = (ev: CalEvent) => ev.originalStart ?? ev.start;
 
-/** How far the edit moves a series' occurrence that was at `from`: by days (all-day) or by an instant. */
+/** How far the edit moves a series' occurrence that was at `from`: by days (all-day) or on the wall clock. */
 const shiftOf = (from: Date, draft: EventDraft): SeriesShift =>
   draft.allDay
     ? { days: diffDays(toISODate(from), draft.firstDay ?? toISODate(draft.start)) }
-    : { ms: draft.start.getTime() - from.getTime() };
+    : { wallMs: wallOf(draft.start) - wallOf(from) };
 
 /**
  * Occurrences of a COUNT series the series put before `before`, cancelled
@@ -482,7 +482,8 @@ export const googleSource: CalendarSource = {
       const newFirst = addDays(toISODate(masterStart), diffDays(toISODate(ev.start), first));
       moved = { ...draft, firstDay: newFirst, lastDay: addDays(newFirst, diffDays(first, last)) };
     } else {
-      const newStart = new Date(masterStart.getTime() + (draft.start.getTime() - ev.start.getTime()));
+      // On the wall clock: moved a day across a clock change, the series keeps its time of day.
+      const newStart = fromWall(wallOf(masterStart) + wallOf(draft.start) - wallOf(ev.start));
       moved = { ...draft, start: newStart, end: new Date(newStart.getTime() + (draft.end.getTime() - draft.start.getTime())) };
     }
     const body = keepExdates(draftBody(moved, zones), master.recurrence ?? []);

@@ -138,7 +138,9 @@ flowchart LR
   All events leaves the series times out when they were not changed, a
   changed repeat replaces only the RRULE line (EXDATEs stay), EXDATEs move
   with a series (or a new This and following series) whose time or day
-  changes (`shiftExdates`), and This and following copies guests, color and
+  changes (`shiftExdates`; a timed series and its EXDATEs move on the
+  tablet's wall clock, so a day later across a clock change keeps the time
+  of day), and This and following copies guests, color and
   reminders to the new series and cuts the old one at the occurrence's
   `originalStart` (where the series had it, not where it was moved to); a
   COUNT rule continues with what is left, counting the old series'

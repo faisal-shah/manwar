@@ -1196,6 +1196,54 @@ describe('google calendar: series edits and the occurrences changed elsewhere', 
     ]);
   });
 
+  it('moves the series and its deleted dates by wall-clock time when the edit crosses a clock change', async () => {
+    // Saturdays at 9:30 from Nov 7 (standard time). The Mar 13 lesson moves to Sunday Mar 14, the day
+    // daylight time starts: 23 hours later by the clock on the wall's instant, one day by the wall clock.
+    routes.push((c) =>
+      c.method === 'GET'
+        ? {
+            body: base({
+              id: 'swim',
+              summary: 'Swim lesson',
+              recurrence: [
+                'RRULE:FREQ=WEEKLY;BYDAY=SA',
+                'EXDATE;TZID=America/Chicago:20261121T093000',
+                'EXDATE:20261205T153000Z',
+              ],
+              start: { dateTime: '2026-11-07T09:30:00-06:00', timeZone: 'America/Chicago' },
+              end: { dateTime: '2026-11-07T10:15:00-06:00', timeZone: 'America/Chicago' },
+            }),
+          }
+        : undefined,
+    );
+    routes.push((c) => (c.method === 'PATCH' ? { body: { id: 'swim' } } : undefined));
+    const march: CalEvent = {
+      ...occ,
+      id: 'swim_20270313T153000Z',
+      key: `${CAL}::swim_20270313T153000Z`,
+      originalStart: new Date('2027-03-13T09:30'),
+      start: new Date('2027-03-13T09:30'),
+      end: new Date('2027-03-13T10:15'),
+    };
+    const sunday: EventDraft = {
+      title: 'Swim lesson',
+      allDay: false,
+      start: new Date('2027-03-14T09:30'),
+      end: new Date('2027-03-14T10:15'),
+      keepRecurrence: true,
+    };
+    await googleSource.update(march, sunday, 'all');
+    const body = patched();
+    // Sundays at 9:30 from Nov 8, not 8:30.
+    expect(new Date(body.start.dateTime)).toEqual(new Date('2026-11-08T09:30'));
+    expect(new Date(body.end.dateTime)).toEqual(new Date('2026-11-08T10:15'));
+    expect(body.recurrence).toEqual([
+      'RRULE:FREQ=WEEKLY;BYDAY=SA',
+      'EXDATE;TZID=America/Chicago:20261122T093000',
+      'EXDATE:20261206T153000Z',
+    ]);
+  });
+
   it('moves them by days with an all-day series moved to another day', async () => {
     const day: CalEvent = {
       ...occ,

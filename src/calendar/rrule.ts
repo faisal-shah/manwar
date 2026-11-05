@@ -89,14 +89,37 @@ export function withCount(lines: string[], count: number): string[] {
   );
 }
 
-/** How far a series' start moved: by an instant (timed) or by whole days (all-day). */
-export type SeriesShift = { ms: number } | { days: number };
+/**
+ * How far a series' start moved: by wall-clock time on the tablet (timed:
+ * a day later is a day later across a clock change, not 23 or 25 hours) or
+ * by whole days (all-day).
+ */
+export type SeriesShift = { wallMs: number } | { days: number };
+
+/** A local time's wall clock as a number (its fields read as UTC), so a wall-clock shift is a sum. */
+export const wallOf = (d: Date) =>
+  Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours(), d.getMinutes(), d.getSeconds(), d.getMilliseconds());
+
+/** The local time whose wall clock is `wall`. */
+export function fromWall(wall: number): Date {
+  const u = new Date(wall);
+  return new Date(
+    u.getUTCFullYear(),
+    u.getUTCMonth(),
+    u.getUTCDate(),
+    u.getUTCHours(),
+    u.getUTCMinutes(),
+    u.getUTCSeconds(),
+    u.getUTCMilliseconds(),
+  );
+}
 
 /**
  * The EXDATE lines moved with a series whose start moved, so occurrences
  * deleted on other clients stay deleted: a local value (TZID or floating)
- * moves its wall-clock time, a UTC one its instant, a date by whole days.
- * Values of the other kind (a date on a timed series) are left as they are.
+ * moves its wall-clock fields, a UTC one the local time it names, a date by
+ * whole days. Values of the other kind (a date on a timed series) are left
+ * as they are.
  */
 export function shiftExdates(lines: string[], by: SeriesShift): string[] {
   return lines.map((l) => {
@@ -112,10 +135,12 @@ function shiftValue(v: string, by: SeriesShift): string {
   if (!m) return v;
   const [, y, mo, d, h, mi, s, z] = m;
   if (h === undefined) return 'days' in by ? addDays(`${y}-${mo}-${d}`, by.days).replace(/-/g, '') : v;
-  if (!('ms' in by)) return v;
-  // Wall-clock fields read as UTC: adding the shift moves a local time by the same amount.
-  const stamp = utcStamp(new Date(Date.UTC(+y, +mo - 1, +d, +h, +mi, +s) + by.ms));
-  return z ? stamp : stamp.slice(0, -1);
+  if (!('wallMs' in by)) return v;
+  const fields = Date.UTC(+y, +mo - 1, +d, +h, +mi, +s);
+  // A UTC value is an instant: the occurrence the series had at that local time, moved on the wall clock.
+  if (z) return utcStamp(fromWall(wallOf(new Date(fields)) + by.wallMs));
+  // A local value's fields are its wall clock (read as UTC, so the shift is a sum).
+  return utcStamp(new Date(fields + by.wallMs)).slice(0, -1);
 }
 
 /**
