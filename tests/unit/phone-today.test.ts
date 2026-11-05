@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { CalEvent } from '../../src/calendar/types';
 import { capped, isNow, nextUp } from '../../src/phone/today/logic';
-import { shownPerson } from '../../src/phone/tasks/state';
+import { shownPerson } from '../../src/phone/tasks/logic';
 import { UP_FOR_GRABS } from '../../src/data/types';
 
 let seq = 0;

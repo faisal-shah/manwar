@@ -20,6 +20,7 @@ import { editTask } from '../../features/tasks/actions';
 import { UFG_COLOR } from '../../features/tasks/TaskCard';
 import { progress } from '../../tasks/engine';
 import { todayOccurrences, todayProgress } from '../../tasks/state';
+import { swallowRestOfTap } from '../../ui/overlays';
 import { Avatar } from '../../ui/profile';
 import { goPhone, type PhonePage } from '../nav';
 import { showTasksOf } from '../tasks/state';
@@ -97,7 +98,7 @@ function NextUpCard() {
     !next.today.allDay.length && !next.today.timed.length && !next.tomorrow?.allDay.length && !next.tomorrow?.timed.length;
   return (
     <section class="ph-card" aria-label="Calendar">
-      <CardHead icon={CalendarDays} title="Next up" onMore={() => goPhone('calendar')} more="See all" />
+      <CardHead icon={CalendarDays} title="Next up" onMore={openCalendar} more="See all" />
       {loading && empty ? (
         <p class="muted pd-empty">Loading the calendar…</p>
       ) : empty ? (
@@ -125,7 +126,7 @@ function Agenda({ label, agenda, now }: { label: string; agenda: DayAgenda; now:
         ))}
       </ul>
       {more > 0 && (
-        <button type="button" class="pd-more" onClick={() => goPhone('calendar')}>
+        <button type="button" class="pd-more" onClick={openCalendar}>
           {plural(more, 'later event')}
         </button>
       )}
@@ -137,7 +138,7 @@ function EventRow({ ev, now }: { ev: CalEvent; now: number }) {
   const who = whoOf(ev);
   return (
     <li>
-      <button type="button" class="pd-ev" style={fillStyle(ev, 'light')} onClick={() => goPhone('calendar')}>
+      <button type="button" class="pd-ev" style={fillStyle(ev, 'light')} onClick={openCalendar}>
         <span class="pd-ev-text">
           <span class="pd-ev-time">
             {isNow(ev, now) && <span class="pd-now">Now</span>}
@@ -318,8 +319,15 @@ function CountdownsCard() {
   );
 }
 
+/** The calendar opens under the finger: the rest of a double tap presses nothing there. */
+function openCalendar(): void {
+  swallowRestOfTap();
+  goPhone('calendar');
+}
+
 /** The first task: the Tasks tab with its editor open. */
 function addFirstTask(): void {
+  swallowRestOfTap();
   goPhone('tasks');
   editTask('new');
 }

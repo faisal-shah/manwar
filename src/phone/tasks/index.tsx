@@ -1,11 +1,11 @@
 import { House, ListChecks, Plus } from 'lucide-preact';
-import { useLayoutEffect, useRef } from 'preact/hooks';
+import { useEffect, useLayoutEffect, useRef } from 'preact/hooks';
 import { profileById, profiles } from '../../data/store';
 import { UP_FOR_GRABS, type Profile } from '../../data/types';
 import { today } from '../../lib/clock';
 import { forProfile, progress, type Occurrence } from '../../tasks/engine';
 import { todayOccurrences } from '../../tasks/state';
-import { editTask } from '../../features/tasks/actions';
+import { claimRequest, detailsFor, editTask } from '../../features/tasks/actions';
 import { ColumnHead, nothingToDo } from '../../features/tasks/DayView';
 import { ClaimHost, DetailsHost } from '../../features/tasks/Details';
 import { CelebrationHost } from '../../features/tasks/effects';
@@ -16,7 +16,8 @@ import { Empty, IconButton } from '../../ui/controls';
 import { Avatar } from '../../ui/profile';
 import type { PhonePage } from '../nav';
 import { StarsHost } from '../stars/PersonStars';
-import { shownPerson, tasksFor } from './state';
+import { shownPerson } from './logic';
+import { tasksFor } from './state';
 import '../../features/tasks/columns.css';
 import '../../features/tasks/tasks.css';
 import './tasks.css';
@@ -28,6 +29,12 @@ import './tasks.css';
  * the wall's own (features/tasks).
  */
 function TasksBody() {
+  const day = today.value;
+  // This tab shows today alone: at midnight, details or a claim still open are about a list that is gone.
+  useEffect(() => {
+    if (detailsFor.peek() && detailsFor.peek()!.day !== day) detailsFor.value = null;
+    if (claimRequest.peek() && claimRequest.peek()!.day !== day) claimRequest.value = null;
+  }, [day]);
   const occ = todayOccurrences.value;
   const people = profiles.value;
   const ufg = occ.filter((o) => o.profileId === UP_FOR_GRABS);
