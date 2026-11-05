@@ -1,5 +1,5 @@
 import { signal } from '@preact/signals';
-import { onAuthStateChanged, signInWithCustomToken, signOut } from 'firebase/auth';
+import { onAuthStateChanged, signInWithCustomToken, signOut, type User } from 'firebase/auth';
 import { httpsCallable } from 'firebase/functions';
 import { demoMode, googleClientId, googleScopes } from '../config';
 import { auth, functions } from './firebase';
@@ -151,13 +151,46 @@ export function initSession(): void {
       if (demoMode) await signInWithCustomToken(auth, demoToken());
       return;
     }
-    const claims = (await user.getIdTokenResult()).claims;
-    const hid = typeof claims.hid === 'string' ? claims.hid : null;
-    if (!hid) {
+    const claims = await claimsOf(user);
+    if (!claims.hid) {
       await signOut(auth);
       return;
     }
-    openHousehold(hid);
-    session.value = { state: 'signedIn', account: typeof claims.account === 'string' ? claims.account : undefined };
+    openHousehold(claims.hid);
+    session.value = { state: 'signedIn', account: claims.account };
   });
+}
+
+const CLAIMS_KEY = 'manwar.claims.v1';
+
+/**
+ * The household claims of the signed-in user. Reading them refreshes an
+ * expired ID token over the network, which fails when the wall starts while
+ * the Wi-Fi is down (a power cut restarts the tablet before the router). The
+ * claims of the last sign-in are kept for that case, so the wall still opens
+ * on its cached data and calendar.
+ */
+async function claimsOf(user: User): Promise<{ hid: string | null; account?: string }> {
+  try {
+    const c = (await user.getIdTokenResult()).claims;
+    const claims = {
+      hid: typeof c.hid === 'string' ? c.hid : null,
+      account: typeof c.account === 'string' ? c.account : undefined,
+    };
+    try {
+      localStorage.setItem(CLAIMS_KEY, JSON.stringify({ uid: user.uid, ...claims }));
+    } catch {
+      /* storage unavailable: no offline start, everything else works */
+    }
+    return claims;
+  } catch (e) {
+    let saved: { uid?: string; hid?: unknown; account?: unknown } | null = null;
+    try {
+      saved = JSON.parse(localStorage.getItem(CLAIMS_KEY) ?? 'null');
+    } catch {
+      /* unreadable: treat as none */
+    }
+    if (saved?.uid !== user.uid || typeof saved.hid !== 'string') throw e;
+    return { hid: saved.hid, account: typeof saved.account === 'string' ? saved.account : undefined };
+  }
 }
