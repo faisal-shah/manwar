@@ -42,7 +42,9 @@ export function RecipeView({ recipe }: { recipe: Recipe }) {
     <article class="recipe-card scroll" style={cat ? { '--c': cat.color } : undefined} aria-label={recipe.name}>
       <header class="rc-head">
         {recipe.emoji && <span class="rc-emoji">{recipe.emoji}</span>}
-        <h2 class="rc-title">{recipe.name}</h2>
+        <h2 class="rc-title">
+          <bdi>{recipe.name}</bdi>
+        </h2>
         <IconButton label="Edit recipe" class="rc-btn" onClick={() => void asParent(() => (recipeEditor.value = { recipe }))}>
           <Pencil size="2.4rem" />
         </IconButton>
@@ -86,7 +88,11 @@ export function RecipeView({ recipe }: { recipe: Recipe }) {
           <section>
             <h3>Ingredients</h3>
             <ul class="rc-ingredients">
-              {ingredients.map((r) => (r.heading ? <li class="rc-ing-head">{r.text}</li> : <li>{r.text}</li>))}
+              {ingredients.map((r) => (
+                <li class={r.heading ? 'rc-ing-head' : undefined}>
+                  <bdi>{r.text}</bdi>
+                </li>
+              ))}
             </ul>
           </section>
         )}
@@ -97,7 +103,7 @@ export function RecipeView({ recipe }: { recipe: Recipe }) {
               {steps.map((s, i) => (
                 <li>
                   <span class="rc-n">{i + 1}</span>
-                  <span>{s}</span>
+                  <bdi>{s}</bdi>
                 </li>
               ))}
             </ol>

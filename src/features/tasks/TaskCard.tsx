@@ -50,7 +50,7 @@ export function TaskCard({ o, day, color, compact }: { o: Occurrence; day: strin
               {t.emoji}
             </span>
           )}
-          {t.title}
+          <bdi>{t.title}</bdi>
         </span>
         {meta && (
           <span class="tk-meta">

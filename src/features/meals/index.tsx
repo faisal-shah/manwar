@@ -114,7 +114,7 @@ function MealsBody() {
                             }}
                           >
                             {emoji && <span class="mg-emoji">{emoji}</span>}
-                            <span class="mg-title">{e.title}</span>
+                            <bdi class="mg-title">{e.title}</bdi>
                             {e.repeat && <RepeatIcon class="mg-repeat" size="1.8rem" aria-label="Repeats" />}
                           </button>
                         );

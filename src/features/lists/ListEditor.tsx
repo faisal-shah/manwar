@@ -1,4 +1,4 @@
-import { useState } from 'preact/hooks';
+import { useRef, useState } from 'preact/hooks';
 import type { TargetedEvent } from 'preact';
 import { ArrowDown, ArrowUp, Plus, X } from 'lucide-preact';
 import { asParent } from '../../core/lock';
@@ -8,6 +8,7 @@ import { Button, Field, IconButton, Segmented, SettingRow, Toggle } from '../../
 import { Sheet, useCloseWhenGone } from '../../ui/overlays';
 import { ColorSwatches, EmojiPicker } from '../../ui/pickers';
 import { askDeleteList } from './ListCard';
+import { moveId, moveTarget, type MoveRun } from '../settings/logic';
 import { KIND_COLORS, listColor } from './logic';
 import { createList, itemsByList, lists, updateList } from './state';
 
@@ -37,10 +38,13 @@ export function ListEditor({ list, onClose }: { list?: List; onClose: () => void
     setSections([...sections, { id: newId(), name }]);
     setNewSection('');
   };
+  // A moved section takes its arrows with it: a quick run of taps on one spot keeps moving it (moveTarget).
+  const moveRun = useRef<MoveRun | null>(null);
   const moveSection = (i: number, d: -1 | 1) => {
-    const next = [...sections];
-    [next[i], next[i + d]] = [next[i + d], next[i]];
-    setSections(next);
+    const ids = sections.map((s) => s.id);
+    const t = moveTarget(ids, i, d, moveRun.current, performance.now());
+    moveRun.current = t.run;
+    setSections(moveId(ids, t.index, t.index + d).map((id) => sections.find((s) => s.id === id)!));
   };
   useCloseWhenGone(
     !!list && !lists.value.some((l) => l.id === list.id),
@@ -89,7 +93,8 @@ export function ListEditor({ list, onClose }: { list?: List; onClose: () => void
             <input
               class="input grow"
               value={title}
-              placeholder="Grocery List"
+              aria-label="Title"
+              placeholder="List name, e.g. To Do"
               onInput={(e: TargetedEvent<HTMLInputElement>) => setTitle(e.currentTarget.value)}
             />
           </div>

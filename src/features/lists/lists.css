@@ -206,7 +206,7 @@
 .li-row.checked {
   background: color-mix(in srgb, var(--c) 14%, var(--tint-base));
 }
-.li-row.checked .li-text > span:first-child {
+.li-row.checked .li-text > bdi:first-child {
   color: var(--text-2);
   text-decoration: line-through;
   text-decoration-thickness: 0.15rem;

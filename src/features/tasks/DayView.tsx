@@ -1,5 +1,6 @@
 import { Check, House } from 'lucide-preact';
-import { profiles, settings } from '../../data/store';
+import { useLayoutEffect, useRef } from 'preact/hooks';
+import { data, profiles, settings } from '../../data/store';
 import { today } from '../../lib/clock';
 import { progress } from '../../tasks/engine';
 import { occurrencesFor, todayOccurrences } from '../../tasks/state';
@@ -16,14 +17,39 @@ export function DayView() {
   const day = selectedDay.value;
   const occ = day === today.value ? todayOccurrences.value : occurrencesFor(day);
   const cols = buildColumns(occ, profiles.value, taskFilter.value);
+  const start = useStartInView(cols[0]?.id);
   if (!cols.length) return <NoColumns />;
   return (
-    <div class="pcols" data-count={cols.length}>
+    <div class="pcols" data-count={cols.length} ref={start.ref} onScroll={start.onScroll}>
       {cols.map((c) => (
         <DayColumn key={c.id} col={c} day={day} />
       ))}
     </div>
   );
+}
+
+/**
+ * Columns that scroll sideways snap, and the browser re-snaps to the column
+ * it showed when another is put in front of it: an Up for Grabs column that
+ * appears (a new chore, a claim undone, a new day) would open off the left
+ * edge. A row scrolled to its start stays at its start.
+ */
+export function useStartInView(first: string | undefined) {
+  const ref = useRef<HTMLDivElement>(null);
+  const atStart = useRef(true);
+  useLayoutEffect(() => {
+    if (ref.current && atStart.current) ref.current.scrollLeft = 0;
+  }, [first]);
+  const onScroll = (e: Event) => {
+    atStart.current = (e.currentTarget as HTMLElement).scrollLeft < 1;
+  };
+  return { ref, onScroll };
+}
+
+/** An empty column's line; in a household with no tasks yet, how to add the first. */
+export function nothingToDo(isToday: boolean): string {
+  if (!data.tasks.value.some((t) => !t.archived)) return 'No tasks yet. Tap + to add a routine or chore.';
+  return isToday ? 'Nothing to do today.' : 'Nothing to do this day.';
 }
 
 /** No column to show: a new household with no profiles yet (with a button to Settings > Profiles), or every column filtered out. */
@@ -83,9 +109,10 @@ function DayColumn({ col, day }: { col: Col; day: string }) {
     allDone,
   });
   const toggles = sectionToggles.value[`${day}:${col.id}`] ?? {};
-  const isOpen = (s: (typeof sections)[number]) => toggles[s] ?? defaults.has(s);
-  const color = col.profile?.color ?? UFG_COLOR;
   const onlyChores = sections.length === 1 && sections[0] === 'chores';
+  // A column of chores alone has no section buttons, so its cards never fold away (all done, they stay to uncheck).
+  const isOpen = (s: (typeof sections)[number]) => onlyChores || (toggles[s] ?? defaults.has(s));
+  const color = col.profile?.color ?? UFG_COLOR;
   return (
     <section class="pcol" style={{ '--c': color }} aria-label={col.profile?.name ?? 'Up for Grabs'} data-column={col.id}>
       <ColumnHead col={col} />
@@ -120,7 +147,7 @@ function DayColumn({ col, day }: { col: Col; day: string }) {
             All done!
           </div>
         )}
-        {col.all.length === 0 && <Empty emoji="🙌">{isToday ? 'Nothing to do today.' : 'Nothing to do this day.'}</Empty>}
+        {col.all.length === 0 && <Empty emoji="🙌">{nothingToDo(isToday)}</Empty>}
         {sections.filter(isOpen).map((s) => {
           const items = col.occ.filter((o) => o.section === s);
           if (!items.length) return null;

@@ -229,11 +229,11 @@ test('the item editor keeps a move made before Save', async ({ page }) => {
   await produce.locator('.li-text', { hasText: 'Spinach' }).click();
   const pop = page.locator('.popover .item-editor');
   await pop.getByRole('button', { name: 'Move up' }).click();
-  await expect(produce.locator('.li-text > span:first-child')).toHaveText(['Spinach', 'Bananas', 'Onions']);
+  await expect(produce.locator('.li-text > bdi:first-child')).toHaveText(['Spinach', 'Bananas', 'Onions']);
   await pop.getByLabel('Quantity').fill('1 bag');
   await pop.getByRole('button', { name: 'Save' }).click();
   await expect(produce.locator('.li-row', { hasText: 'Spinach' }).locator('.li-qty')).toHaveText('1 bag');
-  await expect(produce.locator('.li-text > span:first-child')).toHaveText(['Spinach', 'Bananas', 'Onions']);
+  await expect(produce.locator('.li-text > bdi:first-child')).toHaveText(['Spinach', 'Bananas', 'Onions']);
 });
 
 test('grocery items made of emoji, or starting with a percentage, are added as typed', async ({ page }) => {
@@ -243,7 +243,7 @@ test('grocery items made of emoji, or starting with a percentage, are added as t
   for (const text of ['🍎', '🍌', '2% milk']) {
     await field.fill(text);
     await field.press('Enter');
-    await expect(card.locator('.li-text > span:first-child', { hasText: text })).toHaveCount(1);
+    await expect(card.locator('.li-text > bdi:first-child', { hasText: text })).toHaveCount(1);
   }
   await expect(page.locator('.toast')).toHaveCount(0);
   await expect(card.locator('.lc-count')).toHaveText('10');
@@ -356,7 +356,7 @@ test('a first-run household plans a typed meal and adds its pasted ingredients a
 
   await page.locator('.rail button', { hasText: 'Lists' }).click();
   const card = groceryCard(page);
-  await expect(card.locator('.li-text > span:first-child')).toHaveText(['Flour', 'Eggs', '2% milk']);
+  await expect(card.locator('.li-text > bdi:first-child')).toHaveText(['Flour', 'Eggs', '2% milk']);
   await expect(card.locator('.li-qty')).toHaveText(['2 cups', '3']);
 });
 
@@ -368,10 +368,10 @@ test('deleting the grocery list never sends ingredients to a to-do list', async 
   const editor = page.getByRole('dialog', { name: 'New list' });
   // A to-do list made first must not become the target either.
   await page.locator('.fab').click();
-  await editor.getByPlaceholder('Grocery List').fill('Chores');
+  await editor.getByRole('textbox', { name: 'Title' }).fill('Chores');
   await editor.getByRole('button', { name: 'Add list' }).click();
   await page.locator('.fab').click();
-  await editor.getByPlaceholder('Grocery List').fill('Groceries');
+  await editor.getByRole('textbox', { name: 'Title' }).fill('Groceries');
   await editor.getByRole('tab', { name: 'Grocery' }).click();
   await editor.getByRole('button', { name: 'Add list' }).click();
   await page.locator('.rail button', { hasText: 'Recipes' }).click();

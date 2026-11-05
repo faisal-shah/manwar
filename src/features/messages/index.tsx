@@ -54,6 +54,7 @@ function Composer() {
       <Field label="Message">
         <textarea
           class="input message-input"
+          dir="auto"
           aria-label="Message"
           maxLength={MAX_MESSAGE_LENGTH}
           placeholder="Write a note for the family"
@@ -109,7 +110,9 @@ function Note({ m, more }: { m: Message; more: number }) {
     <div class="message-layer" role="dialog" aria-label="Message">
       <article class="message-note" style={{ '--c': NOTE_COLOR }}>
         <div class="message-content">
-          <p class={`message-text size-${messageSize(m.text)}`}>{m.text}</p>
+          <p class={`message-text size-${messageSize(m.text)}`} dir="auto">
+            {m.text}
+          </p>
           <p class="message-meta">
             {author && (
               <>

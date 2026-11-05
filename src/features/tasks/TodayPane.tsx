@@ -1,7 +1,7 @@
 import { profiles } from '../../data/store';
 import { today } from '../../lib/clock';
 import { todayOccurrences } from '../../tasks/state';
-import { ColumnHead, NoColumns } from './DayView';
+import { ColumnHead, NoColumns, nothingToDo, useStartInView } from './DayView';
 import { buildColumns, isAllDone } from './logic';
 import { TaskCard, UFG_COLOR } from './TaskCard';
 import { TasksOverlays } from './overlays';
@@ -18,10 +18,11 @@ import './tasks.css';
 export function TodayTasksPane() {
   const day = today.value;
   const cols = buildColumns(todayOccurrences.value, profiles.value, taskFilter.value);
+  const start = useStartInView(cols[0]?.id);
   if (!cols.length) return <NoColumns />;
   return (
     <div class="tp">
-      <div class="tp-cards" data-count={cols.length}>
+      <div class="tp-cards" data-count={cols.length} ref={start.ref} onScroll={start.onScroll}>
         {cols.map((c) => {
           const color = c.profile?.color ?? UFG_COLOR;
           return (
@@ -39,7 +40,7 @@ export function TodayTasksPane() {
                 ) : (
                   <div class="tp-empty">
                     <span aria-hidden="true">{isAllDone(c.all) ? '🎉' : '🙌'}</span>
-                    {isAllDone(c.all) ? 'All done!' : 'Nothing to do today.'}
+                    {isAllDone(c.all) ? 'All done!' : nothingToDo(true)}
                   </div>
                 )}
               </div>

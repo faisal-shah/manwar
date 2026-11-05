@@ -82,7 +82,7 @@ test('a list or recipe deleted on one tablet stays deleted when the other saves 
   await a.getByRole('button', { name: 'To Do menu' }).click();
   await a.getByRole('button', { name: 'Edit list' }).click();
   const listEditor = a.getByRole('dialog', { name: 'Edit list' });
-  await listEditor.getByPlaceholder('Grocery List').fill('To Do soon');
+  await listEditor.getByRole('textbox', { name: 'Title' }).fill('To Do soon');
   await b.getByRole('button', { name: 'To Do menu' }).click();
   await b.getByRole('button', { name: 'Delete list' }).click();
   await b.getByRole('dialog').getByRole('button', { name: 'Delete' }).click();

@@ -70,7 +70,7 @@ function RewardCard({ v, p }: { v: RewardView; p: Profile }) {
         <span class="rw-emoji" aria-hidden="true">
           {r.emoji ?? '🎁'}
         </span>
-        <span class="rw-title serif">{r.title}</span>
+        <bdi class="rw-title serif">{r.title}</bdi>
       </button>
       {v.redeemedAt !== undefined ? (
         <span class="rw-state">Redeemed on {shortDay(v.redeemedAt)}</span>
