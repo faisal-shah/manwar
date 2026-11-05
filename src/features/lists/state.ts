@@ -5,6 +5,7 @@ import type { List, ListItem, ListKind, ListSection } from '../../data/types';
 import { currentTime } from '../../lib/clock';
 import {
   defaultGroceryList,
+  groceryItemId,
   itemKey,
   nextDefaultGrocery,
   placeMerge,
@@ -110,7 +111,7 @@ export function addItem(list: List, text: string, sectionId: string | null, qty?
     }
   }
   const item: ListItem = {
-    id: newId(),
+    id: list.kind === 'grocery' ? groceryItemId(list.id, text, items, newId) : newId(),
     listId: list.id,
     sectionId: sectionId ?? undefined,
     text,
@@ -158,7 +159,9 @@ export function mergeItems(list: List, rows: MergeItem[]): () => void {
   /** What the undo puts back on each reopened item: only the fields the merge changed. */
   const reopened: { id: string; was: Partial<ListItem> }[] = [];
   const now = currentTime();
-  for (const { row, prior, order } of placeMerge(list, itemsByList.value.get(list.id) ?? [], rows)) {
+  const items = itemsByList.value.get(list.id) ?? [];
+  const taken = items.map((i) => ({ id: i.id }));
+  for (const { row, prior, order } of placeMerge(list, items, rows)) {
     if (prior) {
       const change: Partial<ListItem> = { done: false, order, ...(row.qty ? { qty: row.qty } : {}) };
       reopened.push({ id: prior.id, was: Object.fromEntries(Object.keys(change).map((k) => [k, prior[k as keyof ListItem]])) });
@@ -166,7 +169,7 @@ export function mergeItems(list: List, rows: MergeItem[]): () => void {
       continue;
     }
     const item: ListItem = {
-      id: newId(),
+      id: list.kind === 'grocery' ? groceryItemId(list.id, row.name, taken, newId) : newId(),
       listId: list.id,
       text: row.name,
       qty: row.qty,
@@ -175,6 +178,7 @@ export function mergeItems(list: List, rows: MergeItem[]): () => void {
       createdAt: now,
     };
     created.push(item.id);
+    taken.push({ id: item.id });
     b.put('listItems', item);
   }
   void b.commit();
