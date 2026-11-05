@@ -83,6 +83,13 @@ export const householdId = signal<string | null>(null);
 /** True once every collection has delivered its first snapshot. */
 export const ready = signal(false);
 
+/**
+ * True once the settings document has been read: from the cache, or the
+ * server's answer that there is none. A cache without it (a cold start, the
+ * demo's memory cache) says nothing yet, and `settings` are only the defaults.
+ */
+export const settingsLoaded = signal(false);
+
 export const profiles = computed(() => [...data.profiles.value].sort((a, b) => a.order - b.order || a.createdAt - b.createdAt));
 export const profileById = computed(() => new Map(profiles.value.map((p) => [p.id, p])));
 
@@ -174,6 +181,7 @@ export function openHousehold(id: string): void {
       settingsRef(),
       (snap) => {
         settings.value = mergeSettings(snap.exists() ? snap.data() : {});
+        if (snap.exists() || !snap.metadata.fromCache) settingsLoaded.value = true;
         arrived('settings');
       },
       onError,
@@ -190,6 +198,7 @@ export function closeHousehold(): void {
   signalBatch(() => {
     for (const name of NAMES) data[name].value = [];
     settings.value = DEFAULT_SETTINGS;
+    settingsLoaded.value = false;
     ready.value = false;
     householdId.value = null;
   });

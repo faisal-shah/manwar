@@ -380,9 +380,22 @@ test('a reload inside the sleep window (an update at night) keeps the backlight 
 
   await page.reload();
   await expect(page.locator('.shell')).toBeVisible({ timeout: 20_000 });
-  await expect(page.locator('.sleep-screen')).toBeVisible();
-  const levels = await page.evaluate(() => (window as unknown as { __brightness: number[] }).__brightness);
-  expect(levels).toEqual([0]);
+  // The emulator can be slow to send the settings; the wall waits for them in the dark.
+  await expect(page.locator('.sleep-screen')).toBeVisible({ timeout: 30_000 });
+  const levels = () => page.evaluate(() => (window as unknown as { __brightness: number[] }).__brightness);
+  expect(await levels()).toEqual([0]);
+
+  // The same with the database out of reach at first: the wall opens on an empty cache, whose
+  // settings are only the defaults (no sleep window), and must not light up on them.
+  const firestore = /^https?:\/\/[^/]+:8080\//;
+  await page.route(firestore, (r) => r.abort('internetdisconnected'));
+  await page.reload();
+  await expect(page.locator('.shell')).toBeVisible({ timeout: 20_000 });
+  await page.waitForTimeout(500);
+  expect(await levels()).toEqual([]);
+  await page.unroute(firestore);
+  await expect(page.locator('.sleep-screen')).toBeVisible({ timeout: 30_000 });
+  expect(await levels()).toEqual([0]);
 });
 
 test('a Google connection that needs a reconnect shows on the wall and leads to Settings', async ({ page }) => {
