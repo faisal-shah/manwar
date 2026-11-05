@@ -177,6 +177,41 @@ test('a Google connection that needs a reconnect shows on the wall and leads to 
   await expect(page.locator('.set-page').getByRole('button', { name: 'Reconnect' })).toBeVisible();
 });
 
+test('a message posted while the wall sleeps chimes only once someone wakes it', async ({ page, browser }) => {
+  // Count synthesized tones (every chime starts oscillators).
+  await page.addInitScript(() => {
+    const w = window as unknown as { __tones: number };
+    w.__tones = 0;
+    const create = AudioContext.prototype.createOscillator;
+    AudioContext.prototype.createOscillator = function (this: AudioContext) {
+      w.__tones++;
+      return create.call(this);
+    };
+  });
+  const tones = () => page.evaluate(() => (window as unknown as { __tones: number }).__tones);
+  const name = await open(page);
+  await rail(page, 'Sleep').click();
+  await page.getByRole('button', { name: 'Enter sleep mode now' }).click();
+  await expect(page.locator('.sleep-screen')).toBeVisible();
+
+  // Another tablet in the household posts a note.
+  const other = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
+  await other.goto(`/?demo=${name}&${NOW}`);
+  await expect(other.locator('.shell')).toBeVisible({ timeout: 20_000 });
+  await other.locator('.rail button', { hasText: 'Home' }).click();
+  await other.getByRole('button', { name: 'Message' }).click();
+  await other.getByRole('textbox', { name: 'Message' }).fill('Lights out!');
+  await other.getByRole('button', { name: 'Post to the wall' }).click();
+  await expect(page.getByRole('dialog', { name: 'Message' })).toBeAttached();
+  await page.waitForTimeout(500);
+  expect(await tones()).toBe(0);
+  await other.close();
+
+  await page.locator('.sleep-screen').click();
+  await expect(page.getByRole('dialog', { name: 'Message' })).toContainText('Lights out!');
+  await expect.poll(tones).toBeGreaterThan(0);
+});
+
 test('five wrong PINs pause the pad; the right PIN works after the pause', async ({ page }) => {
   await page.clock.install();
   await open(page);

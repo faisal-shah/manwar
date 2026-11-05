@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import { Play, StickyNote } from 'lucide-preact';
+import { sleeping } from '../../core/display';
 import { playChime } from '../../core/sound';
 import { asParent } from '../../core/lock';
 import { profileById, settings } from '../../data/store';
@@ -94,14 +95,16 @@ const announced = new Set<string>();
 
 function Note({ m, more }: { m: Message; more: number }) {
   const author = m.from ? profileById.value.get(m.from) : undefined;
+  // A message that arrives while the wall sleeps waits, silent behind the sleep screen, until someone wakes it.
+  const asleep = sleeping.value;
   useEffect(() => {
-    if (announced.has(m.id)) return;
+    if (asleep || announced.has(m.id)) return;
     announced.add(m.id);
     playChime();
     if (!m.readAloud || !settings.value.sounds) return;
     const id = setTimeout(() => speak(m.text), SPEAK_AFTER_CHIME_MS);
     return () => clearTimeout(id);
-  }, [m.id]);
+  }, [m.id, asleep]);
   return (
     <div class="message-layer" role="dialog" aria-label="Message">
       <article class="message-note" style={{ '--c': NOTE_COLOR }}>
