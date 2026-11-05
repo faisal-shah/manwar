@@ -51,8 +51,31 @@ export function tapCheck(tapped: Occurrence, day: string, origin: DOMRect): void
     else if (cur.profileId === UP_FOR_GRABS) claimRequest.value = { o: cur, day, origin };
     else complete(cur, cur.profileId, day, origin);
   };
-  if (day < today.value || o.state?.status === 'skipped') void asParent(run, 'Enter the PIN to change another day.');
+  if (day < today.value) void asParent(run, 'Enter the PIN to change another day.');
+  else if (o.state?.status === 'skipped') void asParent(run, 'Enter the PIN to unskip a task.');
+  else if (spentStars(o)) void asParent(run, SPENT_REASON);
   else run();
+}
+
+const SPENT_REASON = 'Those stars were spent. Enter the PIN to take them back.';
+
+/**
+ * An un-check takes back stars the balance no longer holds (they were spent
+ * on a reward since). Taking them puts the balance below zero, which is a
+ * parent's decision: a kid could otherwise empty a sibling's stars.
+ */
+function spentStars(o: Occurrence): boolean {
+  const st = o.state;
+  if (st?.status !== 'done' || st.stars <= 0) return false;
+  const p = profileById.value.get(st.by);
+  return !!p && p.stars < st.stars;
+}
+
+/** The Undo on a check-off toast, with the same rule as unchecking. */
+function undoCheck(o: Occurrence): void {
+  const cur = fresh(o);
+  if (spentStars(cur)) void asParent(() => void uncompleteTask(cur), SPENT_REASON);
+  else void uncompleteTask(cur);
 }
 
 /*
@@ -92,7 +115,7 @@ export function complete(o: Occurrence, by: string, day: string, origin?: DOMRec
   playCheck();
   if (origin && o.task.stars > 0) flyStars(origin, by, o.task.stars);
   const who = o.profileId === UP_FOR_GRABS ? ` by ${profileById.value.get(by)?.name ?? 'someone'}` : '';
-  toast(`${o.task.title} completed${who}`, { label: 'Undo', run: () => void uncompleteTask(o) });
+  toast(`${o.task.title} completed${who}`, { label: 'Undo', run: () => undoCheck(o) });
   const p = profileById.value.get(by);
   if (!p || day !== today.value) return;
   const section = `${by}:${o.section}`;

@@ -1,4 +1,5 @@
 import { expect, test, type Browser, type Page } from '@playwright/test';
+import { createHash } from 'node:crypto';
 
 /*
  * The wall as a family uses it on the first morning: a landscape Android
@@ -14,9 +15,19 @@ test.describe.configure({ timeout: 90_000 });
 const rail = (page: Page, label: string) => page.locator('.rail button', { hasText: label });
 
 const FIRESTORE = 'http://127.0.0.1:8080/v1/projects/demo-manwar/databases/(default)/documents';
-type Plain = string | number | boolean;
-const enc = (v: Plain) =>
-  typeof v === 'string' ? { stringValue: v } : typeof v === 'boolean' ? { booleanValue: v } : { integerValue: String(v) };
+type Plain = string | number | boolean | null | Plain[] | { [k: string]: Plain };
+const enc = (v: Plain): object =>
+  v === null
+    ? { nullValue: null }
+    : typeof v === 'string'
+      ? { stringValue: v }
+      : typeof v === 'boolean'
+        ? { booleanValue: v }
+        : typeof v === 'number'
+          ? { integerValue: String(v) }
+          : Array.isArray(v)
+            ? { arrayValue: { values: v.map(enc) } }
+            : { mapValue: { fields: Object.fromEntries(Object.entries(v).map(([k, x]) => [k, enc(x)])) } };
 /** A document written straight into the emulator (the owner token bypasses the rules). */
 async function seedDoc(name: string, collection: string, doc: { id: string } & Record<string, Plain>) {
   const res = await fetch(`${FIRESTORE}/households/demo-${name}/${collection}/${doc.id}`, {
@@ -102,5 +113,69 @@ test('Tasks and Home: a household with people but no tasks yet is told how to ad
     'No tasks yet. Tap + to add a routine or chore.',
   );
   await page.screenshot({ path: test.info().outputPath('home.png') });
+  await ctx.close();
+});
+
+test('Tasks: a kid cannot take back stars that were already spent', async ({ browser }) => {
+  const { ctx, page, name } = await tablet(browser, '&seed=none');
+  const salt = 'e2e-salt';
+  const pinHash = createHash('sha256').update(`${salt}:1234`).digest('hex');
+  await seedDoc(name, 'settings', { id: 'main', seededAt: 1, lock: { relockMinutes: 2, salt, pinHash } });
+  await seedDoc(name, 'profiles', { id: 'p1', name: 'Maryam', color: '#F66850', order: 0, stars: 3, createdAt: 1 });
+  const at = Date.UTC(2026, 10, 4, 13);
+  const chore = (id: string, title: string, stars: number) =>
+    seedDoc(name, 'tasks', {
+      id,
+      kind: 'chore',
+      title,
+      assignees: ['p1'],
+      upForGrabs: false,
+      stars,
+      date: '2026-11-04',
+      order: stars,
+      createdAt: 1,
+    });
+  const done = (taskId: string, stars: number, ledgerId: string) =>
+    seedDoc(name, 'taskStates', {
+      id: `${taskId}_2026-11-04_x_p1`,
+      taskId,
+      date: '2026-11-04',
+      part: null,
+      profileId: 'p1',
+      by: 'p1',
+      status: 'done',
+      at,
+      stars,
+      ledgerId,
+    });
+  const entry = (id: string, delta: number, reason: string, label: string) =>
+    seedDoc(name, 'ledger', { id, profileId: 'p1', delta, reason, label, at });
+  // 5 + 2 stars earned, 4 spent on a reward: 3 left.
+  await chore('tA', 'Feed the cat', 5);
+  await chore('tB', 'Tidy toys', 2);
+  // One chore still open, so the column is not all done.
+  await chore('tC', 'Water the plants', 1);
+  await entry('l1', 5, 'task', 'Feed the cat');
+  await entry('l2', 2, 'task', 'Tidy toys');
+  await entry('l3', -4, 'redeem', 'Ice cream');
+  await done('tA', 5, 'l1');
+  await done('tB', 2, 'l2');
+
+  await rail(page, 'Tasks').click();
+  const col = page.locator('.pcol[aria-label="Maryam"]');
+  const balance = col.locator('.star-pill');
+  await expect(balance).toHaveText('3', { timeout: 30_000 });
+  // Taking back 5 of the 3 stars left asks for the PIN, and Cancel leaves the task done.
+  await col.getByRole('button', { name: 'Uncheck Feed the cat' }).click();
+  const pad = page.locator('.modal', { has: page.locator('.pin-keys') });
+  await expect(pad).toContainText('Those stars were spent');
+  await pad.getByRole('button', { name: 'Cancel' }).click();
+  await expect(pad).toHaveCount(0);
+  await expect(col.getByRole('button', { name: 'Uncheck Feed the cat' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(balance).toHaveText('3');
+  // Stars the balance still holds come back without it.
+  await col.getByRole('button', { name: 'Uncheck Tidy toys' }).click();
+  await expect(balance).toHaveText('1');
+  await expect(page.locator('.modal .pin-keys')).toHaveCount(0);
   await ctx.close();
 });
