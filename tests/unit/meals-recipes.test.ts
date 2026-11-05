@@ -64,6 +64,10 @@ describe('recipe text helpers', () => {
     expect(sourceUrlError('example.com')).not.toBeNull();
     expect(sourceUrlError('javascript:alert(1)')).not.toBeNull();
     expect(displayUrl('https://www.example.com/recipes/biryani/')).toBe('www.example.com/recipes/biryani');
+    expect(displayUrl('https://ar.wikipedia.org/wiki/كبسة')).toBe('ar.wikipedia.org/wiki/كبسة');
+    expect(displayUrl('https://example.com/my recipe')).toBe('example.com/my recipe');
+    expect(displayUrl('https://example.com/100%25-juice')).toBe('example.com/100%-juice');
+    expect(displayUrl('https://example.com/bad%E0%A4%A')).toBe('example.com/bad%E0%A4%A');
   });
   it('searches names first, then ingredients', () => {
     const r = (name: string, ingredients: string[]): Recipe => ({

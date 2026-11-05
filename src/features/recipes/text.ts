@@ -52,11 +52,17 @@ export function sourceUrlError(value: string): string | null {
   }
 }
 
-/** "example.com/recipes/biryani" for showing a source without the scheme. */
+/** "example.com/recipes/biryani" for showing a source without the scheme, the path readable ("كبسة", not "%D9%83..."). */
 export function displayUrl(url: string): string {
   try {
     const u = new URL(url);
-    return (u.host + u.pathname).replace(/\/$/, '');
+    let path = u.pathname;
+    try {
+      path = decodeURIComponent(path);
+    } catch {
+      // A malformed escape: show the path as stored.
+    }
+    return (u.host + path).replace(/\/$/, '');
   } catch {
     return url;
   }
