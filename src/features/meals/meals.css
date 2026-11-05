@@ -97,8 +97,10 @@
 /*
  * A shade along the bottom edge while more meals are below (a solid cover
  * attached to the content hides it once scrolled to the end). The shade
- * stops a little short of the edge, so a fractional box height cannot leave a
- * hairline of it below the cover.
+ * stops a little short of the bottom and side edges: the cover is laid out
+ * on the scrolled content and the shade on the box, and on a 1.5x or 2x
+ * screen the two round to different device pixels, which left a hairline of
+ * shade beside or below the cover.
  */
 .mg-list {
   flex: 1;
@@ -112,8 +114,8 @@
   scrollbar-width: none;
   background:
     linear-gradient(var(--bg), var(--bg)) 0 100% / 100% 2rem no-repeat local,
-    linear-gradient(transparent, color-mix(in srgb, var(--on-tint) 26%, transparent)) 0 calc(100% - 0.3rem) / 100% 1.6rem
-      no-repeat scroll;
+    linear-gradient(transparent, color-mix(in srgb, var(--on-tint) 26%, transparent)) 0.3rem calc(100% - 0.3rem) /
+      calc(100% - 0.6rem) 1.6rem no-repeat scroll;
 }
 .mg-list::-webkit-scrollbar {
   display: none;
