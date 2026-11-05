@@ -37,6 +37,10 @@ function idToken(uid: string, claims: Record<string, unknown>): string {
 
 type Who = 'owner' | 'anon' | string;
 const tablet = (hid: string) => idToken(hid, { hid });
+/** A phone paired to `hid` as device `device` (its devices/ document may or may not exist). */
+const phone = (hid: string, device: string) => idToken(`${hid}.phone.${device}`, { hid, device });
+const PHONE = 'phoneAAAAAAAAAAAAAAA';
+const GONE = 'goneBBBBBBBBBBBBBBBB';
 
 async function req(who: Who, method: string, path: string, body?: object): Promise<number> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -64,6 +68,13 @@ test.beforeAll(async () => {
     expect(await write('owner', `households/${hid}/profiles/p1`)).toBe(200);
     expect(await req('owner', 'PATCH', `households/${hid}/private/google`, doc({ refreshToken: 'secret' }))).toBe(200);
   }
+  expect(
+    await req('owner', 'PATCH', `households/${A}/devices/${PHONE}`, {
+      fields: { id: { stringValue: PHONE }, name: { stringValue: 'Phone' }, lastSeenAt: { integerValue: '1' } },
+    }),
+  ).toBe(200);
+  expect(await write('owner', `households/${A}/devices/other0000000000000000`)).toBe(200);
+  expect(await req('owner', 'PATCH', `pairings/ABCDEFGH`, doc({ hid: A }))).toBe(200);
 });
 
 test('a household reads and writes its own collections', async () => {
@@ -110,4 +121,52 @@ test('nothing outside the household collections is open', async () => {
   expect(await write(tablet(A), `households/${A}/profiles/p1/sub/x`)).toBe(403);
   expect(await write(tablet(A), `other/${A}`)).toBe(403);
   expect(await write(tablet(A), '_ids/x')).toBe(403);
+});
+
+test('a paired phone is a member of its household while its device document exists', async () => {
+  const p = phone(A, PHONE);
+  expect(await read(p, `households/${A}`)).toBe(200);
+  expect(await read(p, `households/${A}/profiles/p1`)).toBe(200);
+  expect(await write(p, `households/${A}/profiles/p4`)).toBe(200);
+  expect(await req(p, 'DELETE', `households/${A}/profiles/p4`)).toBe(200);
+  expect(await read(p, `households/${A}/devices/${PHONE}`)).toBe(200);
+  expect(await read(p, `households/${B}/profiles/p1`)).toBe(403);
+  expect(await read(p, `households/${A}/private/google`)).toBe(403);
+});
+
+test('a removed phone (no device document) is refused everywhere at once', async () => {
+  const p = phone(A, GONE);
+  expect(await read(p, `households/${A}`)).toBe(403);
+  expect(await read(p, `households/${A}/profiles/p1`)).toBe(403);
+  expect(await write(p, `households/${A}/profiles/p5`)).toBe(403);
+  expect(await read(p, `households/${A}/devices/${PHONE}`)).toBe(403);
+  // A device claim that is not a string matches no document either.
+  expect(await read(idToken('x', { hid: A, device: [PHONE] }), `households/${A}/profiles/p1`)).toBe(403);
+});
+
+test('devices are written by the Functions; a phone only stamps its own lastSeenAt', async () => {
+  const p = phone(A, PHONE);
+  const seen = (n: string) => ({ fields: { lastSeenAt: { integerValue: n } } });
+  const mask = '?updateMask.fieldPaths=lastSeenAt';
+  expect(await req(p, 'PATCH', `households/${A}/devices/${PHONE}${mask}`, seen('2'))).toBe(200);
+  expect(await req(p, 'PATCH', `households/${A}/devices/${PHONE}${mask}`, { fields: { lastSeenAt: { stringValue: 'x' } } })).toBe(
+    403,
+  );
+  expect(await req(p, 'PATCH', `households/${A}/devices/other0000000000000000${mask}`, seen('2'))).toBe(403);
+  expect(await req(p, 'PATCH', `households/${A}/devices/${PHONE}?updateMask.fieldPaths=name`, doc({ name: 'Mine' }))).toBe(403);
+  expect(await req(p, 'DELETE', `households/${A}/devices/${PHONE}`)).toBe(403);
+  expect(await write(p, `households/${A}/devices/newAAAAAAAAAAAAAAAAA`)).toBe(403);
+  // The wall cannot add, rename or remove devices directly either.
+  expect(await write(tablet(A), `households/${A}/devices/newAAAAAAAAAAAAAAAAA`)).toBe(403);
+  expect(await req(tablet(A), 'PATCH', `households/${A}/devices/${PHONE}${mask}`, seen('3'))).toBe(403);
+  expect(await req(tablet(A), 'DELETE', `households/${A}/devices/${PHONE}`)).toBe(403);
+  expect(await read(tablet(A), `households/${A}/devices/${PHONE}`)).toBe(200);
+});
+
+test("pairing codes are out of every client's reach", async () => {
+  expect(await read(tablet(A), 'pairings/ABCDEFGH')).toBe(403);
+  expect(await read(phone(A, PHONE), 'pairings/ABCDEFGH')).toBe(403);
+  expect(await read('anon', 'pairings/ABCDEFGH')).toBe(403);
+  expect(await write(tablet(A), 'pairings/ZZZZZZZZ')).toBe(403);
+  expect(await read(tablet(A), 'pairings')).toBe(403);
 });

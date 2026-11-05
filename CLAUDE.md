@@ -1,10 +1,12 @@
 # Manwar: maintainer notes
 
 Family wall-calendar web app for an Android tablet (landscape, Fully Kiosk
-Browser), modeled on the Skylight Calendar 2 with Plus. Research and product
-decisions: `research/README.md` (start there; the numbered reports hold the
-detail and the images). Scope: Home, Calendar, Lists, Tasks, Rewards, Meals,
-Recipes, Sleep, Settings. Not built: Photos, Disney, Magic Import, Sidekick.
+Browser), modeled on the Skylight Calendar 2 with Plus, with a phone
+companion for parents on the same URL. Research and product decisions:
+`research/README.md` (start there; the numbered reports hold the detail and
+the images). Scope: Home, Calendar, Lists, Tasks, Rewards, Meals, Recipes,
+Sleep, Settings; the phone has Today, Tasks, Lists, Calendar and More. Not
+built: Photos, Disney, Magic Import, Sidekick, push notifications.
 
 ## Deployment configuration
 
@@ -215,6 +217,63 @@ flowchart LR
   (`app/tab.ts`) from `src/features/<tab>/index.tsx` with `Body`, optional
   top-bar `Controls`, `onAdd` (the + button) and `title`.
 
+## Phone companion
+
+Parents' phones open the same URL and get a different app on the same
+household data (`src/phone/`). Only the wall pairs and removes phones; a
+paired phone is a parent's, so it never asks for the PIN.
+
+```mermaid
+sequenceDiagram
+  participant W as Wall (Settings > Phones)
+  participant F as Functions
+  participant P as Phone
+  W->>F: createPairing (behind the PIN)
+  F-->>W: code, valid 10 min (pairings/{code})
+  W-->>P: QR code: /?pair=CODE (or the code typed)
+  P->>F: redeemPairing(code, name)
+  F->>F: delete the code, create households/hid/devices/id
+  F-->>P: custom token {hid, account, device}
+  P->>P: signs in, watches its devices/ document
+  W->>F: removeDevice(id)
+  F->>F: delete the document and the device's Auth user
+  P->>P: refused by the rules at once, signs out, told why
+```
+
+- **Layout** (`app/layout.ts`): chosen once per page load: `?layout=` in
+  the URL, else the choice stored on the device (pairing stores 'phone'),
+  else a short screen side under 600 CSS px is a phone. Switching stores
+  and reloads, so the wall's services (display schedule, wake lock, idle
+  return, seeding, remote commands) never start on a phone
+  (`app/start.ts`). `html[data-layout]` scopes the phone's CSS
+  (`phone/phone.css`: rem is 62.5% of the phone's font size, and shared
+  sheets, dialogs, popovers and toasts are re-laid for a narrow screen).
+- **Identity**: a paired phone's Auth user is `<hid>.phone.<deviceId>` with
+  claims `hid`, `account`, `device`. `firestore.rules` count it a member
+  only while `devices/{device}` exists (one extra read per request, for
+  phones only); devices are written only by the Functions, except a phone
+  stamping its own `lastSeenAt`. `googleAccessToken` refuses a removed
+  phone too. `session.pairedDevice()` is the device id on a paired phone;
+  `core/lock.ts` turns the lock off there.
+- **Shell** (`phone/PhoneApp.tsx`): pairing screen until signed in, then a
+  header, the status line (household not syncing, calendar trouble) and a
+  bottom tab bar. Tabs are `PhonePage`s (`phone/nav.ts`) listed in
+  `phone/pages.ts`, each in `src/phone/<tab>/`; More's rows are
+  `MoreItem`s in `phone/more/index.tsx`. An inner view sets the header's
+  back arrow through `PhonePage.back`.
+- **Back gesture** (`ui/back.ts`): on the phone each open overlay
+  (`useOverlay` calls `useBack`) or inner view holds one history entry;
+  Back closes the top one, and a view closed another way gives its entry
+  back. Use `useBack(onClose, true)` in any phone view that should close
+  on Back. In e2e, wait for the page's own `history.back()` to land before
+  `page.goBack()` (Playwright's goBack targets an entry).
+- **Shared with the wall through Firestore**: the timer (`timers/wall`,
+  `features/timer/state.ts`; stopping stamps `stoppedAt`, and the wall's
+  sleep hold is derived from the document) and the screen
+  (`commands/display`: a phone asks the wall to sleep or wake;
+  `followDisplayCommands` applies each nonce once, only within 10 minutes
+  of being sent).
+
 ## Layout system
 
 The UI is drawn on a 1600x1000 design canvas: `html { font-size: min(0.625vw, calc(var(--app-h) * 0.01)) }` (`--app-h` is `100vh`),
@@ -277,6 +336,13 @@ so `1rem` = 10 design px. Use rem for every size. Tokens are CSS variables in
   things render.
 - `npm test` (unit, `TZ=America/Chicago`), `npx tsc --noEmit`,
   `npm run test:e2e` (needs the emulators), `cd functions && npm test`.
+- Phone: `?demo=<name>&layout=phone` opens the phone layout signed in as
+  the demo wall (for the phone's screens); `?demo=<name>&pair=<code>` (or
+  `pair=` empty) pairs like a real phone through the Functions emulator,
+  which runs `functions/lib`: `npm run build --prefix functions` after
+  changing the Functions. There the allowlist is the demo accounts
+  (`@manwar.local`), as the emulator has no Secret Manager.
+  `tests/e2e/phone-helpers.ts` opens and pairs phones (Pixel 7 contexts).
 
 ## Brand
 

@@ -27,6 +27,8 @@ import { toISODate } from '../lib/date';
 import { HISTORY_DAYS } from '../tasks/engine';
 import { DEFAULT_SETTINGS, mergeSettings } from './settings';
 import type {
+  Device,
+  DisplayCommand,
   EventMeta,
   LedgerEntry,
   List,
@@ -40,6 +42,7 @@ import type {
   SettingsPatch,
   Task,
   TaskState,
+  WallTimer,
 } from './types';
 
 /** Every household collection and its document type. */
@@ -55,6 +58,9 @@ export interface Collections {
   recipes: Recipe;
   messages: Message;
   eventMeta: EventMeta;
+  devices: Device;
+  timers: WallTimer;
+  commands: DisplayCommand;
 }
 export type CollectionName = keyof Collections;
 
@@ -70,6 +76,9 @@ const NAMES: CollectionName[] = [
   'recipes',
   'messages',
   'eventMeta',
+  'devices',
+  'timers',
+  'commands',
 ];
 
 /** Live contents of each collection, updated by Firestore snapshots (local writes show immediately). */

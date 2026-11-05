@@ -1,6 +1,6 @@
 import type { ComponentType, FunctionComponent } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
-import { CalendarDays, CalendarSync, CloudSun, Info, ListChecks, Lock, Monitor, Users, Utensils } from 'lucide-preact';
+import { CalendarDays, CalendarSync, CloudSun, Info, ListChecks, Lock, Monitor, Smartphone, Users, Utensils } from 'lucide-preact';
 import { settingsPage } from '../../app/nav';
 import { requireParent, unlocked } from '../../core/lock';
 import { Sheet } from '../../ui/overlays';
@@ -9,6 +9,7 @@ import { DisplayPage } from './DisplayPage';
 import { GooglePage } from './GooglePage';
 import { LockPage } from './LockPage';
 import { AboutPage, MealsPage, TasksPage } from './OtherPages';
+import { PhonesPage } from './PhonesPage';
 import { ProfilesPage } from './ProfilesPage';
 import { WeatherPage } from './WeatherPage';
 import './settings.css';
@@ -30,6 +31,7 @@ const PAGES: PageDef[] = [
   { id: 'weather', label: 'Weather', icon: CloudSun, Page: WeatherPage },
   { id: 'meals', label: 'Meals', icon: Utensils, Page: MealsPage },
   { id: 'lock', label: 'Parental lock', icon: Lock, Page: LockPage },
+  { id: 'phones', label: 'Phones', icon: Smartphone, Page: PhonesPage },
   { id: 'tasks', label: 'Tasks', icon: ListChecks, Page: TasksPage },
   { id: 'about', label: 'About', icon: Info, Page: AboutPage },
 ];

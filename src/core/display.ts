@@ -1,5 +1,5 @@
 import { computed, effect, signal } from '@preact/signals';
-import { settings, settingsLoaded } from '../data/store';
+import { data, newId, put, settings, settingsLoaded } from '../data/store';
 import type { TimeWindow } from '../data/types';
 import { currentTime, now } from '../lib/clock';
 import { hhmmToMinutes, minutesOfDay } from '../lib/date';
@@ -103,5 +103,42 @@ export function startDisplay(): void {
     // page left it, so a reload at night (an update, the kiosk browser restarting) does not light the room.
     if (!settingsLoaded.value) return;
     setBrightness(sleeping.value ? 0 : theme.value === 'dark' ? 30 : 100);
+  });
+}
+
+/*
+ * Sleep and wake from a phone. The phone writes `commands/display`; every
+ * wall applies each command once (it remembers the last one it saw), and
+ * only a recent one: a wall that was off when a parent tapped "Sleep" does
+ * not go dark hours later when it starts.
+ */
+const COMMAND_KEY = 'manwar.displayCommand.v1';
+export const COMMAND_FRESH_MS = 10 * 60_000;
+
+/** Ask the wall(s) to sleep now or wake up. */
+export function sendDisplayCommand(kind: 'sleep' | 'wake', by?: string): void {
+  void put('commands', { id: 'display', kind, nonce: newId(), at: currentTime(), by });
+}
+
+/** The wall's side: apply each new display command. Started once the household is open. */
+export function followDisplayCommands(): void {
+  let seen: string | null = null;
+  try {
+    seen = localStorage.getItem(COMMAND_KEY);
+  } catch {
+    /* storage unavailable: a reload may apply the last command again, if still recent */
+  }
+  effect(() => {
+    const c = data.commands.value.find((x) => x.id === 'display');
+    if (!c || c.nonce === seen) return;
+    seen = c.nonce;
+    try {
+      localStorage.setItem(COMMAND_KEY, c.nonce);
+    } catch {
+      /* as above */
+    }
+    if (Math.abs(currentTime() - c.at) > COMMAND_FRESH_MS) return;
+    if (c.kind === 'sleep') sleepNow();
+    else wake();
   });
 }

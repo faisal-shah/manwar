@@ -186,6 +186,11 @@
   font-size: 2rem;
   margin: 0;
 }
+.connect-alt {
+  color: var(--accent);
+  font-weight: 600;
+  padding: 1.2rem;
+}
 .connect .error {
   color: var(--danger);
 }

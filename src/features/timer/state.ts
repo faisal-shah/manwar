@@ -1,17 +1,25 @@
-import { computed, signal } from '@preact/signals';
+import { computed, effect } from '@preact/signals';
 import { sleepHeldUntil } from '../../core/display';
+import { data, put, upsert } from '../../data/store';
+import type { WallTimer } from '../../data/types';
 import { currentTime, nowMs } from '../../lib/clock';
-import { LEAD_MS, SLEEP_GRACE_MS, validMinutes } from './logic';
+import { LEAD_MS, SLEEP_GRACE_MS, STALE_MS, validMinutes } from './logic';
 
-export interface RunningTimer {
-  minutes: number;
-  /** End of the lead-in countdown; the timer runs from here. */
-  startAt: number;
-  endAt: number;
-}
+export type RunningTimer = WallTimer;
 
-/** The wall's one timer (in memory; a reload drops it). */
-export const timer = signal<RunningTimer | null>(null);
+/**
+ * The wall's one timer, shared through Firestore (`timers/wall`) so a phone
+ * can start, watch and stop it. Stopping it stamps `stoppedAt` (the wall
+ * reads from it when scheduled sleep may resume, however late it hears of
+ * the stop). One that ended more than STALE_MS ago is left over (nobody was
+ * at the wall to dismiss it) and reads as none.
+ */
+const stored = computed(() => data.timers.value.find((x) => x.id === 'wall') ?? null);
+
+export const timer = computed<RunningTimer | null>(() => {
+  const t = stored.value;
+  return t && !t.stoppedAt && nowMs.value - t.endAt < STALE_MS ? t : null;
+});
 
 /** True from Start until someone stops or dismisses the timer. */
 export const timerActive = computed(() => timer.value !== null);
@@ -24,16 +32,25 @@ export const timerPhase = computed<'lead' | 'running' | 'done' | null>(() => {
   return n < t.endAt ? 'running' : 'done';
 });
 
-export function startTimer(minutes: number): void {
+/** Start the wall's timer (replacing one that runs). `startedBy`: the phone that starts it. */
+export function startTimer(minutes: number, startedBy?: string): void {
   if (!validMinutes(minutes)) throw new Error(`startTimer: minutes must be 1-999, got ${minutes}`);
   const startAt = currentTime() + LEAD_MS;
-  const endAt = startAt + minutes * 60_000;
-  timer.value = { minutes, startAt, endAt };
-  // Scheduled sleep waits until a few minutes after the timer ends.
-  sleepHeldUntil.value = endAt + SLEEP_GRACE_MS;
+  // A whole new document: no stoppedAt from the last one.
+  void put('timers', { id: 'wall', minutes, startAt, endAt: startAt + minutes * 60_000, startedBy });
 }
 
 export function stopTimer(): void {
-  timer.value = null;
-  sleepHeldUntil.value = Math.min(sleepHeldUntil.value, currentTime() + SLEEP_GRACE_MS);
+  if (stored.peek()) void upsert('timers', 'wall', { stoppedAt: currentTime() });
+}
+
+/**
+ * The wall's side: scheduled sleep waits until a few minutes after the timer
+ * ends, or after it was stopped. Started once the household is open.
+ */
+export function holdSleepForTimer(): void {
+  effect(() => {
+    const t = stored.value;
+    sleepHeldUntil.value = t ? Math.min(t.endAt, t.stoppedAt ?? Infinity) + SLEEP_GRACE_MS : 0;
+  });
 }

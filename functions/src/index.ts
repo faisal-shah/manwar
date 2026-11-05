@@ -4,6 +4,8 @@ import { getFirestore } from 'firebase-admin/firestore';
 import { defineSecret, defineString } from 'firebase-functions/params';
 import { HttpsError, onCall, type CallableOptions } from 'firebase-functions/v2/https';
 import { OAuth2Client } from 'google-auth-library';
+import { randomBytes } from 'node:crypto';
+import { PAIRING_TTL_MS, codeFromBytes, deviceName, deviceUid, isDeviceId, normalizeCode } from './pairing.js';
 import { householdIdFor, isAllowedAccount, missingScopes, parseAccountList } from './policy.js';
 
 initializeApp();
@@ -19,7 +21,14 @@ const CLIENT_SECRET = defineSecret('GOOGLE_OAUTH_CLIENT_SECRET');
  * the repo; a new version takes effect on the next deploy.
  */
 const ALLOWED_ACCOUNTS = defineSecret('ALLOWED_ACCOUNTS');
-const allowed = (email: string) => isAllowedAccount(email, parseAccountList(ALLOWED_ACCOUNTS.value()));
+/**
+ * The emulator has no Secret Manager: there the demo households (accounts
+ * at manwar.local, which no real Google account has) are the allowed ones.
+ */
+const emulator = process.env.FUNCTIONS_EMULATOR === 'true';
+const allowed = (email: unknown) =>
+  typeof email === 'string' &&
+  (emulator ? email.endsWith('@manwar.local') : isAllowedAccount(email, parseAccountList(ALLOWED_ACCOUNTS.value())));
 const NOT_ALLOWED = 'This Google account is not on the allowlist for this Manwar. Ask its owner to add it.';
 
 const opts: CallableOptions = {
@@ -93,10 +102,27 @@ export const connectGoogle = onCall<{ code?: unknown }>(opts, async (req) => {
   };
 });
 
+const REMOVED = 'This phone was removed from the household. Pair it again from the wall.';
+const deviceDoc = (hid: string, id: string) => db.doc(`households/${hid}/devices/${id}`);
+
+/**
+ * The caller's household, and its device id when the caller is a paired
+ * phone (null for a wall, which signs in with the Google account itself).
+ * A phone removed from its household is refused here as the Firestore
+ * rules refuse it.
+ */
+async function caller(req: { auth?: { token: Record<string, unknown> } }): Promise<{ hid: string; device: string | null }> {
+  const t = req.auth?.token;
+  const hid = t?.hid;
+  if (typeof hid !== 'string') throw new HttpsError('unauthenticated', 'Sign in first.');
+  if (t?.device === undefined) return { hid, device: null };
+  if (!isDeviceId(t.device) || !(await deviceDoc(hid, t.device).get()).exists) throw new HttpsError('permission-denied', REMOVED);
+  return { hid, device: t.device };
+}
+
 /** A fresh Calendar access token for the signed-in household. */
 export const googleAccessToken = onCall(opts, async (req) => {
-  const hid = req.auth?.token?.hid;
-  if (typeof hid !== 'string') throw new HttpsError('unauthenticated', 'Sign in first.');
+  const { hid } = await caller(req);
   const snap = await tokenDoc(hid).get();
   const refreshToken = snap.get('refreshToken');
   if (typeof refreshToken !== 'string')
@@ -118,4 +144,88 @@ export const googleAccessToken = onCall(opts, async (req) => {
     }
     throw new HttpsError('unavailable', 'Could not reach Google. Try again shortly.');
   }
+});
+
+/*
+ * Phones. The wall makes a pairing code (Settings > Phones, behind the
+ * parent PIN); a phone that presents it within ten minutes, once, becomes a
+ * device of the household with its own sign-in (`device` claim). Codes live
+ * in the top-level `pairings` collection, which the rules keep from every
+ * client. Removing a device deletes its document (the rules check it on
+ * every request) and its Auth user (no more token refreshes).
+ */
+
+const EXPIRED = 'That code has expired or was already used. Make a new one on the wall.';
+
+function newCode(): string {
+  for (;;) {
+    const code = codeFromBytes(randomBytes(32));
+    if (code) return code;
+  }
+}
+
+/** A pairing code for the caller's household; one at a time (a new one replaces the last). */
+export const createPairing = onCall(opts, async (req) => {
+  const { hid, device } = await caller(req);
+  if (device) throw new HttpsError('permission-denied', 'Phones are paired from the wall.');
+  const account = req.auth?.token?.account;
+  if (!allowed(account)) throw new HttpsError('permission-denied', NOT_ALLOWED);
+  const old = await db.collection('pairings').where('hid', '==', hid).get();
+  const code = newCode();
+  const now = Date.now();
+  const expiresAt = now + PAIRING_TTL_MS;
+  const b = db.batch();
+  for (const d of old.docs) b.delete(d.ref);
+  b.create(db.doc(`pairings/${code}`), { hid, account, createdAt: now, expiresAt });
+  await b.commit();
+  return { code, expiresAt };
+});
+
+/** Pair a phone: trade a code from the wall, once, for the phone's own sign-in. Needs no sign-in. */
+export const redeemPairing = onCall<{ code?: unknown; name?: unknown }>(opts, async (req) => {
+  const code = normalizeCode(req.data?.code);
+  if (!code) throw new HttpsError('invalid-argument', 'That is not a pairing code: it has 8 letters and digits.');
+  const name = deviceName(req.data?.name);
+  if (!name) throw new HttpsError('invalid-argument', 'Give this phone a name (up to 40 characters).');
+  const ref = db.doc(`pairings/${code}`);
+  type Paired = { ok: true; hid: string; account: string; deviceId: string } | { ok: false; error: string };
+  const paired = await db.runTransaction(async (tx): Promise<Paired> => {
+    const p = await tx.get(ref);
+    if (!p.exists) throw new HttpsError('not-found', EXPIRED);
+    // A code is used once, also when it turns out to be expired or its household no longer allowed.
+    tx.delete(ref);
+    const hid = p.get('hid');
+    const account = p.get('account');
+    if (typeof hid !== 'string' || !(Number(p.get('expiresAt')) > Date.now())) return { ok: false, error: EXPIRED };
+    if (!allowed(account)) return { ok: false, error: NOT_ALLOWED };
+    const dev = db.collection(`households/${hid}/devices`).doc();
+    tx.create(dev, { id: dev.id, name, kind: 'phone', createdAt: Date.now() });
+    return { ok: true, hid, account: account as string, deviceId: dev.id };
+  });
+  if (!paired.ok) throw new HttpsError(paired.error === EXPIRED ? 'not-found' : 'permission-denied', paired.error);
+  const customToken = await getAuth().createCustomToken(deviceUid(paired.hid, paired.deviceId), {
+    hid: paired.hid,
+    account: paired.account,
+    device: paired.deviceId,
+  });
+  return { customToken };
+});
+
+/** Remove a paired phone: the wall removes any, a phone only itself. */
+export const removeDevice = onCall<{ deviceId?: unknown }>(opts, async (req) => {
+  const id = req.data?.deviceId;
+  if (!isDeviceId(id)) throw new HttpsError('invalid-argument', 'No such phone.');
+  const t = req.auth?.token;
+  const hid = t?.hid;
+  if (typeof hid !== 'string') throw new HttpsError('unauthenticated', 'Sign in first.');
+  // A phone unpairing itself may already be removed; the wall must be a member in good standing.
+  if (t?.device !== undefined && t.device !== id)
+    throw new HttpsError('permission-denied', 'A phone can only unpair itself. Remove other phones at the wall.');
+  await deviceDoc(hid, id).delete();
+  try {
+    await getAuth().deleteUser(deviceUid(hid, id));
+  } catch (e) {
+    if ((e as { code?: string }).code !== 'auth/user-not-found') throw e;
+  }
+  return {};
 });

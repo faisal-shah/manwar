@@ -21,8 +21,8 @@ export default defineConfig({
         name: APP_TITLE,
         short_name: NAME_AR,
         description: 'Family wall calendar, tasks, rewards, lists and meals',
-        display: 'fullscreen',
-        orientation: 'landscape',
+        // The wall runs in Fully Kiosk (which ignores the manifest); an installed phone is a portrait app.
+        display: 'standalone',
         background_color: '#dce8f3',
         theme_color: '#dce8f3',
         start_url: '/',

@@ -32,13 +32,15 @@ jobs:
           VITE_BUILD_ID: ${{ github.sha }}
       - run: npm ci --prefix functions
       - run: npm test --prefix functions
+      # The Functions emulator runs the built code (phone pairing in the e2e specs).
+      - run: npm run build --prefix functions
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 21
       - run: npx playwright install --with-deps chromium
-      # Demo mode runs against the Auth and Firestore emulators.
-      - run: npx --yes firebase-tools@15 emulators:exec --only auth,firestore --project demo-manwar "npx playwright test"
+      # Demo mode runs against the Auth, Firestore and Functions emulators.
+      - run: npx --yes firebase-tools@15 emulators:exec --only auth,firestore,functions --project demo-manwar "npx playwright test"
 
       # Keyless auth: GitHub's OIDC token is exchanged for the deployer
       # service account via Workload Identity Federation (the provider only

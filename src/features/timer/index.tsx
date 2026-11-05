@@ -7,7 +7,16 @@ import { nowMs, today } from '../../lib/clock';
 import { formatTime, toISODate } from '../../lib/date';
 import { Button } from '../../ui/controls';
 import { Modal } from '../../ui/overlays';
-import { STAGE_COLORS, formatDuration, pressKey, splitRemaining, timerStage, validMinutes, type KeypadKey } from './logic';
+import {
+  CHIME_WINDOW_MS,
+  STAGE_COLORS,
+  formatDuration,
+  pressKey,
+  splitRemaining,
+  timerStage,
+  validMinutes,
+  type KeypadKey,
+} from './logic';
 import { startTimer, stopTimer, timer, timerPhase } from './state';
 import './timer.css';
 import { plural } from '../../lib/text';
@@ -99,7 +108,8 @@ function useTimesUpChime(ringing: boolean) {
 export function TimerOverlay() {
   const t = timer.value;
   const phase = timerPhase.value;
-  useTimesUpChime(phase === 'done');
+  // A timer that ended while nobody was watching (a reload long after its end) does not chime late.
+  useTimesUpChime(phase === 'done' && !!t && nowMs.value - t.endAt < CHIME_WINDOW_MS);
   if (!t || !phase) return null;
   const n = nowMs.value;
   const total = t.minutes * 60_000;

@@ -15,6 +15,9 @@ vi.mock('firebase/firestore', () => ({
   deleteField: () => ({ op: 'delete' }),
 }));
 
+// The wall (no paired phone): the lock applies.
+vi.mock('../../src/data/session', () => ({ pairedDevice: () => null }));
+
 const doc = vi.hoisted(() => ({ stored: {} as Record<string, unknown> }));
 
 function merge(into: Record<string, unknown>, patch: Record<string, unknown>): Record<string, unknown> {

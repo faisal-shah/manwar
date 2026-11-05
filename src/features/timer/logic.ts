@@ -5,6 +5,10 @@ export const MAX_MINUTES = 999;
 export const LEAD_MS = 3000;
 /** Scheduled sleep stays off until this long after a timer ends. */
 export const SLEEP_GRACE_MS = 5 * 60_000;
+/** A finished timer nobody dismissed is cleared this long after its end. */
+export const STALE_MS = 10 * 60_000;
+/** The chime sounds only for a timer that finished this recently (not on a reload long after). */
+export const CHIME_WINDOW_MS = 30_000;
 
 export type KeypadKey = '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | 'clear' | 'back';
 

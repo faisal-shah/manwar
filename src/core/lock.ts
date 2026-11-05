@@ -1,5 +1,6 @@
 import { computed, signal } from '@preact/signals';
 import { pinChange } from '../data/settings';
+import { pairedDevice } from '../data/session';
 import { saveSettings, settings } from '../data/store';
 import { currentTime, nowMs } from '../lib/clock';
 import { onActivity } from './activity';
@@ -9,10 +10,11 @@ import { pinPause } from './pin';
  * Parental lock. With a PIN set, the tablet is in kid mode: anyone can look
  * around and check off tasks; adding, editing, deleting, giving stars and
  * redeeming need the PIN. A correct PIN unlocks until the tablet has been
- * idle for `relockMinutes`.
+ * idle for `relockMinutes`. A paired phone belongs to a parent (only the
+ * wall pairs phones, behind the PIN), so it never asks.
  */
 
-export const lockEnabled = computed(() => !!settings.value.lock.pinHash);
+export const lockEnabled = computed(() => !pairedDevice() && !!settings.value.lock.pinHash);
 const unlockedUntil = signal(0);
 export const unlocked = computed(() => !lockEnabled.value || nowMs.value < unlockedUntil.value);
 

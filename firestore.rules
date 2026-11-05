@@ -1,20 +1,36 @@
 rules_version = '2';
-// Each tablet signs in with a custom token carrying its household id (hid
-// claim, minted by the connectGoogle Function). A household may read and
-// write its own collections; households/{hid}/private holds the Google
-// refresh token and is reachable only through the Admin SDK.
+// Each wall signs in with a custom token carrying its household id (hid
+// claim, minted by the connectGoogle Function); a paired phone's token also
+// carries its device id (device claim, minted by redeemPairing), and the
+// phone counts as a member only while its devices/{id} document exists, so
+// removing a phone at the wall cuts it off at once. A member may read and
+// write its household's collections; households/{hid}/private holds the
+// Google refresh token, and pairings/ the pairing codes: both are reachable
+// only through the Admin SDK. Devices are added and removed by the
+// Functions; a phone may only stamp its own lastSeenAt.
 service cloud.firestore {
   match /databases/{database}/documents {
+    function deviceActive(hid) {
+      return !('device' in request.auth.token)
+        || exists(/databases/$(database)/documents/households/$(hid)/devices/$(request.auth.token.device));
+    }
     function member(hid) {
-      return request.auth != null && request.auth.token.hid == hid;
+      return request.auth != null && request.auth.token.hid == hid && deviceActive(hid);
     }
     match /households/{hid} {
       allow read: if member(hid);
       match /private/{doc} {
         allow read, write: if false;
       }
+      match /devices/{id} {
+        allow read: if member(hid);
+        allow update: if member(hid)
+          && request.auth.token.get('device', null) == id
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastSeenAt'])
+          && request.resource.data.lastSeenAt is int;
+      }
       match /{collection}/{docId} {
-        allow read, write: if member(hid) && collection != 'private';
+        allow read, write: if member(hid) && collection != 'private' && collection != 'devices';
       }
     }
   }

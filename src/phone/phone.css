@@ -1,0 +1,256 @@
+/*
+ * The phone companion. Its rem is 10px at the phone's default text size
+ * (62.5% of the browser's, so the phone's own text-size setting scales it),
+ * not the wall's canvas scale. Shared components (sheets, dialogs, popovers,
+ * toasts) are re-laid for a narrow screen here, under [data-layout='phone'].
+ */
+html[data-layout='phone'] {
+  font-size: 62.5%;
+}
+
+.ph {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, var(--bg-top), var(--bg-bottom));
+}
+.ph-head {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  min-height: 5.6rem;
+  padding: calc(env(safe-area-inset-top) + 0.8rem) 1.2rem 0.4rem 1.6rem;
+}
+.ph-head h1 {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 2.8rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ph-head .ph-back {
+  margin-left: -0.8rem;
+}
+.ph-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.2rem;
+  margin: 0 1.6rem 0.8rem;
+  padding: 0.6rem 1.2rem;
+  border-radius: 1.2rem;
+  background: var(--surface-strong);
+  color: var(--text-2);
+  font-size: 1.4rem;
+}
+.ph-status span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.ph-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  padding: 0.4rem 1.6rem 2.4rem;
+  -webkit-overflow-scrolling: touch;
+}
+.ph-nav {
+  display: flex;
+  border-top: 1px solid var(--line);
+  background: var(--sheet);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.ph-nav button {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  min-height: 6rem;
+  font-size: 1.2rem;
+  font-weight: 500;
+  color: var(--text-2);
+}
+.ph-nav button.on {
+  color: var(--accent);
+  font-weight: 700;
+}
+.ph-nav .badge {
+  position: absolute;
+  top: 0.5rem;
+  left: calc(50% + 0.6rem);
+  min-width: 1.9rem;
+  height: 1.9rem;
+  padding: 0 0.5rem;
+  border-radius: 99rem;
+  background: var(--today);
+  color: #fff;
+  font-size: 1.15rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Building blocks for the tabs. */
+.ph-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+}
+.ph-card {
+  padding: 1.6rem;
+  border-radius: 1.8rem;
+  background: var(--surface-solid);
+  box-shadow: var(--shadow-soft);
+}
+.ph-card > p {
+  margin: 0 0 1.2rem;
+}
+.ph-card-title {
+  margin: 0 0 0.8rem;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 2.2rem;
+}
+.ph-about {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+.ph-menu {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-radius: 1.8rem;
+  background: var(--surface-solid);
+  overflow: hidden;
+}
+.ph-menu li + li {
+  border-top: 1px solid var(--line);
+}
+.ph-menu button {
+  display: flex;
+  align-items: center;
+  gap: 1.4rem;
+  width: 100%;
+  min-height: 6.4rem;
+  padding: 0.8rem 1.6rem;
+  text-align: left;
+  font-size: 1.7rem;
+  font-weight: 500;
+}
+.ph-menu-label {
+  flex: 1;
+  min-width: 0;
+}
+.ph-menu-label small {
+  display: block;
+  color: var(--text-2);
+  font-size: 1.4rem;
+  font-weight: 400;
+}
+.ph-link {
+  color: var(--accent);
+  font-weight: 600;
+  padding: 1.2rem;
+  min-height: 4.8rem;
+}
+
+/* Pairing */
+.ph-pair {
+  position: fixed;
+  inset: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2rem;
+  padding: calc(env(safe-area-inset-top) + 4rem) 2.4rem calc(env(safe-area-inset-bottom) + 2.4rem);
+}
+.ph-pair form {
+  width: 100%;
+  max-width: 44rem;
+  display: flex;
+  flex-direction: column;
+}
+.ph-pair h1 {
+  margin: 0 0 0.8rem;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 2.8rem;
+}
+.ph-pair .error {
+  color: var(--danger);
+  font-weight: 600;
+}
+.ph-pair .btn {
+  margin-top: 0.8rem;
+}
+.ph-code {
+  font-size: 2.4rem;
+  letter-spacing: 0.15em;
+  font-variant-numeric: tabular-nums;
+  text-transform: uppercase;
+}
+.ph .error {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+/* Shared overlays on a narrow screen */
+html[data-layout='phone'] .sheet,
+html[data-layout='phone'] .sheet-wide {
+  width: 100%;
+  min-width: 0;
+  border-radius: 0;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+html[data-layout='phone'] .sheet-head h2 {
+  font-size: 2.4rem;
+}
+html[data-layout='phone'] .sheet-body {
+  padding: 0.8rem 1.6rem 2.4rem;
+}
+html[data-layout='phone'] .sheet-foot {
+  padding: 1.2rem 1.6rem;
+}
+html[data-layout='phone'] .modal {
+  min-width: 0;
+  width: calc(100vw - 3.2rem);
+  max-width: 48rem;
+  max-height: 86dvh;
+  padding: 2.4rem 2rem;
+}
+html[data-layout='phone'] .modal h2 {
+  font-size: 2.4rem;
+}
+html[data-layout='phone'] .popover {
+  left: 0 !important;
+  right: 0;
+  top: auto !important;
+  bottom: 0;
+  width: auto !important;
+  max-height: 85dvh;
+  border-radius: 2.4rem 2.4rem 0 0;
+  padding-bottom: calc(2.4rem + env(safe-area-inset-bottom));
+}
+html[data-layout='phone'] .toasts {
+  left: 1.2rem;
+  right: 1.2rem;
+  bottom: calc(7.2rem + env(safe-area-inset-bottom));
+}
+html[data-layout='phone'] .toast {
+  justify-content: space-between;
+}

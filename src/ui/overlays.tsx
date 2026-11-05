@@ -6,6 +6,8 @@ import { ArrowLeft, X } from 'lucide-preact';
 import { checkPin, pinPausedUntil, pinRequest } from '../core/lock';
 import { pauseSecondsLeft } from '../core/pin';
 import { currentTime, nowMs } from '../lib/clock';
+import { isPhone } from '../app/layout';
+import { useBack } from './back';
 import { IconButton } from './controls';
 
 const portal = (node: ComponentChildren) => createPortal(node, document.body);
@@ -47,6 +49,8 @@ export function useOverlay(onClose: () => void): { scrim: (e: MouseEvent) => voi
   const openingTap = useOpeningTap();
   const close = useRef(onClose);
   close.current = onClose;
+  // On the phone, Back closes it.
+  useBack(onClose, isPhone);
   useEffect(() => {
     onScreen.add(close);
     return () => void onScreen.delete(close);
@@ -326,7 +330,7 @@ export function DialogHost() {
       )}
       {ch && (
         <Modal title={ch.title} onClose={() => pick(null)}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', minWidth: '36rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', minWidth: 'min(36rem, 100%)' }}>
             {ch.options.map((o) => (
               <button type="button" class="btn" onClick={() => pick(o.value)}>
                 {o.label}

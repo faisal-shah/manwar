@@ -17,8 +17,11 @@ import { activeTab, goTo, openSettings, settingsOpen, sleepMenuOpen } from './na
 import { calendarStatus, currentWeather, householdStatus } from './status';
 import { TABS, Overlays, RailBadges } from './tabs';
 import { SettingsSheet, SleepMenu } from '../features/settings';
+import { isPhone, switchLayout } from './layout';
+import { PhoneApp } from '../phone/PhoneApp';
 
 export function App() {
+  if (isPhone) return <PhoneApp />;
   const s = session.value;
   if (s.state === 'signedIn' && ready.value) return <Shell />;
   return <ConnectScreen />;
@@ -57,6 +60,9 @@ function ConnectScreen() {
               Connect Google account
             </Button>
           )}
+          <button type="button" class="connect-alt" onClick={() => switchLayout('phone')}>
+            A parent's phone? Pair it with the wall instead
+          </button>
         </>
       )}
     </div>

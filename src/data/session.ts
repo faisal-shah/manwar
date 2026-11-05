@@ -1,10 +1,11 @@
 import { signal } from '@preact/signals';
 import { onAuthStateChanged, signInWithCustomToken, signOut, type User } from 'firebase/auth';
+import { doc, onSnapshot, updateDoc, type Unsubscribe } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { demoMode, googleClientId, googleScopes } from '../config';
 import { errorMessage, isSignInRefused, needsReconnect } from './errors';
-import { auth, functions } from './firebase';
-import { closeHousehold, openHousehold } from './store';
+import { auth, db, functions } from './firebase';
+import { closeHousehold, householdId, openHousehold } from './store';
 
 /**
  * Who the tablet is signed in as. A household signs in once with Google's
@@ -20,7 +21,14 @@ import { closeHousehold, openHousehold } from './store';
  */
 export type SessionState = 'loading' | 'waiting' | 'signedOut' | 'connecting' | 'signedIn' | 'error';
 
-export const session = signal<{ state: SessionState; account?: string; error?: string }>({ state: 'loading' });
+/**
+ * `device`: the paired phone's id (Firestore `devices`), when this is one;
+ * a wall signs in with the Google account itself and has none.
+ */
+export const session = signal<{ state: SessionState; account?: string; device?: string; error?: string }>({ state: 'loading' });
+
+/** This page's device id when it is a paired phone (signed in), else null. */
+export const pairedDevice = () => (session.value.state === 'signedIn' ? (session.value.device ?? null) : null);
 
 /**
  * A Google problem only connecting again fixes (access revoked, the account
@@ -204,6 +212,104 @@ export async function disconnect(): Promise<void> {
 }
 
 /*
+ * Phones. A phone pairs with a code the wall shows (Settings > Phones):
+ * redeemPairing trades it for the phone's own sign-in, a custom token with
+ * the household and the phone's device id. The phone watches its devices/
+ * document and signs out when the wall removes it (the rules refuse it from
+ * that moment).
+ */
+
+/** Pair this page as a phone of the household whose wall showed `code`. Throws a message for people. */
+export async function pairPhone(code: string, name: string): Promise<void> {
+  try {
+    const res = await call<{ code: string; name: string }, { customToken: string }>('redeemPairing')({ code, name });
+    newConnection();
+    googleProblem.value = null;
+    await signInWithCustomToken(auth, res.data.customToken);
+  } catch (e) {
+    throw new Error(errorMessage(e));
+  }
+}
+
+/** A pairing code for this household (the wall, behind the PIN); valid once, until `expiresAt`. */
+export async function makePairingCode(): Promise<{ code: string; expiresAt: number }> {
+  try {
+    return (await call<void, { code: string; expiresAt: number }>('createPairing')()).data;
+  } catch (e) {
+    throw new Error(errorMessage(e));
+  }
+}
+
+/** Remove a paired phone (the wall): it is signed out and refused from now on. */
+export async function removePhone(deviceId: string): Promise<void> {
+  try {
+    await call<{ deviceId: string }, unknown>('removeDevice')({ deviceId });
+  } catch (e) {
+    throw new Error(errorMessage(e));
+  }
+}
+
+const PHONE_REMOVED = 'This phone was removed from the household. Pair it again from the wall.';
+
+/** Unpair this phone (More > This phone): the Function removes it, then it signs out. */
+export async function unpairPhone(): Promise<void> {
+  const device = pairedDevice();
+  const hid = householdId.peek();
+  if (!device || !hid) throw new Error('unpairPhone: not a paired phone');
+  // Its own removal is no news to report: stop watching for it first.
+  stopDeviceWatch?.();
+  stopDeviceWatch = null;
+  try {
+    await removePhone(device);
+  } catch (e) {
+    watchDevice(hid, device);
+    throw e;
+  }
+  await disconnect();
+}
+
+/** A paired phone's Auth user (`deviceUid` in functions/src/pairing.ts). */
+const isPhoneUser = (uid: string) => uid.includes('.phone.');
+
+let stopDeviceWatch: Unsubscribe | null = null;
+const LAST_SEEN_EVERY_MS = 60 * 60_000;
+
+/**
+ * Follow this phone's devices/ document: when the wall removes it (the
+ * server says it is gone, or the rules refuse it), sign out. Also stamps
+ * when the phone was last used, at most hourly.
+ */
+function watchDevice(hid: string, device: string): void {
+  stopDeviceWatch?.();
+  let stamped = false;
+  const ref = doc(db, 'households', hid, 'devices', device);
+  stopDeviceWatch = onSnapshot(
+    ref,
+    (snap) => {
+      if (!snap.exists()) {
+        if (!snap.metadata.fromCache) void removed();
+        return;
+      }
+      const seen = Number(snap.get('lastSeenAt')) || 0;
+      if (!stamped && Date.now() - seen > LAST_SEEN_EVERY_MS) {
+        stamped = true;
+        void updateDoc(ref, { lastSeenAt: Date.now() }).catch(() => {});
+      }
+    },
+    (e) => {
+      if (e.code === 'permission-denied') void removed();
+    },
+  );
+}
+
+async function removed(): Promise<void> {
+  stopDeviceWatch?.();
+  stopDeviceWatch = null;
+  await disconnect();
+  fail(PHONE_REMOVED);
+}
+
+/*
  * The household id rides in the ID token's claims. Reading them refreshes an
  * expired token, which fails offline: a tablet that boots before the Wi-Fi is
  * up would never open its household. So the last household opened is
@@ -216,6 +322,8 @@ interface Household {
   uid: string;
   hid: string;
   account?: string;
+  /** A paired phone's device id. */
+  device?: string;
 }
 
 function rememberHousehold(h: Household): void {
@@ -248,7 +356,12 @@ async function householdOf(user: User): Promise<Household | null> {
   try {
     const { claims } = await user.getIdTokenResult();
     if (typeof claims.hid !== 'string') return null;
-    const h = { uid: user.uid, hid: claims.hid, account: typeof claims.account === 'string' ? claims.account : undefined };
+    const h: Household = {
+      uid: user.uid,
+      hid: claims.hid,
+      account: typeof claims.account === 'string' ? claims.account : undefined,
+      device: typeof claims.device === 'string' ? claims.device : undefined,
+    };
     rememberHousehold(h);
     return h;
   } catch (e) {
@@ -272,6 +385,9 @@ function whenOnline(fn: () => void): void {
   window.addEventListener('online', run);
   setTimeout(run, RETRY_MS);
 }
+
+/** A pairing code in the URL (`?pair=`, from the wall's QR code). */
+export const pairParam = typeof location === 'undefined' ? null : new URLSearchParams(location.search).get('pair');
 
 /** `?demo=name` gives each demo (or test run) its own household in the emulator. */
 const demoHousehold = `demo${new URLSearchParams(location.search).get('demo') ? `-${new URLSearchParams(location.search).get('demo')}` : ''}`;
@@ -299,10 +415,13 @@ export function initSession(): void {
 
   async function signedInAs(user: User | null, n: number): Promise<void> {
     if (!user) {
+      stopDeviceWatch?.();
+      stopDeviceWatch = null;
       closeHousehold();
       if (session.value.state === 'connecting' || session.value.state === 'error') return;
       session.value = { state: 'signedOut' };
-      if (demoMode) await signInWithCustomToken(auth, demoToken());
+      // A demo page with `pair` in its address (a code, or empty) pairs like a real phone instead of signing in as the demo wall.
+      if (demoMode && pairParam === null) await signInWithCustomToken(auth, demoToken());
       return;
     }
     let h: Household | null;
@@ -317,8 +436,8 @@ export function initSession(): void {
         });
         return;
       }
-      // The sign-in itself was refused (revoked, disabled): connect again.
-      fail('The sign-in expired. Connect the Google account again.');
+      // The sign-in itself was refused (revoked, disabled, a phone removed): connect or pair again.
+      fail(isPhoneUser(user.uid) ? PHONE_REMOVED : 'The sign-in expired. Connect the Google account again.');
       await signOut(auth);
       return;
     }
@@ -328,6 +447,7 @@ export function initSession(): void {
       return;
     }
     openHousehold(h.hid);
-    session.value = { state: 'signedIn', account: h.account };
+    if (h.device) watchDevice(h.hid, h.device);
+    session.value = { state: 'signedIn', account: h.account, device: h.device };
   }
 }

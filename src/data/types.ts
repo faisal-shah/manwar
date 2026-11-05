@@ -198,6 +198,40 @@ export interface Recipe {
   createdAt: number;
 }
 
+/** A paired phone (`devices`): added and removed by the Functions (see firestore.rules). */
+export interface Device {
+  id: string;
+  name: string;
+  kind: 'phone';
+  createdAt: number;
+  /** When the phone last opened the household; it stamps this itself, at most hourly. */
+  lastSeenAt?: number;
+}
+
+/** The wall's one timer (`timers/wall`), shared so a phone can start, watch or stop it. */
+export interface WallTimer {
+  id: 'wall';
+  minutes: number;
+  /** End of the "3, 2, 1" lead-in; the timer runs from here. */
+  startAt: number;
+  endAt: number;
+  /** The phone that started it, when one did (Device id). */
+  startedBy?: string;
+  /** Stopped or dismissed at this instant (the document stays, so the wall knows when sleep may resume). */
+  stoppedAt?: number;
+}
+
+/** A request for the wall's screen from a phone (`commands/display`): sleep now, or wake up. */
+export interface DisplayCommand {
+  id: 'display';
+  kind: 'sleep' | 'wake';
+  /** New for every command: a wall applies each one once, whatever the clocks say. */
+  nonce: string;
+  /** When it was sent (the phone's clock); a wall ignores one older than a few minutes. */
+  at: number;
+  by?: string;
+}
+
 export interface Message {
   id: string;
   text: string;
