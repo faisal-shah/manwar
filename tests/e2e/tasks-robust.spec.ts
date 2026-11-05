@@ -90,7 +90,8 @@ test('a double tap on a check circle checks it once', async ({ page }) => {
   await expect(card(page, 'asiyah', 'Breakfast')).toHaveClass(/done/);
   await expect(stars(page, 'asiyah')).toHaveText('130');
 
-  // Two clicks before the store has the first: one award.
+  // A double click with no gap: still one award (the circle drops the rest of a double tap; the store's
+  // own guard against a second write in flight is covered in tests/unit/tasks-guard.test.ts).
   await card(page, 'asiyah', 'Get Ready').locator('.tk-check').dblclick();
   await expect(card(page, 'asiyah', 'Get Ready')).toHaveClass(/done/);
   await page.waitForTimeout(600);
