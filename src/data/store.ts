@@ -270,19 +270,22 @@ export function closeHousehold(): void {
 }
 
 /**
- * Call `done` once the store shows every write made so far: each listener
- * has seen it (snapshots in sync) and none is down. A listener that failed
- * sees no writes until it is opened again, and Firestore's in-sync event
- * does not wait for it; a write guard released then would let the next
- * tap decide from data that never showed the first.
+ * Call `done` once the store shows every write made so far to `names`: each
+ * listener has seen it (snapshots in sync) and none of `names` is down. A
+ * listener that failed sees no writes until it is opened again, and
+ * Firestore's in-sync event does not wait for it; a write guard released
+ * then would let the next tap decide from data that never showed the first.
+ * Other listeners being down does not hold it: they show nothing the write
+ * guard decides from.
  */
-export function whenShown(done: () => void): void {
+export function whenShown(names: readonly CollectionName[], done: () => void): void {
+  const down = (f: ReadonlyMap<string, string>) => names.some((n) => f.has(n));
   const stop = onSnapshotsInSync(db, () => {
     stop();
-    if (!failed.peek().size) return done();
+    if (!down(failed.peek())) return done();
     let finished = false;
     const off = failed.subscribe((f) => {
-      if (f.size || finished) return;
+      if (down(f) || finished) return;
       finished = true;
       off();
       done();

@@ -10,6 +10,18 @@ export const STALE_WEATHER_MS = 3 * 60 * 60_000;
 export const currentWeather = <W extends { fetchedAt: number }>(w: W | null, now: number): W | null =>
   w && now - w.fetchedAt < STALE_WEATHER_MS ? w : null;
 
+/**
+ * What the top bar says while a household listener is down and waits to
+ * listen again (`loadError`), or null. The wall shows that data as it last
+ * came in, and holds a check-off, redemption or undo until the listeners
+ * it is shown by are back, so a second tap on it does nothing meanwhile.
+ */
+export function householdStatus(loadError: string | null): { text: string; detail: string } | null {
+  return loadError
+    ? { text: 'Not syncing', detail: `The household's data is not coming in (${loadError}). Trying again shortly.` }
+    : null;
+}
+
 export interface CalendarStatus {
   text: string;
   /** Only connecting Google again fixes it. */

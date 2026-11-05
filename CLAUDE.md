@@ -70,7 +70,8 @@ flowchart LR
   not await them. `settings/main` is one document merged over
   `DEFAULT_SETTINGS` (`data/settings.ts`). Firestore ends a listener for
   good on an error, so `listen()` in the store reports it (`loadError`,
-  shown on the loading screen) and subscribes again after 30 seconds.
+  shown on the loading screen, and as Not syncing in the top bar once the
+  wall is up) and subscribes again after 30 seconds.
 - **Several tablets, one household**: `put` (a whole document) is for new
   documents only. A change to an existing one writes only the fields it
   changes (`patch`, `saveEdited` for editors, `upsert` to create or merge,
@@ -159,9 +160,10 @@ flowchart LR
   entry and marks the original `undoneAt`. Every write there reads the
   current state from the store (never the caller's copy) and holds its keys
   through `exclusive()` until the store shows the write (`whenShown` in the
-  store: snapshots in sync and no listener down waiting to resubscribe,
-  since a dead listener never shows it and Firestore's in-sync event does
-  not wait for it), as the local snapshot lags the write by milliseconds
+  store: snapshots in sync and none of the star collections' listeners
+  down waiting to resubscribe, since a dead listener never shows it and
+  Firestore's in-sync event does not wait for it; a listener of other data
+  being down holds nothing), as the local snapshot lags the write by milliseconds
   and a second tap in between would award or charge twice; writes return
   null when they did nothing.
   Check-offs on another day are stamped on that day (`madeAt`), and are

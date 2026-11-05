@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { STALE_SYNC_MS, STALE_WEATHER_MS, calendarStatus, currentWeather } from '../../src/app/status';
+import { STALE_SYNC_MS, STALE_WEATHER_MS, calendarStatus, currentWeather, householdStatus } from '../../src/app/status';
 import { NETWORK_MESSAGE, errorMessage, isNetworkError, needsReconnect } from '../../src/data/errors';
 
 /** The shapes the Firebase SDKs throw (FirebaseError: code + message). */
@@ -43,6 +43,16 @@ describe('error messages', () => {
     expect(needsReconnect(fnError('unavailable', 'Could not reach Google. [503]'))).toBe(false);
     expect(needsReconnect(fnError('internal', 'internal [0]'))).toBe(false);
     expect(needsReconnect(new Error('x'))).toBe(false);
+  });
+});
+
+describe('household status in the top bar', () => {
+  it('says the wall is not syncing while a listener is down, and why', () => {
+    expect(householdStatus(null)).toBeNull();
+    expect(householdStatus('Quota exceeded.')).toEqual({
+      text: 'Not syncing',
+      detail: "The household's data is not coming in (Quota exceeded.). Trying again shortly.",
+    });
   });
 });
 

@@ -36,7 +36,7 @@ vi.mock('../../src/data/store', async () => {
     return api;
   };
   let id = 0;
-  const whenShown = (done: () => void) => void sync.waiting.push(done);
+  const whenShown = (_names: string[], done: () => void) => void sync.waiting.push(done);
   return { data, profiles, profileById, batch, whenShown, newId: () => `id${++id}` };
 });
 

@@ -14,7 +14,7 @@ import { DOUBLE_TAP_MS, DialogHost, ToastHost, useScrimClose } from '../ui/overl
 import { WeatherIcon } from '../ui/WeatherIcon';
 import { LogoMark, Wordmark } from '../ui/Logo';
 import { activeTab, goTo, openSettings, settingsOpen, sleepMenuOpen } from './nav';
-import { calendarStatus, currentWeather } from './status';
+import { calendarStatus, currentWeather, householdStatus } from './status';
 import { TABS, Overlays, RailBadges } from './tabs';
 import { SettingsSheet, SleepMenu } from '../features/settings';
 
@@ -153,9 +153,22 @@ function TopBar({ title, Controls }: { title: string | null; Controls?: Function
           {toUnit(w.tempC, settings.value.tempUnit)}°
         </span>
       )}
+      <HouseholdStatus />
       <SyncStatus now={real} />
       <div class="controls">{Controls && <Controls />}</div>
     </header>
+  );
+}
+
+/** A household listener that is down says so on the wall (the loading screen says it before the first load). */
+function HouseholdStatus() {
+  const st = householdStatus(loadError.value);
+  if (!st) return null;
+  return (
+    <span class="sync-status" role="status" title={st.detail}>
+      <CloudOff size="2rem" strokeWidth={2.2} />
+      <span>{st.text}</span>
+    </span>
   );
 }
 

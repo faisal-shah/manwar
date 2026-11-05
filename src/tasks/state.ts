@@ -40,17 +40,22 @@ export const todayProgress = computed(() => {
  * raises the snapshot a few milliseconds later (more with IndexedDB), so a
  * second tap in that gap would otherwise see the old state and award,
  * refund or charge the stars twice. The keys are freed once the store
- * shows the write (whenShown: every listener has it, and none is down
- * waiting to resubscribe). Each write returns null when it did nothing.
+ * shows the write (whenShown: every listener has it, and none of the
+ * collections below is down waiting to resubscribe; while one is, the top
+ * bar says the wall is not syncing). Each write returns null when it did
+ * nothing.
  */
 const busy = new Set<string>();
+
+/** What these writes change and decide from. */
+const STAR_DATA = ['taskStates', 'ledger', 'profiles', 'tasks', 'rewards'] as const;
 
 function exclusive(keys: (string | undefined)[], write: () => Promise<void>): Promise<void> | null {
   const held = keys.filter((k): k is string => !!k);
   if (held.some((k) => busy.has(k))) return null;
   held.forEach((k) => busy.add(k));
   const done = write();
-  whenShown(() => held.forEach((k) => busy.delete(k)));
+  whenShown(STAR_DATA, () => held.forEach((k) => busy.delete(k)));
   return done;
 }
 

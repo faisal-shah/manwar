@@ -102,11 +102,11 @@ describe('store listeners', () => {
     expect(live()).toHaveLength(0);
   });
 
-  it('says a write is shown only once no listener is down', () => {
+  it('says a write is shown only once none of its listeners is down', () => {
     openHousehold('h1');
     live().forEach(deliver);
     const shown = vi.fn();
-    whenShown(shown);
+    whenShown(['taskStates', 'ledger'], shown);
     inSync.splice(0).forEach((cb) => cb());
     expect(shown).toHaveBeenCalledOnce();
 
@@ -115,7 +115,7 @@ describe('store listeners', () => {
     const states = live().find((s) => s.path.endsWith('/taskStates'))!;
     states.error(Object.assign(new Error('Quota exceeded.'), { code: 'resource-exhausted' }));
     const later = vi.fn();
-    whenShown(later);
+    whenShown(['taskStates', 'ledger'], later);
     inSync.splice(0).forEach((cb) => cb());
     expect(later).not.toHaveBeenCalled();
     vi.advanceTimersByTime(30_000);
@@ -125,6 +125,20 @@ describe('store listeners', () => {
     expect(later).toHaveBeenCalledOnce();
     deliver(live().find((s) => s.path.endsWith('/taskStates'))!);
     expect(later).toHaveBeenCalledOnce();
+  });
+
+  it('does not hold a write on a listener that shows none of it', () => {
+    openHousehold('h1');
+    live().forEach(deliver);
+    // The messages listener is down: a check-off is still shown by the task states and ledger.
+    live()
+      .find((s) => s.path.endsWith('/messages'))!
+      .error(Object.assign(new Error('Missing or insufficient permissions.'), { code: 'permission-denied' }));
+    expect(loadError.value).toBe('Missing or insufficient permissions.');
+    const shown = vi.fn();
+    whenShown(['taskStates', 'ledger'], shown);
+    inSync.splice(0).forEach((cb) => cb());
+    expect(shown).toHaveBeenCalledOnce();
   });
 
   it('moves the task states window at the day change without showing less in between', () => {
