@@ -185,3 +185,8 @@
   font-family: var(--font-display);
   font-size: 6rem;
 }
+/* Just woken: fades out while it takes the rest of the waking double tap. */
+.sleep-screen.waking {
+  opacity: 0;
+  transition: opacity 0.3s;
+}

@@ -163,8 +163,10 @@ generated from it: `node scripts/icons/render.mjs` after any brand change.
 - Firestore field paths cannot contain `*`; `lastDoneKey()` maps Up for Grabs to `any`.
 - Overlays (`Sheet`, `Modal`, `Popover`) portal to `document.body`. Their
   scrims close through `useScrimClose`, which lets the second tap of the
-  double tap that opened them through; use it for any custom scrim. In
-  e2e tests, close by tapping away from the control that opened it.
+  double tap that opened them through; use it for any custom scrim. The
+  sleep screen does the same, and after a waking tap it stays a moment
+  (fading) to take the rest of that double tap. In e2e tests, close by
+  tapping away from the control that opened it.
 - The Google connection uses the Google Identity Services popup code flow
   (`redirect_uri` 'postmessage'), so only the page origin must be registered.
   Google returns a refresh token on the first consent only; `connectGoogle`

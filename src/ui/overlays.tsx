@@ -15,7 +15,7 @@ const portal = (node: ComponentChildren) => createPortal(node, document.body);
  * and would close it again at once; so a scrim ignores a tap that comes
  * soon after it opened and close to the tap that opened it.
  */
-const DOUBLE_TAP_MS = 450;
+export const DOUBLE_TAP_MS = 450;
 const DOUBLE_TAP_REM = 6;
 let lastDown = { x: -1e9, y: -1e9 };
 if (typeof window !== 'undefined')

@@ -224,6 +224,36 @@ test('Sleep now survives a reload of the page', async ({ page }) => {
   await expect(page.locator('.sleep-screen')).toHaveCount(0);
 });
 
+/** Two taps on one spot, as a finger does it (about 150 ms apart). */
+async function doubleTapAt(page: Page, x: number, y: number) {
+  await page.mouse.click(x, y);
+  await page.waitForTimeout(150);
+  await page.mouse.click(x, y);
+}
+
+test('a double tap on Sleep now sleeps, and a double tap that wakes the wall acts on nothing under it', async ({ page }) => {
+  await open(page);
+  await rail(page, 'Home').click();
+  const circle = page.locator('[data-column="asiyah"] .tk-card').first();
+  await expect(circle).toBeVisible({ timeout: 15_000 });
+  await rail(page, 'Sleep').click();
+  const sleepNowBox = (await page.getByRole('button', { name: 'Enter sleep mode now' }).boundingBox())!;
+  await doubleTapAt(page, sleepNowBox.x + sleepNowBox.width / 2, sleepNowBox.y + sleepNowBox.height / 2);
+  const sleepScreen = page.locator('.sleep-screen');
+  await page.waitForTimeout(300);
+  await expect(sleepScreen).toBeVisible();
+
+  // Wake it with a double tap right over a task's check circle.
+  const check = (await circle.locator('.tk-check').boundingBox())!;
+  await doubleTapAt(page, check.x + check.width / 2, check.y + check.height / 2);
+  await expect(sleepScreen).toHaveCount(0);
+  await page.waitForTimeout(300);
+  await expect(circle).not.toHaveClass(/done/);
+  // Once awake, a tap works as usual.
+  await circle.locator('.tk-check').click();
+  await expect(circle).toHaveClass(/done/);
+});
+
 test('a reload inside the sleep window (an update at night) keeps the backlight off', async ({ page }) => {
   // Fully Kiosk's brightness call, recorded.
   await page.addInitScript(() => {
