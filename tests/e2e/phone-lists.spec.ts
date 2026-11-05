@@ -12,6 +12,11 @@ test.describe.configure({ timeout: 90_000 });
 const RUN = Date.now().toString(36);
 const name = (n: string) => `phlists-${RUN}-${n}`;
 
+// Every wall and phone a test opened is its own browser context: close them, or a worker holds them all.
+test.afterEach(async ({ browser }) => {
+  await Promise.all(browser.contexts().map((c) => c.close()));
+});
+
 type Plain = string | number | boolean | Plain[] | { [k: string]: Plain };
 const enc = (v: Plain): object =>
   typeof v === 'string'

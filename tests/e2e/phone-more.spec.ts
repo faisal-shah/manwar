@@ -12,6 +12,11 @@ test.describe.configure({ timeout: 90_000 });
 const RUN = Date.now().toString(36);
 const name = (n: string) => `phmore-${RUN}-${n}`;
 
+// Every wall and phone a test opened is its own browser context: close them, or a worker holds them all.
+test.afterEach(async ({ browser }) => {
+  await Promise.all(browser.contexts().map((c) => c.close()));
+});
+
 async function more(p: Page, row: string) {
   await p.locator('.ph-nav').getByRole('button', { name: 'More' }).click();
   if (await p.locator('.ph-back').count()) await p.locator('.ph-back').click();
