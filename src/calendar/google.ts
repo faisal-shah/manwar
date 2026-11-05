@@ -1,4 +1,4 @@
-import { googleAccessToken } from '../data/session';
+import { dropGoogleToken, googleAccessToken } from '../data/session';
 import { addDays, diffDays, fromISODate, toISODate } from '../lib/date';
 import { endSeriesBefore, recurrenceCount, toRRule, withCount } from './rrule';
 import { eventKey, type AccessRole, type CalEvent, type CalendarInfo, type CalendarSource, type EventDraft } from './types';
@@ -18,15 +18,22 @@ class GoogleError extends Error {
 async function call<T>(path: string, init: RequestInit & { query?: Record<string, string> } = {}): Promise<T> {
   const url = new URL(API + path);
   for (const [k, v] of Object.entries(init.query ?? {})) url.searchParams.set(k, v);
-  const token = await googleAccessToken();
-  const res = await fetch(url, {
-    ...init,
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...init.headers },
-  });
-  if (res.status === 204) return undefined as T;
-  const body = await res.json().catch(() => null);
-  if (!res.ok) throw new GoogleError(res.status, `Google Calendar ${res.status}: ${body?.error?.message ?? res.statusText}`);
-  return body as T;
+  for (let attempt = 0; ; attempt++) {
+    const token = await googleAccessToken();
+    const res = await fetch(url, {
+      ...init,
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...init.headers },
+    });
+    // A token Google no longer takes (expired early by the tablet's clock, or revoked): ask for a new one, once.
+    if (res.status === 401 && attempt === 0) {
+      dropGoogleToken(token);
+      continue;
+    }
+    if (res.status === 204) return undefined as T;
+    const body = await res.json().catch(() => null);
+    if (!res.ok) throw new GoogleError(res.status, `Google Calendar ${res.status}: ${body?.error?.message ?? res.statusText}`);
+    return body as T;
+  }
 }
 
 /** DELETE that treats an event already gone (deleted on a phone meanwhile) as done. */

@@ -1,7 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { newEventId, type CalEvent, type EventDraft } from '../../src/calendar/types';
 
-vi.mock('../../src/data/session', () => ({ googleAccessToken: async () => 'token' }));
+/** The session's token cache: dropping the current token makes the next one new. */
+const tokens = vi.hoisted(() => ({ n: 0, dropped: [] as string[] }));
+vi.mock('../../src/data/session', () => ({
+  googleAccessToken: async () => `token${tokens.n}`,
+  dropGoogleToken: (t: string) => {
+    tokens.dropped.push(t);
+    if (t === `token${tokens.n}`) tokens.n++;
+  },
+}));
 
 const { googleSource } = await import('../../src/calendar/google');
 
@@ -16,6 +24,7 @@ interface Call {
   path: string;
   query: Record<string, string>;
   body: any;
+  token: string;
 }
 
 let calls: Call[] = [];
@@ -31,6 +40,7 @@ beforeEach(() => {
       path: decodeURIComponent(url.pathname.replace('/calendar/v3', '')),
       query: Object.fromEntries(url.searchParams),
       body: init.body ? JSON.parse(String(init.body)) : undefined,
+      token: String((init.headers as Record<string, string>).Authorization).replace('Bearer ', ''),
     };
     calls.push(c);
     for (const r of routes) {
@@ -264,6 +274,7 @@ describe('google calendar: reading events', () => {
     ]);
   });
 
+
   describe('next occurrence (countdowns past the window)', () => {
     const after = new Date('2026-11-04T00:00');
     it('returns a one-off event until it has ended', async () => {
@@ -438,6 +449,27 @@ describe('google calendar: writing events', () => {
         `DELETE /calendars/${CAL}/events/swim2`,
       ]);
     });
+
+
+
+  });
+
+
+  it('asks for a new token once when Google refuses the current one', async () => {
+    tokens.dropped = [];
+    const start = tokens.n;
+    routes.push((c) =>
+      c.token === `token${start}` ? { status: 401, body: { error: { code: 401, message: 'Invalid Credentials' } } } : undefined,
+    );
+    routes.push((c) => (c.path === `/calendars/${CAL}/events` ? { body: eventsPage([]) } : undefined));
+    await googleSource.listEvents(CAL, new Date('2026-11-01T00:00'), new Date('2026-12-01T00:00'));
+    expect(tokens.dropped).toEqual([`token${start}`]);
+    expect(calls.map((c) => c.token)).toEqual([`token${start}`, `token${start + 1}`]);
+    // A refusal of the new token too is an error, not a loop.
+    routes.unshift(() => ({ status: 401, body: { error: { code: 401, message: 'Invalid Credentials' } } }));
+    await expect(googleSource.listEvents(CAL, new Date('2026-11-01T00:00'), new Date('2026-12-01T00:00'))).rejects.toThrow(
+      'Google Calendar 401',
+    );
   });
 
   it('adds an event under the id the app chose, and a retry updates it instead of adding it twice', async () => {
