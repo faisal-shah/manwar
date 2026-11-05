@@ -10,6 +10,8 @@ initializeApp();
 const db = getFirestore();
 
 const CLIENT_ID = defineString('GOOGLE_OAUTH_CLIENT_ID');
+/** Full email: firebase-tools does not expand the `name@` short form when granting secret access. */
+const RUNTIME_SERVICE_ACCOUNT = defineString('FUNCTIONS_SERVICE_ACCOUNT');
 const CLIENT_SECRET = defineSecret('GOOGLE_OAUTH_CLIENT_SECRET');
 /**
  * Google accounts allowed to use this deployment (emails, comma separated),
@@ -22,8 +24,7 @@ const NOT_ALLOWED = 'This Google account is not on the allowlist for this Manwar
 
 const opts: CallableOptions = {
   region: 'us-central1',
-  // Short form: firebase-tools appends the project (<name>@<project>.iam.gserviceaccount.com).
-  serviceAccount: 'manwar-functions@',
+  serviceAccount: RUNTIME_SERVICE_ACCOUNT,
   secrets: [CLIENT_SECRET, ALLOWED_ACCOUNTS],
   cors: true,
   maxInstances: 3,

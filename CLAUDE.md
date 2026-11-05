@@ -16,7 +16,7 @@ the default project in `.firebaserc`.
 |---|---|
 | Firebase project | `.firebaserc` (default) |
 | Web config (API key, app id, auth domain) and the OAuth client id | `src/config.ts`; hosts derive from it (`canonicalHost` = authDomain, `<project>.web.app` forwards there) |
-| Functions params | `functions/.env` (`GOOGLE_OAUTH_CLIENT_ID`, must equal `googleClientId`; `tests/unit/config.test.ts` checks) |
+| Functions params | `functions/.env`: `GOOGLE_OAUTH_CLIENT_ID` (must equal `googleClientId`; `tests/unit/config.test.ts` checks) and `FUNCTIONS_SERVICE_ACCOUNT` (the runtime account's full email) |
 | Secrets | Secret Manager: `GOOGLE_OAUTH_CLIENT_SECRET`, `ALLOWED_ACCOUNTS` |
 | Deploy identity | GitHub repository variables `GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_DEPLOY_SERVICE_ACCOUNT` |
 
@@ -26,8 +26,9 @@ the default project in `.firebaserc`.
   via Workload Identity Federation (pool `github`, provider `github`,
   restricted to this repository) as the `github-deployer` service account.
   Repo admin (variables, alerts) needs a `gh` login with admin on the repo.
-- Functions run as the `manwar-functions` service account (written
-  `manwar-functions@`; firebase-tools appends the project).
+- Functions run as the `manwar-functions` service account. Give its full
+  email: firebase-tools does not expand the `name@` short form when it
+  grants the account access to secrets.
 - The OAuth client is the one Firebase auto-created for Google sign-in
   ("Web client (auto created by Google Service)"). Its client id and secret
   are readable from `identitytoolkit.googleapis.com/admin/v2/projects/<project>/defaultSupportedIdpConfigs/google.com`.
