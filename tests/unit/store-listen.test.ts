@@ -42,7 +42,7 @@ const { closeHousehold, loadError, openHousehold, ready, settings } = await impo
 
 const live = () => subs.filter((s) => !s.closed);
 const empty = { docs: [], metadata: { fromCache: false } };
-const settingsDoc = { exists: () => true, data: () => ({ idleHomeMinutes: 5 }) };
+const settingsDoc = { exists: () => true, data: () => ({ idleHomeMinutes: 5 }), metadata: { fromCache: false } };
 const deliver = (sub: Sub) => sub.next(sub.path.endsWith('settings/main') ? settingsDoc : empty);
 
 describe('store listeners', () => {

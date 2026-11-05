@@ -2,8 +2,8 @@ import { demoMode } from '../config';
 import { metaKey } from '../calendar/engine';
 import { currentTime } from '../lib/clock';
 import { addDays, toISODate } from '../lib/date';
-import { getDocsFromServer, limit, query } from 'firebase/firestore';
-import { batch, colRef, confirmedByServer, data, householdId, newId, saveSettings } from './store';
+import { getDocFromServer, getDocsFromServer, limit, query } from 'firebase/firestore';
+import { batch, colRef, confirmedByServer, data, householdId, newId, saveSettings, settings, settingsRef } from './store';
 import {
   EVERYONE,
   type List,
@@ -20,26 +20,31 @@ import {
 const demoFamily = demoMode && new URLSearchParams(location.search).get('seed') !== 'none';
 
 /**
- * First-run data. A real household gets only the default Grocery List; the
- * demo household gets a family that looks like the one in
- * research/00-user-device.md, so every screen has something to show.
+ * First-run data, written once in a household's life. A real household gets
+ * only the default Grocery List; the demo household gets a family that looks
+ * like the one in research/00-user-device.md, so every screen has something
+ * to show. The seed sets `settings.seededAt`, so a household whose people
+ * and lists were all deleted later is not seeded again.
  */
 export async function seedIfEmpty(): Promise<void> {
   const hid = householdId.value;
   for (;;) {
-    if (householdId.value !== hid || data.profiles.value.length || data.lists.value.length) return;
-    const empty = await emptyOnServer();
-    if (empty === false) return;
-    if (empty === true) break;
+    if (householdId.value !== hid || settings.value.seededAt) return;
+    if (data.profiles.value.length || data.lists.value.length) {
+      // Set up already (people or lists): mark it, so emptying it later does not seed it.
+      void saveSettings({ seededAt: currentTime() });
+      return;
+    }
+    const state = await stateOnServer();
+    if (state === 'seeded') return;
+    if (state === 'empty') break;
     // The server could not be asked (offline, or Firestore not connected yet): ask again shortly.
     await new Promise((resolve) => setTimeout(resolve, RETRY_MS));
   }
   if (householdId.value !== hid) return;
   if (demoFamily) return seedDemo();
   // A fixed id: two tablets on their first run write the same list, not two.
-  const b = batch();
-  b.put('lists', grocery('grocery', []));
-  await b.commit();
+  await batch().put('lists', grocery('grocery', [])).settings({ seededAt: currentTime() }).commit();
 }
 
 const RETRY_MS = 20_000;
@@ -50,12 +55,12 @@ const RETRY_MS = 20_000;
  * the empty snapshots already came from it; otherwise ask. Null when it
  * cannot be reached.
  */
-async function emptyOnServer(): Promise<boolean | null> {
-  if (confirmedByServer('profiles') && confirmedByServer('lists')) return true;
+async function stateOnServer(): Promise<'seeded' | 'empty' | null> {
+  if (confirmedByServer('profiles') && confirmedByServer('lists') && confirmedByServer('settings')) return 'empty';
   try {
     const one = (name: 'profiles' | 'lists') => getDocsFromServer(query(colRef(name), limit(1)));
-    const [p, l] = await Promise.all([one('profiles'), one('lists')]);
-    return p.empty && l.empty;
+    const [s, p, l] = await Promise.all([getDocFromServer(settingsRef()), one('profiles'), one('lists')]);
+    return s.get('seededAt') || !p.empty || !l.empty ? 'seeded' : 'empty';
   } catch {
     return null;
   }
@@ -338,6 +343,6 @@ async function seedDemo(): Promise<void> {
   assign(fam, 'trip', [EVERYONE], true);
   for (const id of ['holiday-1', 'holiday-2', 'holiday-3']) assign('holidays@demo', id, [EVERYONE]);
 
+  b.settings({ seededAt: now, weather: { lat: 30.2672, lon: -97.7431, name: 'Austin, Texas' } });
   await b.commit();
-  await saveSettings({ weather: { lat: 30.2672, lon: -97.7431, name: 'Austin, Texas' } });
 }

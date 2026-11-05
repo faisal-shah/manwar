@@ -287,4 +287,6 @@ export interface Settings {
   /** Show every part of the day, not just the current one. */
   tasksShowAllParts: boolean;
   sounds: boolean;
+  /** When the household got its first-run data. A household is seeded once, ever: only while this is unset. */
+  seededAt?: number;
 }
