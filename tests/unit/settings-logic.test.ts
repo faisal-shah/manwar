@@ -12,7 +12,7 @@ import {
   planProfileDelete,
   setTabShown,
 } from '../../src/features/settings/logic';
-import { PIN_TRIES, pinPause } from '../../src/core/pin';
+import { PIN_TRIES, pauseSecondsLeft, pinPause } from '../../src/core/pin';
 
 describe('tab visibility', () => {
   it('hides and shows ordinary tabs', () => {
@@ -146,6 +146,14 @@ describe('PIN', () => {
     expect(pinPause(2 * PIN_TRIES)).toBe(60_000);
     expect(pinPause(3 * PIN_TRIES)).toBe(120_000);
     expect(pinPause(10 * PIN_TRIES)).toBe(5 * 60_000);
+  });
+  it('counts a pause down in whole seconds, from 30 for a 30-second pause', () => {
+    const start = 1_000_000;
+    expect(pauseSecondsLeft(start + 30_000, start)).toBe(30);
+    expect(pauseSecondsLeft(start + 30_000, start + 1)).toBe(30);
+    expect(pauseSecondsLeft(start + 30_000, start + 29_001)).toBe(1);
+    expect(pauseSecondsLeft(start + 30_000, start + 30_000)).toBe(0);
+    expect(pauseSecondsLeft(start + 30_000, start + 31_000)).toBe(0);
   });
 });
 

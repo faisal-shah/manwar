@@ -28,9 +28,36 @@ function extend() {
   unlockedUntil.value = currentTime() + settings.value.lock.relockMinutes * 60_000;
 }
 
-let wrongPins = 0;
+/*
+ * Wrong PINs in a row and the pause they earned, kept in this tablet's
+ * storage: a kid who reloads the page (or waits for the nightly reload)
+ * gets neither a fresh pad nor a reset count.
+ */
+const PAUSE_KEY = 'manwar.pinPause.v1';
+type PauseState = { wrong: number; until: number };
+
+function loadPause(): PauseState {
+  try {
+    const v = JSON.parse(localStorage.getItem(PAUSE_KEY) ?? 'null') as Partial<PauseState> | null;
+    return { wrong: Number(v?.wrong) || 0, until: Number(v?.until) || 0 };
+  } catch {
+    return { wrong: 0, until: 0 };
+  }
+}
+
+function storePause(p: PauseState): void {
+  try {
+    if (p.wrong) localStorage.setItem(PAUSE_KEY, JSON.stringify(p));
+    else localStorage.removeItem(PAUSE_KEY);
+  } catch {
+    // No storage (private mode): the pause lasts until a reload.
+  }
+}
+
+const stored = typeof window === 'undefined' ? { wrong: 0, until: 0 } : loadPause();
+let wrongPins = stored.wrong;
 /** The PIN pad refuses entries until this instant (after repeated wrong PINs). */
-export const pinPausedUntil = signal(0);
+export const pinPausedUntil = signal(stored.until);
 
 export async function checkPin(pin: string): Promise<boolean> {
   const { pinHash, salt } = settings.value.lock;
@@ -44,6 +71,7 @@ export async function checkPin(pin: string): Promise<boolean> {
     const pause = pinPause(++wrongPins);
     if (pause) pinPausedUntil.value = currentTime() + pause;
   }
+  storePause({ wrong: wrongPins, until: pinPausedUntil.value });
   return ok;
 }
 

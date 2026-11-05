@@ -185,7 +185,9 @@ flowchart LR
   stars it takes back were spent since (the balance no longer covers them):
   then it asks for the PIN (`tasks/actions.ts`). The pad blurs the focused
   field when it opens, so the on-screen keyboard closes. Repeated wrong PINs pause the pad
-  (`core/pin.ts`, in memory). The Calendar filter is a view preference and
+  (`core/pin.ts`); the miss count and the pause are kept in localStorage
+  (`manwar.pinPause.v1`, `core/lock.ts`), so a reload does not reset them.
+  The countdown reads `currentTime()`, not the once-a-second `nowMs`. The Calendar filter is a view preference and
   stays open.
 - **Display** (`core/display.ts`): night window switches to the dark theme
   and dims (Fully Kiosk), sleep window blanks the screen, a tap wakes it and

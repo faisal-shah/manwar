@@ -4,7 +4,8 @@ import { createPortal } from 'preact/compat';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { ArrowLeft, X } from 'lucide-preact';
 import { checkPin, pinPausedUntil, pinRequest } from '../core/lock';
-import { nowMs } from '../lib/clock';
+import { pauseSecondsLeft } from '../core/pin';
+import { currentTime, nowMs } from '../lib/clock';
 import { IconButton } from './controls';
 
 const portal = (node: ComponentChildren) => createPortal(node, document.body);
@@ -356,7 +357,8 @@ function PinPadHost() {
     if (req && document.activeElement instanceof HTMLElement) document.activeElement.blur();
   }, [req]);
   if (!req) return null;
-  const pausedFor = Math.ceil((pinPausedUntil.value - nowMs.value) / 1000);
+  // nowMs re-renders the countdown each second, but it can be most of a second behind the exact time.
+  const pausedFor = pauseSecondsLeft(pinPausedUntil.value, Math.max(nowMs.value, currentTime()));
   const paused = pausedFor > 0;
   const press = async (d: string) => {
     if (paused) return;
