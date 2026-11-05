@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { endSeriesBefore, fromRecurrence, toRRule } from '../../src/calendar/rrule';
+import { endSeriesBefore, fromRecurrence, shiftByday, toRRule } from '../../src/calendar/rrule';
 
 describe('rrule', () => {
   it('round-trips the editor subset', () => {
@@ -27,5 +27,25 @@ describe('rrule', () => {
     expect(endSeriesBefore(['RRULE:FREQ=WEEKLY'], new Date('2026-11-21T15:30:00Z'), false)).toEqual([
       'RRULE:FREQ=WEEKLY;UNTIL=20261121T152959Z',
     ]);
+  });
+});
+
+describe('shiftByday', () => {
+  it('moves the weekdays of a weekly rule, wrapping around the week and keeping the other parts and lines', () => {
+    const lines = ['RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,SA;UNTIL=20270101', 'EXDATE;VALUE=DATE:20261114'];
+    expect(shiftByday(lines, 1)).toEqual([
+      'RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=SU,TU;UNTIL=20270101',
+      'EXDATE;VALUE=DATE:20261114',
+    ]);
+    expect(shiftByday(lines, -2)).toEqual(['RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=TH,SA;UNTIL=20270101', lines[1]]);
+  });
+  it('leaves rules it should not move: a whole number of weeks, no BYDAY, another frequency, ordinals', () => {
+    for (const l of [
+      'RRULE:FREQ=WEEKLY;BYDAY=MO',
+      'RRULE:FREQ=WEEKLY',
+      'RRULE:FREQ=MONTHLY;BYDAY=1MO',
+      'RRULE:FREQ=WEEKLY;BYDAY=1MO',
+    ])
+      expect(shiftByday([l], l === 'RRULE:FREQ=WEEKLY;BYDAY=MO' ? 14 : 3)).toEqual([l]);
   });
 });

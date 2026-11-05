@@ -1238,7 +1238,7 @@ describe('google calendar: series edits and the occurrences changed elsewhere', 
     expect(new Date(body.start.dateTime)).toEqual(new Date('2026-11-08T09:30'));
     expect(new Date(body.end.dateTime)).toEqual(new Date('2026-11-08T10:15'));
     expect(body.recurrence).toEqual([
-      'RRULE:FREQ=WEEKLY;BYDAY=SA',
+      'RRULE:FREQ=WEEKLY;BYDAY=SU',
       'EXDATE;TZID=America/Chicago:20261122T093000',
       'EXDATE:20261206T153000Z',
     ]);
@@ -1294,6 +1294,61 @@ describe('google calendar: series edits and the occurrences changed elsewhere', 
       'RRULE:FREQ=WEEKLY;BYDAY=SA',
       'EXDATE;TZID=America/Chicago:20261205T100000',
     ]);
+  });
+
+  it('moves a weekly series to the weekday its occurrence moved to (All events)', async () => {
+    // Saturday lessons, and the Nov 21 one moved to Monday Nov 23 for every week.
+    routes.push((c) => (c.method === 'GET' ? { body: master(['RRULE:FREQ=WEEKLY;BYDAY=SA']) } : undefined));
+    routes.push((c) => (c.method === 'PATCH' ? { body: { id: 'swim' } } : undefined));
+    const monday: EventDraft = {
+      title: 'Swim lesson',
+      allDay: false,
+      start: new Date('2026-11-23T09:30'),
+      end: new Date('2026-11-23T10:15'),
+      keepRecurrence: true,
+    };
+    await googleSource.update(occ, monday, 'all');
+    expect(patched().recurrence).toEqual(['RRULE:FREQ=WEEKLY;BYDAY=MO']);
+  });
+
+  it('moves every weekday of a weekly series with it, and leaves a repeat edited in the editor alone', async () => {
+    routes.push((c) => (c.method === 'GET' ? { body: master(['RRULE:FREQ=WEEKLY;BYDAY=TH,SA']) } : undefined));
+    routes.push((c) => (c.method === 'PATCH' ? { body: { id: 'swim' } } : undefined));
+    const sunday: EventDraft = {
+      title: 'Swim lesson',
+      allDay: false,
+      start: new Date('2026-11-22T09:30'),
+      end: new Date('2026-11-22T10:15'),
+      keepRecurrence: true,
+    };
+    await googleSource.update(occ, sunday, 'all');
+    expect(patched().recurrence).toEqual(['RRULE:FREQ=WEEKLY;BYDAY=SU,FR']);
+
+    calls.length = 0;
+    routes = [];
+    routes.push((c) => (c.method === 'GET' ? { body: master(['RRULE:FREQ=WEEKLY;BYDAY=TH,SA']) } : undefined));
+    routes.push((c) => (c.method === 'PATCH' ? { body: { id: 'swim' } } : undefined));
+    await googleSource.update(
+      occ,
+      { ...sunday, keepRecurrence: false, repeat: { every: 1, unit: 'week', weekdays: [0, 3] } },
+      'all',
+    );
+    expect(patched().recurrence).toEqual(['RRULE:FREQ=WEEKLY;BYDAY=SU,WE']);
+  });
+
+  it('starts the new series on the weekday its first occurrence moved to (This and following)', async () => {
+    routes.push((c) => (c.method === 'GET' ? { body: master(['RRULE:FREQ=WEEKLY;BYDAY=SA']) } : undefined));
+    routes.push((c) => (c.method === 'POST' ? { body: { id: 'swim2' } } : undefined));
+    routes.push((c) => (c.method === 'PATCH' ? { body: { id: 'swim' } } : undefined));
+    const friday: EventDraft = {
+      title: 'Swim lesson',
+      allDay: false,
+      start: new Date('2026-11-20T16:00'),
+      end: new Date('2026-11-20T16:45'),
+      keepRecurrence: true,
+    };
+    await googleSource.update(occ, friday, 'following');
+    expect(calls.find((c) => c.method === 'POST')!.body.recurrence).toEqual(['RRULE:FREQ=WEEKLY;BYDAY=FR']);
   });
 
   it('counts what a COUNT rule has used by where the series had each occurrence', async () => {

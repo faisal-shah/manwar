@@ -1,6 +1,16 @@
 import { dropGoogleToken, googleAccessToken } from '../data/session';
 import { addDays, diffDays, fromISODate, toISODate } from '../lib/date';
-import { endSeriesBefore, fromWall, recurrenceCount, shiftExdates, toRRule, wallOf, withCount, type SeriesShift } from './rrule';
+import {
+  endSeriesBefore,
+  fromWall,
+  recurrenceCount,
+  shiftByday,
+  shiftExdates,
+  toRRule,
+  wallOf,
+  withCount,
+  type SeriesShift,
+} from './rrule';
 import {
   RateLimited,
   eventKey,
@@ -297,6 +307,9 @@ function keepExdates(body: Partial<GEvent>, lines: string[]): Partial<GEvent> {
 /** Where an occurrence sits in its series: its original start, which a moved occurrence no longer shows. */
 const seriesStart = (ev: CalEvent) => ev.originalStart ?? ev.start;
 
+/** How many days the edit moves an occurrence that was at `from`, by the wall calendar. */
+const daysMoved = (from: Date, draft: EventDraft) => diffDays(toISODate(from), draft.firstDay ?? toISODate(draft.start));
+
 /** How far the edit moves a series' occurrence that was at `from`: by days (all-day) or on the wall clock. */
 const shiftOf = (from: Date, draft: EventDraft): SeriesShift =>
   draft.allDay
@@ -458,6 +471,8 @@ export const googleSource: CalendarSource = {
         const count = recurrenceCount(lines);
         body.recurrence =
           count === null ? lines : withCount(lines, Math.max(1, count - (await instancesBefore(cal, ev.seriesId, cut))));
+        // Moved to another weekday: the new series repeats on the days it moved to.
+        body.recurrence = shiftByday(body.recurrence, daysMoved(cut, draft));
       }
       // The new series repeats at the edited occurrence's time: the deleted dates it carries move with it.
       if (body.recurrence && draft.allDay === seriesAllDay) body.recurrence = shiftExdates(body.recurrence, shiftOf(cut, draft));
@@ -492,10 +507,18 @@ export const googleSource: CalendarSource = {
       // phone, whose times are not the series'.
       delete body.start;
       delete body.end;
-    } else if (draft.allDay === seriesAllDay) {
+    } else {
+      // Moved to another weekday: a weekly rule's days move with it (a repeat edited here is the editor's).
+      if (draft.keepRecurrence) {
+        const lines = master.recurrence ?? [];
+        const shifted = shiftByday(lines, daysMoved(ev.start, draft));
+        if (shifted.some((l, i) => l !== lines[i])) body.recurrence = shifted;
+      }
       // The dates deleted on other clients move with the series, or they would come back at the new time.
-      const lines = body.recurrence ?? master.recurrence ?? [];
-      if (lines.some((l) => l.startsWith('EXDATE'))) body.recurrence = shiftExdates(lines, shiftOf(ev.start, draft));
+      if (draft.allDay === seriesAllDay) {
+        const lines = body.recurrence ?? master.recurrence ?? [];
+        if (lines.some((l) => l.startsWith('EXDATE'))) body.recurrence = shiftExdates(lines, shiftOf(ev.start, draft));
+      }
     }
     await call(`/calendars/${cal}/events/${encodeURIComponent(ev.seriesId)}`, { method: 'PATCH', body: JSON.stringify(body) });
     return {};

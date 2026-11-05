@@ -1,6 +1,6 @@
 import type { ISODate, Repeat, Weekday } from '../data/types';
 import { addDays, dateAt, diffDays, minutesOfDay, minutesToHHMM, toISODate } from '../lib/date';
-import { occursOn } from '../lib/repeat';
+import { occursOn, shiftRepeat } from '../lib/repeat';
 import { currentTime } from '../lib/clock';
 import { toRRule } from './rrule';
 import { eventKey, type CalEvent, type CalendarInfo, type CalendarSource, type EventDraft } from './types';
@@ -268,7 +268,7 @@ export const fakeSource: CalendarSource = {
       const kept = master.repeat;
       master.repeat = { ...master.repeat!, until: addDays(orig, -1) };
       const id = `ev${Math.random().toString(36).slice(2, 10)}`;
-      ms.push({ ...next, id, repeat: draft.keepRecurrence ? kept : next.repeat });
+      ms.push({ ...next, id, repeat: draft.keepRecurrence ? kept && shiftRepeat(kept, diffDays(orig, next.day)) : next.repeat });
       save(ms);
       return { newSeriesId: id };
     } else {
@@ -277,7 +277,8 @@ export const fakeSource: CalendarSource = {
         ...master,
         ...next,
         day: addDays(master.day, shift),
-        repeat: draft.keepRecurrence ? master.repeat : next.repeat,
+        // Moved to another weekday: a weekly rule's days move with it.
+        repeat: draft.keepRecurrence ? master.repeat && shiftRepeat(master.repeat, shift) : next.repeat,
         overrides: {},
       };
     }

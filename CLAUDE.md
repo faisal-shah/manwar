@@ -140,7 +140,10 @@ flowchart LR
   with a series (or a new This and following series) whose time or day
   changes (`shiftExdates`; a timed series and its EXDATEs move on the
   tablet's wall clock, so a day later across a clock change keeps the time
-  of day), and This and following copies guests, color and
+  of day), a weekly rule's BYDAY days move with an occurrence moved to
+  another weekday when the repeat was not edited (`shiftByday`; the demo
+  source and meal plans do the same with `shiftRepeat`), and This and
+  following copies guests, color and
   reminders to the new series and cuts the old one at the occurrence's
   `originalStart` (where the series had it, not where it was moved to); a
   COUNT rule continues with what is left, counting the old series'

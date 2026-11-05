@@ -1,6 +1,6 @@
-import type { ISODate, MealCategoryId, MealEntry, Repeat, Weekday } from '../../data/types';
+import type { ISODate, MealCategoryId, MealEntry } from '../../data/types';
 import { addDays, diffDays, fromISODate, monthShort, startOfWeek } from '../../lib/date';
-import { occursOn } from '../../lib/repeat';
+import { occursOn, shiftRepeat } from '../../lib/repeat';
 
 /**
  * Pure meal-plan logic: the week window, which entries fall on which days
@@ -85,12 +85,6 @@ export type Scope = 'one' | 'following' | 'all';
 
 export type MealOp =
   { op: 'put'; entry: MealEntry } | { op: 'patch'; id: string; data: Partial<MealEntry> } | { op: 'remove'; id: string };
-
-/** A weekly rule moved by `days`: its weekdays move with it (other rules follow their start date). */
-function shiftRepeat(rule: Repeat, days: number): Repeat {
-  if (rule.unit !== 'week' || !rule.weekdays?.length) return rule;
-  return { ...rule, weekdays: rule.weekdays.map((d) => ((((d + days) % 7) + 7) % 7) as Weekday).sort() };
-}
 
 /**
  * Writes that change (or, with `changes` null, remove) the occurrence of

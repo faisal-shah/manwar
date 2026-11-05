@@ -1,6 +1,12 @@
 import type { ISODate, Repeat, Weekday } from '../data/types';
 import { addDays, dayLong, dayShort, diffDays, fromISODate, monthsBetween, startOfWeek, weekdayOf } from './date';
 
+/** A weekly rule moved by `days`: its weekdays move with it (other rules follow their start date). */
+export function shiftRepeat(rule: Repeat, days: number): Repeat {
+  if (rule.unit !== 'week' || !rule.weekdays?.length) return rule;
+  return { ...rule, weekdays: rule.weekdays.map((d) => ((((d + days) % 7) + 7) % 7) as Weekday).sort() };
+}
+
 /** Does a rule that started on `start` produce an occurrence on `date`? */
 export function occursOn(rule: Repeat | undefined, start: ISODate, date: ISODate): boolean {
   if (date < start) return false;

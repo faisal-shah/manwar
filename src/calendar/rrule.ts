@@ -115,6 +115,28 @@ export function fromWall(wall: number): Date {
 }
 
 /**
+ * A weekly RRULE moved by `days` (an occurrence moved to another weekday,
+ * applied to the series): its BYDAY weekdays move with it, or the series
+ * would keep repeating on the old days. Other rules follow their start.
+ */
+export function shiftByday(lines: string[], days: number): string[] {
+  const by = ((days % 7) + 7) % 7;
+  if (!by) return lines;
+  return lines.map((l) => {
+    if (!l.startsWith('RRULE:')) return l;
+    const parts = rruleParts(l);
+    if (!parts.includes('FREQ=WEEKLY')) return l;
+    const i = parts.findIndex((p) => p.startsWith('BYDAY='));
+    if (i < 0) return l;
+    const codes = parts[i].slice(6).split(',');
+    if (codes.some((c) => !DAYS.includes(c))) return l;
+    const moved = codes.map((c) => (DAYS.indexOf(c) + by) % 7).sort((a, b) => a - b);
+    parts[i] = `BYDAY=${moved.map((d) => DAYS[d]).join(',')}`;
+    return `RRULE:${parts.join(';')}`;
+  });
+}
+
+/**
  * The EXDATE lines moved with a series whose start moved, so occurrences
  * deleted on other clients stay deleted: a local value (TZID or floating)
  * moves its wall-clock fields, a UTC one the local time it names, a date by
