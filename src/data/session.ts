@@ -165,6 +165,15 @@ export function googleAccessToken(): Promise<string> {
   return tokenRequest;
 }
 
+/**
+ * Forget a token Google refused (401), so the next call asks for a new one.
+ * The expiry comes from the server's clock; a tablet clock running behind
+ * would otherwise keep using an expired token until its own clock caught up.
+ */
+export function dropGoogleToken(value: string): void {
+  if (token?.value === value) token = null;
+}
+
 export async function disconnect(): Promise<void> {
   token = null;
   googleProblem.value = null;

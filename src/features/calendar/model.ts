@@ -4,18 +4,10 @@ import type { CalEvent } from '../../calendar/types';
 import { profileById, settings } from '../../data/store';
 import { nowMs } from '../../lib/clock';
 import { EVERYONE, type ISODate, type MealCategory, type MealEntry, type Profile } from '../../data/types';
-import {
-  addDays,
-  dateAt,
-  dayShort,
-  formatHeaderDate,
-  formatLongDate,
-  formatTime,
-  formatTimeRange,
-  toISODate,
-} from '../../lib/date';
+import { addDays, dayShort, formatHeaderDate, formatLongDate, formatTime, formatTimeRange, toISODate } from '../../lib/date';
 import { calendarMeals } from '../meals/state';
 import { everyoneProfile } from '../../ui/profile';
+import { isLong } from './layout';
 
 /** Reactive helpers shared by the views (they read signals, so components re-render on change). */
 
@@ -34,11 +26,6 @@ export interface DayItems {
   /** Timed events under 24 hours that touch this day. */
   timed: CalEvent[];
 }
-
-const DAY_MS = 86_400_000;
-
-/** All-day events and events of a day or longer go in the all-day row and month bars. */
-export const isLong = (ev: CalEvent) => ev.allDay || ev.end.getTime() - ev.start.getTime() >= DAY_MS;
 
 /** Planned meals on a day, for categories shown on the calendar (Filter > Meals). Repeats and per-day exceptions come from the Meals slice. */
 export function mealsOn(day: ISODate): MealItem[] {
@@ -164,19 +151,4 @@ export function countdownEmoji(ev: CalEvent): string | undefined {
     [/visit/, '🏡'],
   ];
   return guesses.find(([re]) => re.test(t))?.[1];
-}
-
-/** Minutes after midnight on `day` where a timed segment starts and ends (clipped to the day). */
-export function segmentOn(ev: CalEvent, day: ISODate): { startMin: number; endMin: number } {
-  const dayStart = dateAt(day).getTime();
-  const dayEnd = dateAt(addDays(day, 1)).getTime();
-  const s = Math.max(ev.start.getTime(), dayStart);
-  const e = Math.min(ev.end.getTime(), dayEnd);
-  // Minutes from local midnight, DST-safe by using wall-clock fields.
-  const toMin = (t: number, isEnd: boolean) => {
-    if (isEnd && t >= dayEnd) return 24 * 60;
-    const d = new Date(t);
-    return toISODate(d) === day ? d.getHours() * 60 + d.getMinutes() : 0;
-  };
-  return { startMin: toMin(s, false), endMin: toMin(e, true) };
 }
