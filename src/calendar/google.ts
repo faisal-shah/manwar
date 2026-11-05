@@ -220,6 +220,16 @@ function carried(master: GEvent): Record<string, unknown> {
   return Object.fromEntries(CARRIED.filter((k) => m[k] !== undefined).map((k) => [k, m[k]]));
 }
 
+/**
+ * A changed repeat rule replaces the series' RRULE line only. Its other
+ * lines stay: EXDATEs are occurrences deleted on other clients (phones
+ * syncing over CalDAV, imported calendars), which would come back.
+ */
+function keepExdates(body: Partial<GEvent>, lines: string[]): Partial<GEvent> {
+  if (body.recurrence?.length) body.recurrence = [...body.recurrence, ...lines.filter((l) => !l.startsWith('RRULE:'))];
+  return body;
+}
+
 /** Where an occurrence sits in its series: its original start, which a moved occurrence no longer shows. */
 const seriesStart = (ev: CalEvent) => ev.originalStart ?? ev.start;
 
@@ -346,7 +356,7 @@ export const googleSource: CalendarSource = {
     if (scope === 'following' && toISODate(masterStart) < toISODate(cut)) {
       // Start a new series here, then end the old one just before this occurrence.
       const lines = master.recurrence ?? [];
-      const body = { ...carried(master), ...draftBody({ ...draft, keepRecurrence: false }, zones) };
+      const body = { ...carried(master), ...keepExdates(draftBody({ ...draft, keepRecurrence: false }, zones), lines) };
       if (draft.keepRecurrence) {
         // A COUNT rule continues with the occurrences it has left, not a fresh COUNT.
         const count = recurrenceCount(lines);
@@ -379,7 +389,7 @@ export const googleSource: CalendarSource = {
     }
     await call(`/calendars/${cal}/events/${encodeURIComponent(ev.seriesId)}`, {
       method: 'PATCH',
-      body: JSON.stringify(draftBody(moved, zones)),
+      body: JSON.stringify(keepExdates(draftBody(moved, zones), master.recurrence ?? [])),
     });
     return {};
   },

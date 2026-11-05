@@ -752,6 +752,35 @@ describe('google calendar: writing events', () => {
       expect(calls[0].body.reminders).toEqual({ useDefault: false, overrides: [{ method: 'popup', minutes: 30 }] });
     });
 
+    it('a changed repeat keeps the dates deleted on other clients', async () => {
+      // Two lessons deleted on an iPhone (CalDAV keeps them as EXDATE lines).
+      const exdates = ['EXDATE;TZID=Europe/London:20261114T160000', 'EXDATE;TZID=Europe/London:20261128T160000'];
+      const occ: CalEvent = { ...london, id: 'call_20261121T160000Z', key: `${CAL}::call_20261121T160000Z`, seriesId: 'call' };
+      routes.push((c) =>
+        c.method === 'GET'
+          ? {
+              body: base({
+                id: 'call',
+                recurrence: ['RRULE:FREQ=WEEKLY;BYDAY=SA', ...exdates],
+                start: { dateTime: '2026-10-31T16:00:00+00:00', timeZone: 'Europe/London' },
+                end: { dateTime: '2026-10-31T16:30:00+00:00', timeZone: 'Europe/London' },
+              }),
+            }
+          : undefined,
+      );
+      routes.push((c) => (c.method === 'PATCH' || c.method === 'POST' ? { body: { id: 'call2' } } : undefined));
+      const twice = {
+        ...draft,
+        keepRecurrence: false,
+        repeat: { every: 1, unit: 'week' as const, weekdays: [0, 6] as (0 | 6)[] },
+      };
+      await googleSource.update(occ, twice, 'all');
+      expect(calls.find((c) => c.method === 'PATCH')!.body.recurrence).toEqual(['RRULE:FREQ=WEEKLY;BYDAY=SU,SA', ...exdates]);
+      calls = [];
+      await googleSource.update(occ, twice, 'following');
+      expect(calls.find((c) => c.method === 'POST')!.body.recurrence).toEqual(['RRULE:FREQ=WEEKLY;BYDAY=SU,SA', ...exdates]);
+    });
+
     it('moving a whole series keeps the zone it repeats in', async () => {
       const occ: CalEvent = { ...london, id: 'call_20261121T160000Z', key: `${CAL}::call_20261121T160000Z`, seriesId: 'call' };
       routes.push((c) =>
