@@ -64,15 +64,25 @@ const UNITS = [
   'dozen',
 ].join('|');
 
-const WITH_NUMBER = new RegExp(`^(${QTY})\\s*(?:(${UNITS})\\.?(?![\\p{L}]))?\\s*(?:of\\s+)?(.*)$`, 'iu');
+// A quantity is followed by a unit or by a space: "2% milk" and "7up" are names.
+const WITH_NUMBER = new RegExp(`^(${QTY})(?:\\s*(${UNITS})\\.?(?![\\p{L}])|(?=\\s))\\s*(?:of\\s+)?(.*)$`, 'iu');
 const MEASURE_ONLY = /^((?:an?\s+)?(?:pinch|dash|handful|splash|sprinkle)(?:es|s)?)\s+of\s+(.+)$/i;
+/** Pasted-list markers: bullets, check boxes and "1." / "2)" numbering (not "1.5 cups"). */
+const MARKER = /^\s*(?:[-–—*•·◦▪▫■□●○✓✔☐☑]+\s*|\[[ xX]?\]\s*|\d{1,2}[.)]\s+)+/u;
+const HEADING = /^(?:ingredients|instructions|directions|method)$/i;
 
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-/** Split an ingredient line into quantity and name. Null for blank lines and headers ("Ingredients:"). */
+/** A line without its leading bullet, check box or list number. */
+export const stripMarker = (raw: string): string => raw.replace(MARKER, '').trim();
+
+/** Lines that head a group rather than name an ingredient: "For the sauce:", "Ingredients". */
+export const isHeading = (line: string): boolean => line.endsWith(':') || HEADING.test(line);
+
+/** Split an ingredient line into quantity and name. Null for blank lines and headings. */
 export function parseIngredient(raw: string): ParsedIngredient | null {
-  const line = raw.replace(/^\s*[-*•·]\s*/, '').trim();
-  if (!line || line.endsWith(':')) return null;
+  const line = stripMarker(raw);
+  if (!line || isHeading(line)) return null;
   const m = WITH_NUMBER.exec(line);
   if (m && m[3].trim()) {
     const qty = [m[1].trim(), m[2]].filter(Boolean).join(' ');

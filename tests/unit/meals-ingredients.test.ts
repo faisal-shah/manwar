@@ -21,6 +21,20 @@ describe('parseIngredient', () => {
     ['Fresh mint and cilantro', undefined, 'Fresh mint and cilantro'],
     ['- Cream cheese', undefined, 'Cream cheese'],
     ['• 8 slices cheddar', '8 slices', 'Cheddar'],
+    ['2% milk', undefined, '2% milk'],
+    ['1 gal 2% milk', '1 gal', '2% milk'],
+    ['7up', undefined, '7up'],
+    ['500g', undefined, '500g'],
+    ['1/2', undefined, '1/2'],
+    ['2-3', undefined, '2-3'],
+    ['A dozen eggs', undefined, 'A dozen eggs'],
+    ['1. 2 cups flour', '2 cups', 'Flour'],
+    ['2) 3 eggs', '3', 'Eggs'],
+    ['10. Salt', undefined, 'Salt'],
+    ['– 1 onion', '1', 'Onion'],
+    ['▪ Parsley', undefined, 'Parsley'],
+    ['- [ ] Butter', undefined, 'Butter'],
+    ['1.5 kg lamb', '1.5 kg', 'Lamb'],
   ];
   for (const [line, qty, name] of cases)
     it(line, () => {
@@ -28,9 +42,12 @@ describe('parseIngredient', () => {
       expect([p.qty, p.name]).toEqual([qty, name]);
     });
 
-  it('skips blank lines and headers', () => {
+  it('skips blank lines and headings', () => {
     expect(parseIngredient('  ')).toBeNull();
     expect(parseIngredient('Ingredients:')).toBeNull();
+    expect(parseIngredient('For the sauce:')).toBeNull();
+    expect(parseIngredient('INGREDIENTS')).toBeNull();
+    expect(parseIngredient('- ')).toBeNull();
   });
 });
 
@@ -58,6 +75,14 @@ describe('classifyIngredients', () => {
       ['Basmati rice', 'onList', 'rice'],
       ['Olive oil', 'reopen', 'oil2'],
       ['Yogurt', 'new', undefined],
+    ]);
+  });
+
+  it('keeps emoji-only ingredients apart', () => {
+    const rows = classifyIngredients(['🍎', '🍌'], [it_('apple', '🍎')]);
+    expect(rows.map((r) => [r.line, r.status])).toEqual([
+      ['🍎', 'onList'],
+      ['🍌', 'new'],
     ]);
   });
 

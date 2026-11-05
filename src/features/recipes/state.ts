@@ -29,9 +29,17 @@ export function openRecipe(id: string): void {
 
 export type RecipeDraft = Omit<Recipe, 'id' | 'createdAt'>;
 
+/**
+ * Create or update a recipe. A rename carries over to the planned meals made
+ * from it that still show its old name (a meal retitled by hand keeps its title).
+ */
 export function saveRecipe(draft: RecipeDraft, existing?: Recipe): Recipe {
   const recipe: Recipe = existing ? { ...existing, ...draft } : { ...draft, id: newId(), createdAt: currentTime() };
-  void batch().put('recipes', recipe).commit();
+  const b = batch().put('recipes', recipe);
+  if (existing && existing.name !== recipe.name)
+    for (const m of data.meals.value)
+      if (m.recipeId === recipe.id && m.title === existing.name) b.patch('meals', m.id, { title: recipe.name });
+  void b.commit();
   return recipe;
 }
 

@@ -7,6 +7,7 @@ import { today } from '../../lib/clock';
 import { Button, IconButton } from '../../ui/controls';
 import { Modal, choose, confirm, toast } from '../../ui/overlays';
 import { openIngredients } from '../meals/IngredientsModal';
+import { isHeading } from '../meals/ingredients';
 import { plannedToast } from '../meals/PlanMealSheet';
 import { categoryById, planMeal, visibleCategories } from '../meals/state';
 import { CategoryBadge, CategoryPicker, DayPicker, RepeatRow } from '../meals/ui';
@@ -76,7 +77,7 @@ export function RecipeView({ recipe }: { recipe: Recipe }) {
         ) : null}
         {recipe.sourceUrl && (
           <span class="rc-source">
-            <Link size="2.2rem" /> {displayUrl(recipe.sourceUrl)}
+            <Link size="2.2rem" /> <span>{displayUrl(recipe.sourceUrl)}</span>
           </span>
         )}
       </div>
@@ -85,9 +86,7 @@ export function RecipeView({ recipe }: { recipe: Recipe }) {
           <section>
             <h3>Ingredients</h3>
             <ul class="rc-ingredients">
-              {recipe.ingredients.map((i) => (
-                <li>{i}</li>
-              ))}
+              {recipe.ingredients.map((i) => (isHeading(i) ? <li class="rc-ing-head">{i.replace(/:$/, '')}</li> : <li>{i}</li>))}
             </ul>
           </section>
         )}

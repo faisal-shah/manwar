@@ -8,7 +8,7 @@ import { Modal, toast } from '../../ui/overlays';
 import { ensureGroceryList, groceryList, itemsByList, mergeItems } from '../lists/state';
 import { classifyIngredients } from './ingredients';
 
-/** Open request for the "Add to Grocery List" modal. Mount <IngredientsHost/> where it can appear. */
+/** Open request for the "Add to Grocery List" modal; <IngredientsHost/> is mounted once by the shell (app/tabs Overlays). */
 const request = signal<Recipe | null>(null);
 
 /** Ask which of a recipe's ingredients to add to the default grocery list. */
@@ -83,7 +83,9 @@ function IngredientsModal({ recipe, onClose }: { recipe: Recipe; onClose: () => 
           {recipe.emoji && <span class="im-emoji">{recipe.emoji}</span>}
           {addable.length
             ? `${recipe.name} ingredients. Uncheck what you already have.`
-            : `Every ${recipe.name} ingredient is already on ${listName}.`}
+            : rows.length
+              ? `Every ${recipe.name} ingredient is already on ${listName}.`
+              : `${recipe.name} has no ingredients to add.`}
         </p>
         {addable.length > 1 && (
           <div class="im-all">

@@ -1,7 +1,9 @@
 import { computed, signal } from '@preact/signals';
 import { batch, data, newId, put, settings } from '../../data/store';
 import type { ISODate, MealCategory, MealCategoryId, MealEntry, Recipe, Repeat } from '../../data/types';
+import { goTo } from '../../app/nav';
 import { currentTime, today } from '../../lib/clock';
+import { diffDays } from '../../lib/date';
 import { editOccurrence, mealOccurrences, nextCellOrder, weekOf, type MealOp, type Scope } from './plan';
 
 /** Reactive views of the meal plan and its writes. Callers wrap writes in asParent(). */
@@ -14,6 +16,13 @@ export const categoryById = computed(() => new Map(categories.value.map((c) => [
 /** Weeks paged away from the current one on the Meals tab. */
 export const weekOffset = signal(0);
 export const weekStartDate = computed(() => weekOf(today.value, settings.value.weekStart, weekOffset.value));
+
+/** Show the Meals tab at the week holding `date` (a meal tapped on the calendar). */
+export function openMealsWeek(date: ISODate): void {
+  const ws = settings.value.weekStart;
+  weekOffset.value = diffDays(weekOf(today.value, ws), weekOf(date, ws)) / 7;
+  goTo('meals');
+}
 
 /** The cell (or entry) the Plan Meal sheet is open for; the grid outlines it. */
 export const planTarget = signal<{ date: ISODate; category: MealCategoryId; entry?: MealEntry } | null>(null);

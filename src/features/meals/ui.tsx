@@ -6,6 +6,10 @@ import { addDays, dayShort, fromISODate } from '../../lib/date';
 import { describeRepeat } from '../../lib/repeat';
 import { RepeatEditor } from '../../ui/pickers';
 
+/** First character of a name as one grapheme ("🍳 Brunch" gives the whole emoji, not half of it). */
+export const initialOf = (name: string): string =>
+  ([...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(name.trim())][0]?.segment ?? '').toUpperCase();
+
 /** Letter disc in the category color (B, L, D, S). */
 export function CategoryBadge({ category, size = 3 }: { category: Pick<MealCategory, 'name' | 'color'>; size?: number }) {
   return (
@@ -14,7 +18,7 @@ export function CategoryBadge({ category, size = 3 }: { category: Pick<MealCateg
       style={{ '--c': category.color, width: `${size}rem`, height: `${size}rem`, fontSize: `${size * 0.46}rem` }}
       aria-hidden="true"
     >
-      {category.name.trim().charAt(0).toUpperCase()}
+      {initialOf(category.name)}
     </span>
   );
 }

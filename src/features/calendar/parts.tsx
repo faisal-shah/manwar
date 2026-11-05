@@ -1,7 +1,7 @@
 import type { ComponentChildren } from 'preact';
 import type { CalEvent } from '../../calendar/types';
-import { goTo } from '../../app/nav';
 import { Avatar } from '../../ui/profile';
+import { openMealsWeek } from '../meals/state';
 import { fillStyle, isPast, isUnassigned, timeLabel, timePrefix, whoOf, type MealItem, type Who } from './model';
 import { openDetail } from './state';
 
@@ -79,7 +79,7 @@ export function EventPill({ ev, bar }: { ev: CalEvent; bar?: { startsHere: boole
   );
 }
 
-/** Planned meal: outlined pill in the category color; opens the Meals tab. */
+/** Planned meal: outlined pill in the category color; opens the Meals tab at its week. */
 export function MealPill({ item, badge }: { item: MealItem; badge?: boolean }) {
   return (
     <button
@@ -88,7 +88,7 @@ export function MealPill({ item, badge }: { item: MealItem; badge?: boolean }) {
       style={{ '--c': item.category.color }}
       onClick={(e) => {
         e.stopPropagation();
-        goTo('meals');
+        openMealsWeek(item.day);
       }}
       title={`${item.category.name}: ${item.meal.title}`}
     >

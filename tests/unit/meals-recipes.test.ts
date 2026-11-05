@@ -23,6 +23,9 @@ describe('instructionSteps', () => {
       'Serve',
     ]);
   });
+  it('drops pasted bullets from step lines', () => {
+    expect(instructionSteps('- Melt the butter.\n• Add the onion.')).toEqual(['Melt the butter.', 'Add the onion.']);
+  });
   it('is empty for blank text', () => {
     expect(instructionSteps('  \n ')).toEqual([]);
   });
@@ -31,6 +34,15 @@ describe('instructionSteps', () => {
 describe('recipe text helpers', () => {
   it('splits ingredients one per line', () => {
     expect(ingredientLines(' 2 eggs \n\nMilk\n')).toEqual(['2 eggs', 'Milk']);
+  });
+  it('drops pasted bullets and list numbers but keeps quantities', () => {
+    expect(ingredientLines('- 2 cups flour\n• Salt\n1. 3 eggs\n2) 1.5 cups milk\n-\n1.5 kg lamb')).toEqual([
+      '2 cups flour',
+      'Salt',
+      '3 eggs',
+      '1.5 cups milk',
+      '1.5 kg lamb',
+    ]);
   });
   it('validates source URLs', () => {
     expect(sourceUrlError('')).toBeNull();
@@ -51,5 +63,12 @@ describe('recipe text helpers', () => {
     const all = [r('Spaghetti', ['1 onion']), r('Onion soup', ['Onions']), r('Toast', ['Bread'])];
     expect(searchRecipes(all, 'onion').map((x) => x.name)).toEqual(['Onion soup', 'Spaghetti']);
     expect(searchRecipes(all, '').map((x) => x.name)).toEqual(['Onion soup', 'Spaghetti', 'Toast']);
+  });
+  it('searches across Arabic diacritics and Latin accents', () => {
+    const r = (name: string): Recipe => ({ id: name, name, category: 'dinner', ingredients: [], instructions: '', createdAt: 0 });
+    const all = [r('كَبْسَة لحم'), r('كبسة دجاج'), r('Crème brûlée'), r('Toast')];
+    expect(searchRecipes(all, 'كبسة').map((x) => x.name)).toEqual(['كبسة دجاج', 'كَبْسَة لحم']);
+    expect(searchRecipes(all, 'كَبْسَة').map((x) => x.name)).toEqual(['كبسة دجاج', 'كَبْسَة لحم']);
+    expect(searchRecipes(all, 'creme BRULEE').map((x) => x.name)).toEqual(['Crème brûlée']);
   });
 });

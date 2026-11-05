@@ -1,4 +1,6 @@
 import type { Recipe } from '../../data/types';
+import { fold } from '../../lib/text';
+import { stripMarker } from '../meals/ingredients';
 
 /**
  * Instructions as numbered steps for reading across the kitchen. Several
@@ -11,7 +13,7 @@ export function instructionSteps(text: string): string[] {
     .map((l) =>
       l
         .trim()
-        .replace(/^(?:step\s*)?\d+\s*[.):-]\s*/i, '')
+        .replace(/^(?:[-–—*•·◦▪]+\s*|(?:step\s*)?\d+\s*[.):-]\s*)/i, '')
         .trim(),
     )
     .filter((l) => l && !/^instructions:?$/i.test(l));
@@ -22,12 +24,8 @@ export function instructionSteps(text: string): string[] {
     .filter(Boolean);
 }
 
-/** Ingredients typed one per line, blank lines dropped. */
-export const ingredientLines = (text: string): string[] =>
-  text
-    .split('\n')
-    .map((l) => l.trim())
-    .filter(Boolean);
+/** Ingredients typed or pasted one per line: bullets and list numbers dropped, blank lines dropped. */
+export const ingredientLines = (text: string): string[] => text.split('\n').map(stripMarker).filter(Boolean);
 
 /** Validates an optional source URL typed into the recipe editor. Returns an error message or null. */
 export function sourceUrlError(value: string): string | null {
@@ -51,12 +49,12 @@ export function displayUrl(url: string): string {
   }
 }
 
-/** Search: name first, then ingredient matches. Case-insensitive. */
+/** Search: name first, then ingredient matches. Ignores case and diacritics (Arabic harakat, accents). */
 export function searchRecipes(recipes: Recipe[], query: string): Recipe[] {
-  const q = query.trim().toLowerCase();
+  const q = fold(query.trim());
   const sorted = [...recipes].sort((a, b) => a.name.localeCompare(b.name));
   if (!q) return sorted;
-  const byName = sorted.filter((r) => r.name.toLowerCase().includes(q));
-  const byIngredient = sorted.filter((r) => !byName.includes(r) && r.ingredients.some((i) => i.toLowerCase().includes(q)));
+  const byName = sorted.filter((r) => fold(r.name).includes(q));
+  const byIngredient = sorted.filter((r) => !byName.includes(r) && r.ingredients.some((i) => fold(i).includes(q)));
   return [...byName, ...byIngredient];
 }
