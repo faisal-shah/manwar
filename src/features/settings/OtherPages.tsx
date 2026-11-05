@@ -3,7 +3,7 @@ import { demoMode } from '../../config';
 import { requireParent, unlocked } from '../../core/lock';
 import { settings } from '../../data/store';
 import { pairedDevice, session } from '../../data/session';
-import { chooseLayout, switchLayout } from '../../app/layout';
+import { phoneSized, screenShortSide, switchLayout } from '../../app/layout';
 import { Button } from '../../ui/controls';
 import { version } from '../../../package.json';
 import { buildId } from '../../config';
@@ -78,8 +78,7 @@ export function TasksPage() {
 }
 
 /** A paired phone switched to the wall layout, or a screen the size of a phone (layout.ts's rule). */
-const likelyPhone = () =>
-  !!pairedDevice() || chooseLayout(null, null, Math.min(window.screen.width, window.screen.height)) === 'phone';
+const likelyPhone = () => !!pairedDevice() || phoneSized(screenShortSide());
 
 export function AboutPage() {
   return (

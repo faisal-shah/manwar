@@ -28,8 +28,14 @@ export function chooseLayout(param: string | null, stored: string | null, signed
   if (isLayout(param)) return param;
   if (isLayout(stored)) return stored;
   if (signedInAsWall) return 'wall';
-  return shortSide < PHONE_MAX_SHORT_SIDE ? 'phone' : 'wall';
+  return phoneSized(shortSide) ? 'phone' : 'wall';
 }
+
+/** Rule 4: a screen whose short side is under 600 CSS px is a phone's. */
+export const phoneSized = (shortSide: number) => shortSide < PHONE_MAX_SHORT_SIDE;
+
+/** This device's screen, by rule 4. */
+export const screenShortSide = () => Math.min(window.screen.width, window.screen.height);
 
 function storedLayout(): string | null {
   try {
@@ -52,12 +58,7 @@ function signedInAsWall(): boolean {
 export const layout: Layout =
   typeof window === 'undefined'
     ? 'wall'
-    : chooseLayout(
-        new URLSearchParams(location.search).get('layout'),
-        storedLayout(),
-        signedInAsWall(),
-        Math.min(window.screen.width, window.screen.height),
-      );
+    : chooseLayout(new URLSearchParams(location.search).get('layout'), storedLayout(), signedInAsWall(), screenShortSide());
 
 export const isPhone = layout === 'phone';
 
