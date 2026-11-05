@@ -85,6 +85,18 @@ test('Tasks: an Up for Grabs column that appears opens on screen', async ({ brow
   await expect(page.locator('.pcols > .pcol').first()).toHaveAttribute('aria-label', 'Up for Grabs');
   await page.waitForTimeout(300);
   expect(await page.locator('.pcols').evaluate((el) => el.scrollLeft)).toBe(0);
+  // Home's task pane does the same.
+  await rail(page, 'Home').click();
+  const pane = page.locator('.tp-cards');
+  await expect(pane.locator('.tp-card').first()).toHaveAttribute('aria-label', 'Up for Grabs');
+  expect(await pane.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
+  await pane.getByRole('button', { name: 'Complete Take out trash' }).click();
+  await page.locator('.modal button', { hasText: 'Hashim!' }).click();
+  await expect(pane.locator('.tp-card').first()).not.toHaveAttribute('aria-label', 'Up for Grabs');
+  await page.locator('.toast', { hasText: 'Take out trash' }).getByRole('button', { name: 'Undo' }).click();
+  await expect(pane.locator('.tp-card').first()).toHaveAttribute('aria-label', 'Up for Grabs');
+  await page.waitForTimeout(300);
+  expect(await pane.evaluate((el) => el.scrollLeft)).toBe(0);
   await ctx.close();
 });
 
