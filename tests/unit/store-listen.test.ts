@@ -91,4 +91,18 @@ describe('store listeners', () => {
     vi.advanceTimersByTime(30_000);
     expect(live()).toHaveLength(0);
   });
+
+  it('drops a pending retry when the same household is opened again (signed out and back in)', () => {
+    openHousehold('h1');
+    const n = live().length;
+    live()[0].error(Object.assign(new Error('Missing or insufficient permissions.'), { code: 'permission-denied' }));
+    closeHousehold();
+    openHousehold('h1');
+    expect(live()).toHaveLength(n);
+    vi.advanceTimersByTime(30_000);
+    // One listener per collection, and every one of them closes with the household.
+    expect(live()).toHaveLength(n);
+    closeHousehold();
+    expect(live()).toHaveLength(0);
+  });
 });

@@ -104,6 +104,8 @@ const setFailed = (key: string, reason: string | null) => {
   failed.value = next;
 };
 const LISTEN_RETRY_MS = 30_000;
+/** Counts closed households, so a retry scheduled for one that closed (even if reopened since) does nothing. */
+let generation = 0;
 
 function hid(): string {
   const h = householdId.value;
@@ -121,7 +123,7 @@ const settingsRef = () => doc(db, 'households', hid(), 'settings', 'main');
  * silently stale; it is reported and opened again after LISTEN_RETRY_MS.
  */
 function listen(key: string, open: (onError: (e: FirestoreError) => void) => Unsubscribe): void {
-  const household = householdId.value;
+  const gen = generation;
   const start = () => {
     listeners.set(
       key,
@@ -129,7 +131,7 @@ function listen(key: string, open: (onError: (e: FirestoreError) => void) => Uns
         console.warn(`store: ${key} listener failed`, e);
         setFailed(key, errorMessage(e));
         setTimeout(() => {
-          if (householdId.value === household && listeners.has(key)) start();
+          if (generation === gen) start();
         }, LISTEN_RETRY_MS);
       }),
     );
@@ -180,6 +182,7 @@ export function openHousehold(id: string): void {
 }
 
 export function closeHousehold(): void {
+  generation++;
   listeners.forEach((u) => u());
   listeners.clear();
   fromServer.clear();
