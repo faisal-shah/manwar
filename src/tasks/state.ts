@@ -70,7 +70,8 @@ const inHistory = (o: Occurrence, day: ISODate) => {
  * "Who did it?" dialog can outlive it: the task deleted, its assignee taken
  * off or its schedule changed on another device.
  */
-export const stillOn = (o: Occurrence, day: ISODate) => occurrencesFor(day).some((x) => x.id === o.id);
+export const stillOn = (o: Occurrence, day: ISODate) =>
+  (day === today.value ? todayOccurrences.value : occurrencesFor(day)).some((x) => x.id === o.id);
 
 /** A check-off or skip is written only for a current occurrence, in loaded history. */
 const canMark = (o: Occurrence, day: ISODate) => inHistory(o, day) && stillOn(o, day);
