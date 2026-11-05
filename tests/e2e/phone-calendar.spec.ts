@@ -277,7 +277,9 @@ test('To assign: a tap assigns, both badges go down, and the wall’s assignment
     'aria-pressed',
     'true',
   );
-  // Taking the last person off puts it back in the queue.
+  // Taking the last person off puts it back in the queue. (A tap on the chip tapped last, within the
+  // double-tap time, is the rest of that double tap: wait it out.)
+  await page.waitForTimeout(500);
   await row.getByRole('button', { name: 'Mamma', exact: true }).click();
   await row.getByRole('button', { name: 'Hashim!', exact: true }).click();
   await expect(calTab(page).locator('.badge')).toHaveText('2');
@@ -651,8 +653,10 @@ test('a tap while a sheet is opening reaches what it is aimed at', async ({ brow
   await page.waitForTimeout(60);
   await page.mouse.click(edit.x + edit.width / 2, edit.y + edit.height / 2);
   await expect(page.locator('.sheet input[name="title"]')).toBeVisible();
-  // A tap in the title field just as the editor opens lands in it.
+  // A tap in the title field just as the editor opens lands in it. (The + sits under the X: a tap there
+  // within the double-tap time of the one that closed the editor is the rest of that double tap.)
   await page.locator('.sheet').getByRole('button', { name: 'Close' }).click();
+  await page.waitForTimeout(500);
   await page.getByRole('button', { name: 'Add event' }).click();
   await page.waitForTimeout(60);
   await page.mouse.click(title.x + 30, title.y + title.height / 2);
