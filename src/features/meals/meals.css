@@ -154,6 +154,12 @@
 .mg-title {
   flex: 1;
   min-width: 0;
+  /*
+   * Start, not the entry's left: the title is a bdi, so an Arabic one is a
+   * right-to-left block, and Chrome draws no line-clamp ellipsis on a
+   * right-to-left block aligned left (a cut title would look whole).
+   */
+  text-align: start;
   display: -webkit-box;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
