@@ -272,13 +272,19 @@ sequenceDiagram
   P->>P: refused by the rules at once, signs out, told why
 ```
 
-- **Layout** (`app/layout.ts`): chosen once per page load: `?layout=` in
-  the URL, else the choice stored on the device (pairing stores 'phone', a
-  wall stores 'wall' once signed in), else a device that remembers a
-  household it opened as the wall (`manwar.claims.v1` without a device: a
-  wall with no stored choice, so a small tablet or a larger display size
-  never turns it into a phone), else a short screen side
-  under 600 CSS px is a phone. Switching stores
+- **Layout** (`app/layout.ts`, `chooseLayout`): chosen once per page
+  load: `?layout=` in the URL, else a choice made on the device (the
+  layout switches below and the pairing screen's This is the wall, stored
+  in `manwar.layout.v2`), else a paired phone (`manwar.claims.v1` with a
+  device) is a phone, else Fully Kiosk (`underFully`) is a wall, else the
+  screen: a short side under 480 CSS px is a phone whatever the device
+  signed in as (a phone once signed in with the household's Google
+  account is still a phone), under 600 too unless the device remembers
+  the household as the wall (claims without a device: a small tablet, or
+  one with a larger display size), otherwise a wall. Only a choice is
+  stored; what a device signed in as follows its session. The pairing
+  screen's link to the wall layout shows with the form only, not while a
+  signed-in phone loads. Switching stores
   and reloads, so the wall's services (display schedule, wake lock, idle
   return, seeding, remote commands) never start on a phone
   (`app/start.ts`). More > This phone asks before it switches to the wall

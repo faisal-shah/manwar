@@ -13,7 +13,7 @@ import { session } from '../data/session';
 import { holdSleepForTimer } from '../features/timer/state';
 import { startPhoneTheme } from '../phone/theme';
 import { startBack } from '../ui/back';
-import { isPhone, rememberLayout } from './layout';
+import { isPhone } from './layout';
 import { startIdleReturn } from './nav';
 
 /**
@@ -40,8 +40,6 @@ export function startApp(): void {
     startCalendarSync();
     startWeather();
     if (isPhone) return;
-    // A wall stays one however its screen measures (a display size changed later).
-    rememberLayout('wall');
     void seedIfEmpty();
     startIdleReturn();
     holdSleepForTimer();

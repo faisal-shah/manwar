@@ -203,7 +203,7 @@ test('a paired device switched to the wall layout is a wall: it asks for the PIN
   await p.page.getByRole('button', { name: 'About' }).click();
   await p.page.getByRole('button', { name: 'Use the phone layout here' }).click();
   await expect(p.page.locator('.ph-nav')).toBeVisible({ timeout: 30_000 });
-  expect(await p.page.evaluate(() => localStorage.getItem('manwar.layout.v1'))).toBe('phone');
+  expect(await p.page.evaluate(() => localStorage.getItem('manwar.layout.v2'))).toBe('phone');
   expect([...w.errors, ...p.errors]).toEqual([]);
 });
 
@@ -225,4 +225,56 @@ test('the wall offers the phone layout only on a device that could be a phone', 
   await expect(page.locator('.ph-nav')).toBeVisible({ timeout: 30_000 });
   expect(new URL(page.url()).searchParams.get('layout')).toBeNull();
   expect(w.errors).toEqual([]);
+});
+
+test('a phone once signed in as the wall opens as a phone next time, and its loading screen offers no wall layout', async ({
+  browser,
+}) => {
+  const household = `e2e-pair-${RUN}-once-wall`;
+  const w = await wall(browser, household);
+  const ctx = await newContext(browser, { ...devices['Pixel 7'], timezoneId: 'America/Chicago' });
+  const page = await ctx.newPage();
+  // Signed in as the household's wall, in the wall layout (as a phone was before the companion, or by ?layout=wall).
+  await page.goto(`/?demo=${household}&layout=wall&${NOW}`);
+  await expect(page.locator('.shell')).toBeVisible({ timeout: 30_000 });
+  await page.goto(`/?demo=${household}&${NOW}`);
+  await expect(page.locator('.ph-nav')).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator('html')).toHaveAttribute('data-layout', 'phone');
+  // Loading (the household out of reach): no way into the wall layout from here.
+  const firestore = /^https?:\/\/[^/]+:8080\//;
+  await page.route(firestore, (r) => r.abort('internetdisconnected'));
+  await page.reload();
+  await expect(page.locator('.ph-loading')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole('button', { name: 'This is the wall: use the wall layout' })).toHaveCount(0);
+  await page.unroute(firestore);
+  expect(w.errors).toEqual([]);
+});
+
+test('a small tablet that opened the household as the wall stays one; the wall under Fully Kiosk is one at any size', async ({
+  browser,
+}) => {
+  const household = `e2e-pair-${RUN}-small-wall`;
+  const small = { viewport: { width: 853, height: 533 }, screen: { width: 853, height: 533 }, hasTouch: true };
+  const tablet = await (await newContext(browser, { ...small, timezoneId: 'America/Chicago' })).newPage();
+  await tablet.goto(`/?demo=${household}&layout=wall&${NOW}`);
+  await expect(tablet.locator('.shell')).toBeVisible({ timeout: 30_000 });
+  await tablet.goto(`/?demo=${household}&${NOW}`);
+  await expect(tablet.locator('.shell')).toBeVisible({ timeout: 30_000 });
+
+  // The same screen, never signed in: the pairing screen, which can make it the wall.
+  const fresh = await (await newContext(browser, { ...small, timezoneId: 'America/Chicago' })).newPage();
+  await fresh.goto(`/?demo=${household}&pair=&${NOW}`);
+  await expect(fresh.getByRole('heading', { name: 'Pair this phone' })).toBeVisible({ timeout: 30_000 });
+  await fresh.getByRole('button', { name: 'This is the wall: use the wall layout' }).click();
+  await expect(fresh.locator('html')).toHaveAttribute('data-layout', 'wall', { timeout: 30_000 });
+  await fresh.goto(`/?demo=${household}&${NOW}`);
+  await expect(fresh.locator('.shell')).toBeVisible({ timeout: 30_000 });
+
+  // Fully Kiosk's JavaScript Interface: the wall, even on a phone-sized screen.
+  const kiosk = await (await newContext(browser, { ...devices['Pixel 7'], timezoneId: 'America/Chicago' })).newPage();
+  await kiosk.addInitScript(() => {
+    (window as unknown as { fully: object }).fully = { setScreenBrightness: () => {}, turnScreenOn: () => {} };
+  });
+  await kiosk.goto(`/?demo=${household}&${NOW}`);
+  await expect(kiosk.locator('.shell')).toBeVisible({ timeout: 30_000 });
 });

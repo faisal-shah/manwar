@@ -2,6 +2,19 @@
 Changelog
 =========
 
+0.2.2 (2026-11-05)
+==================
+
+Fixed
+-----
+
+- A phone once signed in with the household's Google account opened as a
+  second wall. A screen under 480 CSS px on its short side is now a phone
+  unless a layout was chosen on it; only a choice made on the device is
+  stored, and a device under Fully Kiosk opens as the wall.
+- The phone's loading screen no longer offers the wall layout; the link
+  shows with the pairing form only.
+
 0.2.1 (2026-11-05)
 ==================
 

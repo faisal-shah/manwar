@@ -2,7 +2,7 @@ import { useRef, useState } from 'preact/hooks';
 import { pairParam, pairPhone, session } from '../data/session';
 import { loadError } from '../data/store';
 import { currentTime, nowMs } from '../lib/clock';
-import { rememberLayout, switchLayout } from '../app/layout';
+import { switchLayout } from '../app/layout';
 import { Button } from '../ui/controls';
 import { Wordmark } from '../ui/Logo';
 import { formatPairCode } from './pairCode';
@@ -34,7 +34,6 @@ export function PairScreen() {
     setError(null);
     try {
       await pairPhone(code, name);
-      rememberLayout('phone');
       // The code is used up: a reload must not show it again.
       const url = new URL(location.href);
       url.searchParams.delete('pair');
@@ -93,11 +92,12 @@ export function PairScreen() {
           <Button variant="primary" type="submit" disabled={busy || code.replace('-', '').length !== 8 || !name.trim()}>
             {busy ? 'Pairing…' : 'Pair'}
           </Button>
+          {/* A wall tablet that opened as a phone, signed out (a signed-in device switches in This phone). */}
+          <button type="button" class="ph-link" onClick={() => switchLayout('wall')}>
+            This is the wall: use the wall layout
+          </button>
         </form>
       )}
-      <button type="button" class="ph-link" onClick={() => switchLayout('wall')}>
-        This is the wall: use the wall layout
-      </button>
     </div>
   );
 }
