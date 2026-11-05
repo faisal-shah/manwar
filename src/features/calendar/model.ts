@@ -117,16 +117,6 @@ export function whenLabel(ev: CalEvent): string {
   return `${formatHeaderDate(first)}, ${formatTime(ev.start, fmt())} - ${formatHeaderDate(last)}, ${formatTime(ev.end, fmt())}`;
 }
 
-/** Reminder line for the detail popover. */
-export function reminderLabel(minutes: number | null | undefined): string | null {
-  if (minutes === undefined) return null;
-  if (minutes === null) return 'No reminder';
-  if (minutes === 0) return 'At time of event';
-  if (minutes % 1440 === 0) return `${minutes / 1440} ${minutes === 1440 ? 'day' : 'days'} before`;
-  if (minutes % 60 === 0) return `${minutes / 60} ${minutes === 60 ? 'hour' : 'hours'} before`;
-  return `${minutes} minutes before`;
-}
-
 /** The clock at minute resolution: views that only need minutes re-render once a minute, not every second. */
 export const nowMinute = computed(() => Math.floor(nowMs.value / 60_000) * 60_000);
 

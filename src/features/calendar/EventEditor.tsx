@@ -30,7 +30,8 @@ import {
   shiftStart,
   type Form,
 } from './form';
-import { calendarName, reminderLabel } from './model';
+import { reminderLabel } from './layout';
+import { calendarName } from './model';
 import { editorSaved, type EditorRequest } from './state';
 
 const REMINDERS = [0, 5, 10, 15, 30, 60, 120, 1440];

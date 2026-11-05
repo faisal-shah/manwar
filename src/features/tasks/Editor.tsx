@@ -21,6 +21,7 @@ import {
 } from './draft';
 import { SECTION_META } from './logic';
 import { currentPart } from './view';
+import { pluralWord } from '../../lib/text';
 
 /** Mounted by the Tasks tab and the Home pane; opened through editTask() (parent PIN). */
 export function EditorHost() {
@@ -246,9 +247,9 @@ function TaskEditor({ task, onClose }: { task: Task | null; onClose: () => void 
                   <Segmented<AfterUnit>
                     value={d.after.unit}
                     options={[
-                      { value: 'day', label: d.after.every === 1 ? 'day' : 'days' },
-                      { value: 'week', label: d.after.every === 1 ? 'week' : 'weeks' },
-                      { value: 'month', label: d.after.every === 1 ? 'month' : 'months' },
+                      { value: 'day', label: pluralWord(d.after.every, 'day') },
+                      { value: 'week', label: pluralWord(d.after.every, 'week') },
+                      { value: 'month', label: pluralWord(d.after.every, 'month') },
                     ]}
                     onChange={(unit) => set({ after: { ...d.after, unit } })}
                   />

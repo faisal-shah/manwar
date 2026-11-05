@@ -12,6 +12,7 @@ import { Avatar, ProfilePicker } from '../../ui/profile';
 import { MAX_MESSAGE_LENGTH, messageSize, timeAgo } from './logic';
 import { canSpeak, composerOpen, dismissMessage, openComposer, pending, postMessage, speak } from './state';
 import './messages.css';
+import { plural } from '../../lib/text';
 
 export { openComposer } from './state';
 
@@ -133,7 +134,7 @@ function Note({ m, more }: { m: Message; more: number }) {
               </button>
             )}
           </div>
-          {more > 0 && <p class="message-more">{more === 1 ? '1 more message' : `${more} more messages`} after this</p>}
+          {more > 0 && <p class="message-more">{plural(more, 'more message', 'more messages')} after this</p>}
         </div>
       </article>
     </div>

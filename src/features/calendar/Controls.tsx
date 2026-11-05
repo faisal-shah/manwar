@@ -5,6 +5,7 @@ import type { CalendarView } from '../../data/types';
 import { FilterMenu } from './Filter';
 import { Menu } from './Menu';
 import { VIEWS, goToday, page, setView, triageOpen, viewLabel, type CalNav } from './state';
+import { plural } from '../../lib/text';
 
 type Open = { kind: 'view' | 'filter'; rect: DOMRect } | null;
 
@@ -25,7 +26,7 @@ export function NavControls({ nav, compact }: { nav: CalNav; compact?: boolean }
           type="button"
           class="ctl triage-btn"
           onClick={() => (triageOpen.value = true)}
-          aria-label={`${n} events to assign`}
+          aria-label={`${plural(n, 'event')} to assign`}
         >
           <Inbox size="2rem" strokeWidth={1.8} />
           To assign

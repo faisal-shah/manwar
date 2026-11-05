@@ -24,6 +24,7 @@ import {
   toggleCollapsed,
   updateItem,
 } from './state';
+import { plural } from '../../lib/text';
 
 /** The list editor sheet (new list or edit), opened from the + button or a card menu. Hosted by the Lists tab body. */
 export const listEditor = signal<{ list?: List } | null>(null);
@@ -221,7 +222,7 @@ export function ListCard({ list, compact }: { list: List; compact?: boolean }) {
 async function askClearDone(list: List, n: number) {
   await asParent(async () => {
     if (
-      !(await confirm(`Clear ${n} done item${n === 1 ? '' : 's'}?`, {
+      !(await confirm(`Clear ${plural(n, 'done item')}?`, {
         body: `They are removed from ${list.title}.`,
         ok: 'Clear',
         danger: true,
@@ -235,7 +236,7 @@ async function askClearDone(list: List, n: number) {
 export async function askDeleteList(list: List, n: number): Promise<boolean> {
   let deleted = false;
   await asParent(async () => {
-    const body = n ? `The list and its ${n} item${n === 1 ? '' : 's'} are deleted.` : 'The list is deleted.';
+    const body = n ? `The list and its ${plural(n, 'item')} are deleted.` : 'The list is deleted.';
     if (!(await confirm(`Delete ${list.title}?`, { body: `${body} This cannot be undone.`, ok: 'Delete', danger: true }))) return;
     deleteList(list);
     deleted = true;

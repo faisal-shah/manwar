@@ -7,6 +7,7 @@ import { Button } from '../../ui/controls';
 import { Modal, toast } from '../../ui/overlays';
 import { ensureGroceryList, groceryList, itemsByList, mergeItems } from '../lists/state';
 import { classifyIngredients } from './ingredients';
+import { plural } from '../../lib/text';
 
 /** Open request for the "Add to Grocery List" modal; <IngredientsHost/> is mounted once by the shell (app/tabs Overlays). */
 const request = signal<Recipe | null>(null);
@@ -51,7 +52,7 @@ function IngredientsModal({ recipe, onClose }: { recipe: Recipe; onClose: () => 
         picked.map((r) => ({ name: r.name, qty: r.qty, reopenId: r.status === 'reopen' ? r.itemId : undefined })),
       );
       onClose();
-      toast(`Added ${picked.length} item${picked.length === 1 ? '' : 's'} to ${target.title}.`, {
+      toast(`Added ${plural(picked.length, 'item')} to ${target.title}.`, {
         label: 'Undo',
         run: () => void asParent(undo),
       });
@@ -68,7 +69,7 @@ function IngredientsModal({ recipe, onClose }: { recipe: Recipe; onClose: () => 
               No thanks
             </Button>
             <Button variant="primary" disabled={!picked.length} onClick={add}>
-              <ShoppingCart size="2.2rem" /> Add {picked.length} item{picked.length === 1 ? '' : 's'}
+              <ShoppingCart size="2.2rem" /> Add {plural(picked.length, 'item')}
             </Button>
           </>
         ) : (

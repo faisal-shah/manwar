@@ -10,6 +10,7 @@ import { Sheet, toast } from '../../ui/overlays';
 import { Avatar } from '../../ui/profile';
 import { historyFor, loadOlderLedger, moreLedger, olderLedger } from './history-state';
 import { MAX_REWARD_COST, REASON_LABEL, formatStars, relativeTime, undoable } from './logic';
+import { plural, pluralWord } from '../../lib/text';
 
 /** Star history for one profile: every ledger entry newest first, with undo, plus Give / Remove stars. */
 export function HistoryHost() {
@@ -55,7 +56,7 @@ function StarHistory({ profileId, onClose }: { profileId: string; onClose: () =>
         <Avatar profile={p} size={7.2} />
         <div class="hist-balance">
           <span class="serif">{p.stars.toLocaleString()}</span>
-          <span class="muted">stars</span>
+          <span class="muted">{pluralWord(p.stars, 'star')}</span>
         </div>
         <div class="hist-actions">
           <Button small onClick={() => void asParent(() => setAdjust('give'), 'Enter the PIN to give stars.')}>
@@ -179,7 +180,7 @@ function Adjust({
       />
       <p class={valid ? 'muted' : 'hist-error'}>
         {valid
-          ? `${balance.toLocaleString()} → ${after.toLocaleString()} stars`
+          ? `${balance.toLocaleString()} → ${plural(after, 'star')}`
           : max < 1
             ? 'There are no stars to remove.'
             : `Enter a whole number from 1 to ${max.toLocaleString()}.`}
@@ -194,7 +195,7 @@ function Adjust({
           onClick={() =>
             void asParent(() => {
               void adjustStars(profileId, kind === 'give' ? amount : -amount, note.trim() || undefined);
-              toast(`${kind === 'give' ? 'Gave' : 'Removed'} ${amount} ${amount === 1 ? 'star' : 'stars'}`);
+              toast(`${kind === 'give' ? 'Gave' : 'Removed'} ${plural(amount, 'star')}`);
               onDone();
             })
           }

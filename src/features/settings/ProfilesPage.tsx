@@ -13,6 +13,7 @@ import { ColorSwatches, EmojiPicker, PROFILE_COLORS } from '../../ui/pickers';
 import { Avatar } from '../../ui/profile';
 import { describeProfileDelete, moveId, moveTarget, nameTaken, planProfileDelete, type MoveRun } from './logic';
 import { Group, PageTitle } from './parts';
+import { plural } from '../../lib/text';
 
 const REASON = 'Enter the PIN to change profiles.';
 /** Firestore batches hold at most 500 writes. */
@@ -50,7 +51,7 @@ export function ProfilesPage() {
               <span class="set-label">
                 <span class="profile-name">{p.name}</span>
                 <small>
-                  {p.birthday ? `Birthday ${formatBirthday(p.birthday)}` : 'No birthday'} · {p.stars} stars
+                  {p.birthday ? `Birthday ${formatBirthday(p.birthday)}` : 'No birthday'} · {plural(p.stars, 'star')}
                 </small>
               </span>
               <ChevronRight size="2.4rem" class="muted" />

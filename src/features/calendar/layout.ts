@@ -14,6 +14,7 @@ import {
   startOfWeek,
   toISODate,
 } from '../../lib/date';
+import { plural } from '../../lib/text';
 
 /**
  * Pure layout and navigation rules for the calendar views. No signals or DOM
@@ -166,7 +167,7 @@ export function rangeLabel(from: ISODate, to: ISODate): string {
 /** "No events", "1 event", "4 events", "12 events today". */
 export function countLabel(n: number, isToday: boolean): string {
   if (n === 0) return 'No events';
-  return `${n} ${n === 1 ? 'event' : 'events'}${isToday ? ' today' : ''}`;
+  return `${plural(n, 'event')}${isToday ? ' today' : ''}`;
 }
 
 /* ---------- Time grid lanes ---------- */
@@ -359,4 +360,17 @@ export function segmentOn(ev: { start: Date; end: Date }, day: ISODate): { start
 export function miniMonthDays(month: ISODate, weekStart: 0 | 1): ISODate[] {
   const from = startOfWeek(startOfMonth(month), weekStart);
   return Array.from({ length: 42 }, (_, i) => addDays(from, i));
+}
+
+/** A countdown's days to go: "Today!", "1 day", "9 days". */
+export const daysText = (days: number) => (days === 0 ? 'Today!' : plural(days, 'day'));
+
+/** Reminder line for the event detail and editor. */
+export function reminderLabel(minutes: number | null | undefined): string | null {
+  if (minutes === undefined) return null;
+  if (minutes === null) return 'No reminder';
+  if (minutes === 0) return 'At time of event';
+  if (minutes % 1440 === 0) return `${plural(minutes / 1440, 'day')} before`;
+  if (minutes % 60 === 0) return `${plural(minutes / 60, 'hour')} before`;
+  return `${plural(minutes, 'minute')} before`;
 }

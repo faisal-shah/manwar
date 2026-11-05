@@ -186,6 +186,19 @@ test('runs a short timer to the end', async ({ page }) => {
   await expect(layer).toHaveCount(0);
 });
 
+test('the timer readout says one minute, not one mins', async ({ page }) => {
+  await open(page);
+  await page.clock.install();
+  await rail(page, 'Home').click();
+  await page.getByRole('button', { name: 'Timer' }).click();
+  await digit(page.locator('.modal'), '2').click();
+  await page.getByRole('button', { name: 'Start' }).click();
+  const clock = page.locator('.timer-layer .timer-clock');
+  await page.clock.fastForward('00:45');
+  await expect(clock).toHaveAttribute('aria-label', /^1 minute \d+ seconds left$/);
+  await expect(clock.locator('small').first()).toHaveText('min');
+});
+
 test('a running timer holds off scheduled sleep until 5 minutes after it ends', async ({ page }) => {
   await open(page);
   await page.clock.install();

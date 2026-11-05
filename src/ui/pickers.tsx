@@ -3,6 +3,7 @@ import type { ISODate, Repeat, RepeatUnit, Weekday } from '../data/types';
 import { dayShort, weekdayOf } from '../lib/date';
 import { describeRepeat } from '../lib/repeat';
 import { Chips, Segmented, Stepper, Toggle } from './controls';
+import { pluralWord } from '../lib/text';
 
 /** Profile colors offered by Skylight's profile editor (research/04, sampled swatches). */
 export const PROFILE_COLORS = [
@@ -137,7 +138,7 @@ export function RepeatEditor({
           <div class="row">
             <span class="muted">Every</span>
             <Stepper value={value.every} min={1} max={30} onChange={(every) => set({ every })} />
-            <span class="muted">{value.unit + (value.every === 1 ? '' : 's')}</span>
+            <span class="muted">{pluralWord(value.every, value.unit)}</span>
           </div>
           {value.unit === 'week' && (
             <Chips<Weekday>

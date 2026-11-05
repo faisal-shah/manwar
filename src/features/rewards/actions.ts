@@ -6,6 +6,7 @@ import type { LedgerEntry, Profile, Reward } from '../../data/types';
 import { redeemReward, undoLedgerEntry } from '../../tasks/state';
 import { confirm, toast } from '../../ui/overlays';
 import { formatStars, rewardsFor } from './logic';
+import { plural, pluralWord } from '../../lib/text';
 
 /** Reward editor: a reward, 'new', or closed. */
 export const editingReward = signal<Reward | 'new' | null>(null);
@@ -33,7 +34,9 @@ export function redeem(reward: Reward, p: Profile): void {
     const view = rewardsFor(data.rewards.value, p.id, balance, false).find((v) => v.reward.id === reward.id);
     if (!view?.affordable) {
       if (view && view.redeemedAt === undefined)
-        toast(`${p.name} needs ${formatStars(view.reward.cost)} stars for ${view.reward.title}.`);
+        toast(
+          `${p.name} needs ${formatStars(view.reward.cost)} ${pluralWord(view.reward.cost, 'star')} for ${view.reward.title}.`,
+        );
       return;
     }
     const entry = redeemReward(view.reward, p.id);
@@ -49,7 +52,7 @@ export function unredeem(r: Redeemed): void {
     redeemed.value = null;
     if (!undoLedgerEntry(r.entry)) return;
     const n = -r.entry.delta;
-    toast(`${r.reward.title} unredeemed, ${n.toLocaleString()} ${n === 1 ? 'star' : 'stars'} back`);
+    toast(`${r.reward.title} unredeemed, ${plural(n, 'star')} back`);
   }, 'Enter the PIN to undo the redemption.');
 }
 
