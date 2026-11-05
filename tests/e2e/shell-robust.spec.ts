@@ -27,7 +27,12 @@ async function open(page: Page, extra = ''): Promise<string> {
 function sessionModule(page: Page): () => string {
   const urls: string[] = [];
   page.on('request', (r) => urls.push(r.url()));
-  return () => urls.find((u) => new URL(u).pathname === '/src/data/session.ts')!;
+  return () => {
+    const url = urls.find((u) => new URL(u).pathname === '/src/data/session.ts');
+    // A production build bundles the module: nothing to drive.
+    test.skip(!url, 'drives the session module, which only the dev server serves');
+    return url!;
+  };
 }
 
 /** Ask the token Function for a Calendar token; the demo household has no Google connection, so it refuses. */
@@ -197,7 +202,6 @@ test('Sleep now survives a reload of the page', async ({ page }) => {
 });
 
 test('a Google connection that needs a reconnect shows on the wall and leads to Settings', async ({ page }) => {
-  test.skip(!process.env.PW_BASE, 'calls the session module through the dev server');
   const session = sessionModule(page);
   await open(page);
   await expect(page.locator('.sync-status')).toHaveCount(0);
@@ -266,7 +270,6 @@ test('a sleep or night window with the same From and To says it never turns on',
 });
 
 test('Reconnect asks for the PIN once the lock has relocked behind an open Settings', async ({ page }) => {
-  test.skip(!process.env.PW_BASE, 'calls the session module through the dev server');
   const session = sessionModule(page);
   await page.clock.install();
   await open(page);
