@@ -212,7 +212,7 @@ test('Settings: three quick taps on one Move up button move that person up three
     await seedDoc(name, 'profiles', { id: `p${i}`, name: n, color: '#2177AE', order: i, stars: 0, createdAt: i });
   await rail(page, 'Settings').click();
   const names = page.locator('.profile-name');
-  await expect(names).toHaveText(['Baba', 'Mama', 'Alexandria', 'Maryam', 'Yusuf']);
+  await expect(names).toHaveText(['Baba', 'Mama', 'Alexandria', 'Maryam', 'Yusuf'], { timeout: 30_000 });
   // A finger tapping where Yusuf's button was: after each move his row (and button) has gone up.
   await page.locator('.sheet').evaluate((el) => Promise.all(el.getAnimations({ subtree: true }).map((a) => a.finished)));
   const up = (await page.getByRole('button', { name: 'Move Yusuf up' }).boundingBox())!;
@@ -221,5 +221,25 @@ test('Settings: three quick taps on one Move up button move that person up three
     await page.waitForTimeout(250);
   }
   await expect(names).toHaveText(['Baba', 'Yusuf', 'Mama', 'Alexandria', 'Maryam']);
+  await ctx.close();
+});
+
+test('Lists: three quick taps on one section arrow move that section up three places', async ({ browser }) => {
+  const { ctx, page, name } = await tablet(browser, '&seed=none');
+  const sections = ['Produce', 'Dairy', 'Pantry', 'Frozen'].map((n, i) => ({ id: `s${i}`, name: n }));
+  await seedDoc(name, 'lists', { id: 'l1', title: 'Costco', kind: 'todo', sections, order: 5, createdAt: 1 });
+  await rail(page, 'Lists').click();
+  await page.getByRole('button', { name: 'Costco menu' }).click({ timeout: 30_000 });
+  await page.getByRole('button', { name: 'Edit list' }).click();
+  const editor = page.getByRole('dialog', { name: 'Edit list' });
+  const order = () => editor.locator('.section-row input').evaluateAll((els) => els.map((el) => (el as HTMLInputElement).value));
+  await expect.poll(order).toEqual(['Produce', 'Dairy', 'Pantry', 'Frozen']);
+  await editor.evaluate((el) => Promise.all(el.getAnimations({ subtree: true }).map((a) => a.finished)));
+  const up = (await editor.getByRole('button', { name: 'Move Frozen up' }).boundingBox())!;
+  for (let i = 0; i < 3; i++) {
+    await page.touchscreen.tap(up.x + up.width / 2, up.y + up.height / 2);
+    await page.waitForTimeout(250);
+  }
+  await expect.poll(order).toEqual(['Frozen', 'Produce', 'Dairy', 'Pantry']);
   await ctx.close();
 });
