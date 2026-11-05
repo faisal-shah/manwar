@@ -246,6 +246,8 @@ function resetForHousehold(household: string | null): void {
 
 let running: Promise<void> | null = null;
 let queued: Promise<void> | null = null;
+/** The queued fetch is one a person waits for (syncNow): a pause the running fetch starts does not skip it. */
+let queuedForced = false;
 
 /**
  * Re-fetch every shown calendar. A call made while a fetch is running gets
@@ -254,23 +256,29 @@ let queued: Promise<void> | null = null;
  * While the sync is paused for a rate limit it does nothing; the fetch at
  * the end of the pause covers it.
  */
-export function refresh(): Promise<void> {
-  if (Date.now() < pause.until) return Promise.resolve();
-  if (!running) {
-    running = fetchAll().finally(() => (running = null));
-    return running;
-  }
-  queued ??= running.then(() => {
-    queued = null;
-    return refresh();
-  });
-  return queued;
-}
+export const refresh = (): Promise<void> => fetchSoon(false);
 
 /** Fetch now even while the sync is paused: a person asked (Sync now), or Google just accepted their save. */
 export function syncNow(): Promise<void> {
   endPause();
-  return refresh();
+  return fetchSoon(true);
+}
+
+/** refresh(), or with `force` syncNow(): a pause started meanwhile (by the fetch running now) does not skip it. */
+function fetchSoon(force: boolean): Promise<void> {
+  if (!force && Date.now() < pause.until) return Promise.resolve();
+  if (!running) {
+    running = fetchAll().finally(() => (running = null));
+    return running;
+  }
+  if (force) queuedForced = true;
+  queued ??= running.then(() => {
+    const forced = queuedForced;
+    queued = null;
+    queuedForced = false;
+    return fetchSoon(forced);
+  });
+  return queued;
 }
 
 /** Make sure [from, to] is loaded (views call this when paging). */

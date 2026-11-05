@@ -153,6 +153,26 @@ describe('calendar sync under a rate limit', () => {
     expect([inserted, asked]).toEqual([1, 2]);
   });
 
+  it('fetches a saved event even when the poll running at the save is limited', async () => {
+    // A poll is on its way when the save goes through; Google limits the poll.
+    let answer!: () => void;
+    source.listCalendars = () => {
+      asked++;
+      if (asked > 1) return Promise.resolve([CAL]);
+      return new Promise((_, reject) => (answer = () => reject(new RateLimited('busy', null))));
+    };
+    const poll = engine.refresh();
+    source.insert = async () => {};
+    const saved = engine.createEvent('fam', 'new2', { title: 'Swim', allDay: false, start: new Date(), end: new Date() }, []);
+    await vi.advanceTimersByTimeAsync(0);
+    answer();
+    await poll;
+    // The fetch the save waits for still runs, though the poll paused the background sync.
+    await saved;
+    expect(asked).toBe(2);
+    expect(engine.events.value.map((e) => e.id)).toEqual(['dentist']);
+  });
+
   it('does not pause for other errors', async () => {
     source.listCalendars = async () => {
       asked++;

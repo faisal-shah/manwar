@@ -151,7 +151,9 @@ flowchart LR
   Retry-After says so), then one fetch runs. A save is never held by the
   pause: it retries a limit twice (1 s and 2 s plus jitter, or a
   Retry-After up to 5 s) and otherwise fails saying when to try again.
-  Google accepting a save, and Sync now, resume the sync (`syncNow`).
+  Google accepting a save, and Sync now, resume the sync (`syncNow`); the
+  fetch they wait for runs even when the fetch running at the time is
+  limited and pauses the sync again.
 - **Tasks**: `tasks/engine.ts` is pure (occurrences from schedules; late
   chores; Up for Grabs; repeat-after-done via `Task.lastDone`), unit-tested.
   `tasks/state.ts` has the reactive views and the writes. Stars use an
