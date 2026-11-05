@@ -107,7 +107,7 @@
 }
 .tk-title {
   font-weight: 600;
-  font-size: 1.8rem;
+  font-size: 2rem;
   line-height: 1.2;
   overflow-wrap: anywhere;
 }
@@ -132,8 +132,10 @@
   padding: 0.1rem 0.8rem;
   border-radius: 99rem;
   font-weight: 700;
-  color: var(--today);
-  background: color-mix(in srgb, var(--today) 12%, transparent);
+  /* Solid, with the red's ink: a tint over a tinted card falls under AA in the dark theme. */
+  background: var(--danger);
+  color: #fff;
+  color: lch(from var(--danger) calc((50 - l) * infinity) 0 0);
 }
 .tk-stars,
 .tk-chip {
@@ -144,6 +146,15 @@
   border-radius: 99rem;
   background: var(--surface-strong);
   color: var(--text-2);
+}
+/* On a tinted card in the dark theme a lighter chip and grey text fall under AA: darken the chip, lift the text. */
+:root[data-theme='dark'] .tk-meta {
+  color: color-mix(in srgb, var(--text) 84%, transparent);
+}
+:root[data-theme='dark'] .tk-stars,
+:root[data-theme='dark'] .tk-chip {
+  background: color-mix(in srgb, var(--tint-base) 55%, transparent);
+  color: var(--text);
 }
 .tk-stars.earned svg {
   color: var(--star);
@@ -191,6 +202,7 @@
 }
 .tk-card.done .tk-circle {
   background: var(--c);
+  color: lch(from var(--c) calc((50 - l) * infinity) 0 0);
   box-shadow: 0 0 0 0.25rem color-mix(in srgb, var(--tint-base) 55%, transparent);
   animation: check-pop 0.32s cubic-bezier(0.3, 1.6, 0.5, 1);
 }
@@ -447,7 +459,7 @@
   flex: 1;
   min-height: 0;
   /* The last row can scroll clear of the + button. */
-  padding-bottom: 9rem;
+  padding-bottom: var(--fab-clear);
 }
 .wk-section {
   margin: 1.2rem 1.2rem 0.6rem;
@@ -518,6 +530,7 @@
 }
 .wk-dot.done {
   color: #fff;
+  color: lch(from var(--c) calc((50 - l) * infinity) 0 0);
 }
 .wk-dot.done::before {
   background: var(--c);
@@ -578,7 +591,8 @@
   display: flex;
   flex-direction: column;
   gap: 0.8rem;
-  padding: 0 1rem 1.2rem;
+  /* Home with the Lists pane off puts this column under the + button. */
+  padding: 0 1rem var(--fab-clear);
 }
 .tp-list .tk-card {
   flex: none;

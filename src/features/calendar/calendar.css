@@ -11,7 +11,7 @@
   --ev-tint-light: 22%;
 }
 :root[data-theme='dark'] {
-  --ev-tint-mid: 50%;
+  --ev-tint-mid: 42%;
   --ev-tint-light: 26%;
 }
 
@@ -63,12 +63,6 @@
 }
 .cal-ctls .ctl-round {
   width: 4.8rem;
-}
-/* Visual pills stay small and calm; the touch target is 5.6rem. */
-.cal-ctls .ctl::after {
-  content: '';
-  position: absolute;
-  inset: -0.4rem -0.2rem;
 }
 .cal-ctls .cal-today-btn.at {
   color: var(--text-3);
@@ -157,13 +151,13 @@
   --pct: 0%;
   flex: 1 1 0;
   min-width: 0;
-  height: 4.8rem;
+  height: var(--touch);
   display: flex;
   align-items: center;
   gap: 1rem;
-  padding: 0 1.6rem 0 0.8rem;
+  padding: 0 1.8rem 0 1rem;
   border-radius: 99rem;
-  font-size: 1.8rem;
+  font-size: 2rem;
   font-weight: 500;
   color: var(--on-tint);
   background: linear-gradient(
@@ -177,17 +171,30 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* A crowded strip (seven or eight people) keeps avatar and count whole rather than a name cut to "B…". */
+.cal-prog {
+  container-type: inline-size;
+}
+@container (max-width: 17rem) {
+  .cal-prog-name {
+    display: none;
+  }
+  .cal-prog-count {
+    margin: 0 auto;
+  }
+}
 .cal-prog-count {
   flex: none;
   display: inline-flex;
   align-items: center;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 .cal-cd {
   flex: 0 1 auto;
   max-width: 38rem;
   min-width: 0;
-  height: 4.8rem;
+  height: var(--touch);
   display: inline-flex;
   align-items: center;
   gap: 0.8rem;
@@ -260,7 +267,7 @@
   min-width: 0;
 }
 .ev-time {
-  color: color-mix(in srgb, var(--on-tint) 68%, transparent);
+  color: color-mix(in srgb, var(--on-tint) 88%, transparent);
   white-space: nowrap;
   overflow: hidden;
 }
@@ -325,7 +332,7 @@
   flex-direction: column;
 }
 .ev-block .ev-title {
-  font-size: 1.55rem;
+  font-size: 1.6rem;
   line-height: 1.25;
 }
 .ev-block .ev-time {
@@ -368,17 +375,18 @@
   border-radius: 99rem;
   overflow: hidden;
   white-space: nowrap;
-  font-size: 1.45rem;
+  font-size: 1.5rem;
   color: var(--on-tint);
   text-align: left;
 }
 .ev-pill .ev-title {
   font-weight: 500;
   flex: 1;
+  text-overflow: ellipsis;
 }
 .ev-prefix {
   flex: none;
-  font-size: 1.15rem;
+  font-size: 1.3rem;
   font-weight: 600;
   opacity: 0.72;
 }
@@ -414,6 +422,7 @@
 }
 .cal-meal .ev-title {
   font-weight: 500;
+  text-overflow: ellipsis;
 }
 .cal-meal-badge {
   flex: none;
@@ -421,7 +430,8 @@
   border-radius: 99rem;
   background: var(--c);
   color: #fff;
-  font-size: 1.1rem;
+  color: lch(from var(--c) calc((50 - l) * infinity) 0 0);
+  font-size: 1.3rem;
   font-weight: 700;
   letter-spacing: 0.03em;
   text-transform: uppercase;
@@ -448,7 +458,7 @@
   gap: 0.2rem;
 }
 .ev-card .ev-title {
-  font-size: 1.75rem;
+  font-size: 1.8rem;
   text-overflow: ellipsis;
 }
 .ev-card .ev-time {
@@ -538,6 +548,8 @@
   flex: 1;
   min-height: 0;
   position: relative;
+  /* The late hours of the last day can scroll clear of the + button. */
+  padding-bottom: var(--fab-clear);
 }
 .sched-grid {
   position: relative;
@@ -589,7 +601,8 @@
 .dayv {
   height: 100%;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  /* The mini month keeps room for seven 4.4rem day circles (the Home pane is narrow). */
+  grid-template-columns: minmax(36rem, 1fr) minmax(0, 2fr);
   gap: 1.6rem;
 }
 .cal-mini,
@@ -664,12 +677,12 @@
   display: flex;
   flex-direction: column;
   gap: 0.8rem;
-  padding-bottom: 8rem;
+  padding-bottom: var(--fab-clear);
 }
 .dayv-items .cal-meal,
 .cal-week-items .cal-meal,
 .cal-day-popup-items .cal-meal {
-  height: 4.4rem;
+  height: var(--touch);
   font-size: 1.6rem;
   flex: none;
 }
@@ -740,11 +753,10 @@
   .cal-week-add-label {
     display: none;
   }
-}
-.cal-week-add::after {
-  content: '';
-  position: absolute;
-  inset: -0.9rem -0.2rem;
+  .cal-week-add {
+    min-width: 4.8rem;
+    justify-content: center;
+  }
 }
 .cal-week-add:active {
   background: var(--line);
@@ -805,6 +817,20 @@
   flex: 1;
   min-height: 0;
   display: grid;
+  container: month / inline-size;
+}
+/* Narrow days (the Home pane, large text) give the title the room: "10:45 AM Hanc" says nothing. */
+@container month (max-width: 110rem) {
+  .month-item .ev-prefix {
+    display: none;
+  }
+  .month-item {
+    padding: 0 0.2rem;
+  }
+  .month-item .ev-pill,
+  .month-item .cal-meal {
+    padding: 0 0.7rem;
+  }
 }
 .month-week {
   display: grid;
@@ -858,6 +884,8 @@
 .month-more {
   position: relative;
   z-index: 1;
+  /* As wide as its words: the day cell under it opens the same list, and the + button may sit at its right. */
+  justify-self: start;
   padding: 0 1rem;
   font-size: 1.45rem;
   font-weight: 600;

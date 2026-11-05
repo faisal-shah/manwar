@@ -79,7 +79,7 @@ export function EventPill({ ev, bar, day }: { ev: CalEvent; bar?: { startsHere: 
       <span class="ev-title" dir="auto">
         {ev.title}
       </span>
-      {isUnassigned(ev) && <Unassigned size={1.8} />}
+      {isUnassigned(ev) && <Unassigned size={2.2} />}
     </button>
   );
 }

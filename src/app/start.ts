@@ -5,6 +5,7 @@ import { startDisplay } from '../core/display';
 import { holdWakeLock } from '../core/kiosk';
 import { idleFor, trackActivity } from '../core/activity';
 import { startRelock } from '../core/lock';
+import { keepScaleWithKeyboard } from '../core/viewport';
 import { startWeather } from '../core/weather';
 import { seedIfEmpty } from '../data/seed';
 import { ready } from '../data/store';
@@ -14,6 +15,7 @@ import { startIdleReturn } from './nav';
 /** Background services, started once the household is open. */
 export function startApp(): void {
   trackActivity();
+  keepScaleWithKeyboard();
   startDisplay();
   startRelock();
   holdWakeLock();

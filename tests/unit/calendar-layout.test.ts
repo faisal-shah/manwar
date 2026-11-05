@@ -140,6 +140,34 @@ describe('layoutMonthWeek', () => {
     expect(l.singles).toEqual([]);
     expect(l.more).toEqual([{ col: 1, line: 2, count: 2 }]);
   });
+  it('takes the lines that fit, per column when a day has less room', () => {
+    const s = empty();
+    s[0] = ['a', 'b', 'c', 'd', 'e'];
+    s[6] = ['p', 'q', 'r', 's', 't'];
+    const l = layoutMonthWeek([{ id: 'w', from: 0, to: 6 }], s, [5, 5, 5, 5, 5, 5, 2]);
+    expect(l.singles.filter((x) => x.col === 0).map((x) => x.id)).toEqual(['a', 'b', 'c']);
+    expect(l.more).toEqual([
+      { col: 0, line: 4, count: 2 },
+      { col: 6, line: 1, count: 5 },
+    ]);
+    // The bar runs on line 0 everywhere; the short day has room for it and its "more".
+    expect(l.bars).toEqual([{ id: 'w', col0: 0, col1: 6, line: 0, startsHere: true, endsHere: true }]);
+  });
+  it('with room for one line shows only "N more"', () => {
+    const s = empty();
+    s[2] = ['a', 'b'];
+    const l = layoutMonthWeek([], s, 1);
+    expect(l.singles).toEqual([]);
+    expect(l.more).toEqual([{ col: 2, line: 0, count: 2 }]);
+  });
+  it('with room for no line shows only "N more", bars included', () => {
+    const s = empty();
+    s[6] = ['a'];
+    const l = layoutMonthWeek([{ id: 'w', from: 5, to: 6 }], s, [3, 3, 3, 3, 3, 3, 0]);
+    expect(l.singles).toEqual([]);
+    expect(l.more).toEqual([{ col: 6, line: 0, count: 2 }]);
+    expect(l.bars).toEqual([{ id: 'w', col0: 5, col1: 5, line: 0, startsHere: true, endsHere: false }]);
+  });
   it('marks bars that continue from or into the neighbouring week', () => {
     const l = layoutMonthWeek([{ id: 'v', from: 0, to: 6, contStart: true, contEnd: true }], empty());
     expect(l.bars).toEqual([{ id: 'v', col0: 0, col1: 6, line: 0, startsHere: false, endsHere: false }]);

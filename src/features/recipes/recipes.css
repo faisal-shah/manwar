@@ -72,7 +72,7 @@
 .recipe-card {
   min-height: 0;
   height: 100%;
-  padding: 3rem 3.6rem 10rem;
+  padding: 3rem 3.6rem var(--fab-clear);
   border-radius: 2.4rem;
   background: color-mix(in srgb, color-mix(in srgb, var(--c, #93d1e5) 16%, var(--tint-base)) 82%, transparent);
   color: var(--on-tint);
@@ -213,6 +213,7 @@
   justify-content: center;
   background: color-mix(in srgb, var(--c, #93d1e5) 74%, #000);
   color: #fff;
+  color: lch(from color-mix(in srgb, var(--c, #93d1e5) 74%, #000) calc((50 - l) * infinity) 0 0);
   font-size: 1.9rem;
   font-weight: 700;
 }

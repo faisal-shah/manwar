@@ -119,12 +119,36 @@ flowchart LR
 
 ## Layout system
 
-The UI is drawn on a 1600x1000 design canvas: `html { font-size: min(0.625vw, 1vh) }`,
+The UI is drawn on a 1600x1000 design canvas: `html { font-size: min(0.625vw, calc(var(--app-h) * 0.01)) }` (`--app-h` is `100vh`),
 so `1rem` = 10 design px. Use rem for every size. Tokens are CSS variables in
 `styles/base.css`; profile colors go in `--c` and are tinted with the
 `.tint-solid`/`.tint-mid`/`.tint-light` helpers (or `color-mix` against
 `--tint-base`) so dark mode works. Display text uses the serif
 (`--font-display`, Newsreader), UI text the sans (Figtree).
+
+- **On-screen keyboard** (`core/viewport.ts`): the viewport meta asks for
+  `interactive-widget=resizes-content`, so Chrome shrinks the layout
+  viewport to the space above the keyboard, as Fully Kiosk's WebView does
+  anyway. Sheets, dialogs and popovers are fixed to that viewport and end
+  above the keyboard. The scale must not follow: while a text field has
+  focus and only the height shrank, `--app-h` keeps the full height and the
+  field is scrolled into view. Test it by focusing a field and shrinking the
+  viewport height (`tests/e2e/layout-fit.spec.ts`).
+- **The + button** covers the bottom-right corner. A scroller that can pass
+  under it ends with `padding-bottom: var(--fab-clear)`; Month gives the
+  corner day fewer lines (`useFit` in `views/Month.tsx`).
+- **Touch targets**: every control takes at least `--touch` (5.6rem). Small
+  pills, segments, toggles and chips get a centered `::before` hit area from
+  the shared rule at the top of `ui/ui.css`; add a class there rather than a
+  per-feature `::after`. A control with `overflow: hidden` clips its own hit
+  area: size it to `--touch` instead.
+- **Text on a profile or category color** uses the color's ink,
+  `color: lch(from var(--c) calc((50 - l) * infinity) 0 0)` (white on dark
+  colors, black on light ones), after a `color: #fff` fallback. The palette
+  has both kinds.
+- **Sizes for the room**: no text under 1.3rem. The glance text is bigger:
+  top bar date and time 4.2rem, progress pills 2rem, task titles 2rem,
+  event titles 1.6rem (schedule blocks) to 1.8rem (cards).
 
 ## Running it
 

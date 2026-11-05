@@ -92,6 +92,13 @@
 .timer-pie {
   width: 72rem;
   height: 72rem;
+  /*
+   * Centered, unless the screen is too narrow in rem (large text) for the
+   * readout (3rem in, 42rem wide, 3rem gap) to stay clear of it: then it
+   * moves right just enough. 168rem = 2 x 48rem + 72rem.
+   */
+  margin-left: max(0rem, calc(168rem - 100vw));
+  flex: none;
   border-radius: 50%;
   background: conic-gradient(var(--pie) calc(var(--left) * 360deg), var(--timer-track) 0);
   transition:

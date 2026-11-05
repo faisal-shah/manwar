@@ -51,6 +51,7 @@
   border-radius: 99rem;
   background: var(--c);
   color: #fff;
+  color: lch(from var(--c) calc((50 - l) * infinity) 0 0);
   font-weight: 700;
   font-size: 1.9rem;
   box-shadow: 0 0.3rem 1.2rem color-mix(in srgb, var(--c) 35%, transparent);
@@ -72,7 +73,7 @@
   border-radius: 99rem;
   font-weight: 600;
   font-size: 1.5rem;
-  color: var(--text-2);
+  color: var(--on-tint);
   background: linear-gradient(
     90deg,
     color-mix(in srgb, var(--c) 50%, var(--tint-base)) var(--p),

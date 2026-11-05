@@ -250,10 +250,12 @@ export interface MonthWeekLayout {
 /**
  * One week row of the Month grid. Multi-day bars keep one line across the
  * days they cover; single-day items fill the free lines of their day. A day
- * shows at most `maxLines` items; with more, it shows `maxLines - 1` and an
- * "N more" line (Skylight: 3 items, or 2 plus "N more").
+ * shows at most `maxLines` items (per column when an array: a day with less
+ * room); with more, it shows `maxLines - 1` and an "N more" line (Skylight:
+ * 3 items, or 2 plus "N more"). A day with room for no line at all shows
+ * only "N more", on the first line.
  */
-export function layoutMonthWeek(bars: WeekBar[], singles: string[][], maxLines = 3): MonthWeekLayout {
+export function layoutMonthWeek(bars: WeekBar[], singles: string[][], maxLines: number | number[] = 3): MonthWeekLayout {
   const order = bars
     .map((b, i) => ({ b, i }))
     .sort((x, y) => x.b.from - y.b.from || y.b.to - y.b.from - (x.b.to - x.b.from) || x.i - y.i);
@@ -272,12 +274,18 @@ export function layoutMonthWeek(bars: WeekBar[], singles: string[][], maxLines =
     };
     const all = place(Infinity);
     const needed = Math.max(taken.size ? Math.max(...taken) + 1 : 0, all.length ? all[all.length - 1] + 1 : 0);
-    if (needed <= maxLines) {
-      limitByCol[col] = maxLines;
+    const max = typeof maxLines === 'number' ? maxLines : maxLines[col];
+    if (max <= 0) {
+      limitByCol[col] = 0;
+      if (needed) out.more.push({ col, line: 0, count: taken.size + items.length });
+      continue;
+    }
+    if (needed <= max) {
+      limitByCol[col] = max;
       all.forEach((line, k) => out.singles.push({ id: items[k], col, line }));
       continue;
     }
-    const limit = maxLines - 1;
+    const limit = max - 1;
     limitByCol[col] = limit;
     const shown = place(limit);
     shown.forEach((line, k) => out.singles.push({ id: items[k], col, line }));

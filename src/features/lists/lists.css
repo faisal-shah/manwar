@@ -62,6 +62,7 @@
   border-radius: 99rem;
   background: var(--c-strong);
   color: #fff;
+  color: lch(from var(--c-strong) calc((50 - l) * infinity) 0 0);
   font-weight: 700;
   font-size: 1.6rem;
   display: inline-flex;
@@ -135,7 +136,8 @@
   position: relative;
   flex: 1;
   min-height: 0;
-  padding: 0.6rem 1.6rem 2rem;
+  /* Any card can be the one under the + button (the cards scroll sideways). */
+  padding: 0.6rem 1.6rem var(--fab-clear);
   display: flex;
   flex-direction: column;
   gap: 0.8rem;
@@ -257,6 +259,8 @@
 }
 .ls-title {
   flex: 1;
+  /* The whole height of the row (its icon buttons make it --touch tall) takes the tap. */
+  align-self: stretch;
   min-width: 0;
   text-align: left;
   font-family: var(--font-display);

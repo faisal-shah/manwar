@@ -1,5 +1,23 @@
 /* Shared components. Feature styles live next to each feature. */
 
+/*
+ * Touch targets: a control takes at least --touch (5.6rem) of the screen
+ * for a finger even where it draws smaller (pills, segments, toggles,
+ * chips). The ::before grows the hit area evenly around it; a control that
+ * is already big enough gets none. Neighbours may share a sliver of it.
+ */
+:where(.btn, .icon-btn, .ctl, .seg button, .chip, .toggle, .toast button, .swatches button, .pill, .cal-week-add, .mg-add) {
+  position: relative;
+}
+:where(.btn, .icon-btn, .ctl, .seg button, .chip, .toggle, .toast button, .swatches button, .pill, .cal-week-add, .mg-add)::before {
+  content: '';
+  position: absolute;
+  top: min(0rem, calc(50% - var(--touch) / 2));
+  bottom: min(0rem, calc(50% - var(--touch) / 2));
+  left: min(0rem, calc(50% - var(--touch) / 2));
+  right: min(0rem, calc(50% - var(--touch) / 2));
+}
+
 /* Buttons */
 .btn {
   display: inline-flex;
@@ -150,6 +168,7 @@
   border-radius: 50%;
   background: var(--c);
   color: #fff;
+  color: lch(from var(--c) calc((50 - l) * infinity) 0 0);
   font-weight: 700;
   line-height: 1;
 }
@@ -306,7 +325,7 @@
   letter-spacing: 0.04em;
 }
 .input {
-  min-height: 5.2rem;
+  min-height: var(--touch);
   padding: 0 1.6rem;
   border-radius: 1.2rem;
   border: 1.5px solid var(--line-strong);

@@ -42,7 +42,7 @@ function ProgressPill({ profile, done, total }: { profile: Profile; done: number
       onClick={() => goTo('tasks')}
       aria-label={`${profile.name}: ${done} of ${total} tasks done`}
     >
-      <Avatar profile={profile} size={3.2} />
+      <Avatar profile={profile} size={3.8} />
       <span class="cal-prog-name" dir="auto">
         {profile.name}
       </span>

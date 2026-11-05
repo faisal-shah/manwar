@@ -180,7 +180,6 @@ function AllDayRow({ days, items, shade }: { days: ISODate[]; items: Map<ISODate
   const first = days[0];
   const last = days[days.length - 1];
   const entries: AllDayEntry[] = [];
-  days.forEach((d, i) => items.get(d)!.meals.forEach((meal) => entries.push({ key: meal.key, from: i, to: i, meal })));
   const seen = new Set<string>();
   for (const d of days) {
     for (const ev of items.get(d)!.long) {
@@ -199,6 +198,8 @@ function AllDayRow({ days, items, shade }: { days: ISODate[]; items: Map<ISODate
       });
     }
   }
+  // Meals after the events: the strip shows three rows, and a meal plan must not push a birthday out of sight.
+  days.forEach((d, i) => items.get(d)!.meals.forEach((meal) => entries.push({ key: meal.key, from: i, to: i, meal })));
   if (!entries.length) return null;
   const rows = packRows(entries);
   const n = Math.max(...rows) + 1;

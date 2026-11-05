@@ -63,7 +63,8 @@
 .pcol-body {
   flex: 1;
   min-height: 0;
-  padding: 0 1.2rem 1.6rem;
+  /* Any column can be the one under the + button (they scroll sideways). */
+  padding: 0 1.2rem var(--fab-clear);
   overscroll-behavior: contain;
 }
 
@@ -99,12 +100,6 @@
   height: 4.8rem;
   padding: 0 2rem;
   font-size: 2rem;
-}
-/* Bigger hit area than the pill draws. */
-.star-pill::after {
-  content: '';
-  position: absolute;
-  inset: -1.2rem -0.4rem;
 }
 .star-pill .star-icon {
   color: var(--star);

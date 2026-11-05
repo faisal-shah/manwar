@@ -44,12 +44,12 @@
   top: 0.6rem;
   right: 1.2rem;
   min-width: 2rem;
-  height: 2rem;
-  padding: 0 0.5rem;
+  height: 2.2rem;
+  padding: 0 0.6rem;
   border-radius: 99rem;
   background: var(--today);
   color: #fff;
-  font-size: 1.15rem;
+  font-size: 1.3rem;
   font-weight: 700;
   display: flex;
   align-items: center;
@@ -80,11 +80,8 @@
   align-items: baseline;
   gap: 1.8rem;
   font-family: var(--font-display);
-  font-size: 3.8rem;
+  font-size: 4.2rem;
   white-space: nowrap;
-}
-.topbar .when .time {
-  font-size: 3.4rem;
 }
 .topbar .wx {
   display: inline-flex;
@@ -92,7 +89,7 @@
   gap: 0.6rem;
   align-self: center;
   font-family: var(--font-display);
-  font-size: 3.2rem;
+  font-size: 3.6rem;
 }
 .sync-status {
   display: inline-flex;
@@ -130,8 +127,8 @@
   position: fixed;
   right: 2.4rem;
   bottom: 2.4rem;
-  width: 7.2rem;
-  height: 7.2rem;
+  width: var(--fab);
+  height: var(--fab);
   border-radius: 50%;
   background: var(--accent);
   color: var(--accent-text);

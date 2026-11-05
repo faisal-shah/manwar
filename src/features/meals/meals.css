@@ -6,8 +6,9 @@
   justify-content: center;
   flex: none;
   border-radius: 50%;
-  background: color-mix(in srgb, var(--c) 74%, #000);
+  background: var(--c);
   color: #fff;
+  color: lch(from var(--c) calc((50 - l) * infinity) 0 0);
   font-weight: 700;
   line-height: 1;
 }
@@ -104,6 +105,8 @@
   flex-direction: column;
   gap: 0.4rem;
   overflow-y: auto;
+  /* A scroller resets touch-action: leave sideways swipes to the week pager here too. */
+  touch-action: pan-y;
   scrollbar-width: none;
   background:
     linear-gradient(var(--bg), var(--bg)) 0 100% / 100% 2rem no-repeat local,

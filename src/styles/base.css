@@ -17,12 +17,13 @@
   --line-strong: rgba(20, 30, 40, 0.18);
   --text: #0a0a0a;
   --text-2: #5c6165;
-  --text-3: #8a9196;
+  --text-3: #6a7176;
   --accent: #1f6fb2;
   --accent-text: #ffffff;
-  --today: #d9443f;
+  /* Holds white text (today's date, badges) at AA. */
+  --today: #d03d38;
   --star: #f2a33a;
-  --danger: #c8372d;
+  --danger: #b8322a;
   --toast: #2b2f33;
   --scrim: rgba(10, 20, 30, 0.28);
   /* Base that profile colors are mixed toward for tints. */
@@ -40,6 +41,9 @@
   --radius-card: 2rem;
   --radius-block: 0.8rem;
   --touch: 5.6rem;
+  /* The + button, and the room a scroller that can pass under it leaves after its last row. */
+  --fab: 7.2rem;
+  --fab-clear: calc(var(--fab) + 2rem);
 
   color-scheme: light;
 }
@@ -57,10 +61,11 @@
   --line-strong: rgba(255, 255, 255, 0.16);
   --text: #e9eef2;
   --text-2: #a3afb8;
-  --text-3: #72808a;
+  --text-3: #8794a0;
   --accent: #5aa2e0;
   --accent-text: #08131c;
-  --today: #e8605a;
+  --today: #cf3f3a;
+  --danger: #f07a70;
   --toast: #e9eef2;
   --scrim: rgba(0, 0, 0, 0.5);
   --tint-base: #121a21;
@@ -70,14 +75,20 @@
   color-scheme: dark;
 }
 
+/*
+ * --app-h is the viewport height the scale is drawn for: 100vh, or the full
+ * height kept while the on-screen keyboard covers part of it
+ * (core/viewport.ts), so typing does not shrink the wall.
+ */
 html {
-  font-size: min(0.625vw, 1vh);
+  --app-h: 100vh;
+  font-size: min(0.625vw, calc(var(--app-h) * 0.01));
 }
 html[data-text='small'] {
-  font-size: min(0.58vw, 0.93vh);
+  font-size: min(0.58vw, calc(var(--app-h) * 0.0093));
 }
 html[data-text='large'] {
-  font-size: min(0.69vw, 1.1vh);
+  font-size: min(0.69vw, calc(var(--app-h) * 0.011));
 }
 
 *,
@@ -130,6 +141,11 @@ textarea,
 select {
   user-select: text;
 }
+/* The browser's own placeholder grey falls under AA on the dark sheets. */
+::placeholder {
+  color: var(--text-3);
+  opacity: 1;
+}
 
 .serif {
   font-family: var(--font-display);
@@ -145,10 +161,16 @@ select {
   display: none;
 }
 
-/* Profile color helpers: set --c on an element, then use these. */
+/*
+ * Profile color helpers: set --c on an element, then use these. Text and
+ * marks drawn on a solid --c take its ink: white on a dark color, black on a
+ * light one (the palette has both), from the color's lightness. Rules that
+ * fill with another --c mix compute the ink from that mix the same way.
+ */
 .tint-solid {
   background: var(--c);
   color: #fff;
+  color: lch(from var(--c) calc((50 - l) * infinity) 0 0);
 }
 .tint-mid {
   background: color-mix(in srgb, var(--c) 62%, var(--tint-base));

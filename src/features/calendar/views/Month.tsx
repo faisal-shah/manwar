@@ -1,3 +1,5 @@
+import type { RefObject } from 'preact';
+import { useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { daysOf } from '../../../calendar/engine';
 import type { CalEvent } from '../../../calendar/types';
 import { settings } from '../../../data/store';
@@ -7,17 +9,64 @@ import { addDays, dateRange, dayShort, diffDays, fromISODate, isWeekend, monthSh
 import { layoutMonthWeek, type WeekBar } from '../layout';
 import { itemsByDay, type DayItems, type MealItem } from '../model';
 import { EventPill, MealPill } from '../parts';
+import { remPx } from '../gestures';
 import { dayPopup, periodOf, type CalNav } from '../state';
 import { DayWeather } from './common';
 
-const LINES = 3;
+/** Week row pieces, in rem: the date line, one item line, the gap between rows. */
+const HEAD = 3;
+const LINE = 2.7;
+const GAP = 0.2;
 
-/** 7-column month grid: 3 items per day, or 2 plus "N more" opening the day popup. */
+/** Item lines that fit `h` rem of a week row under its date line. */
+const fits = (h: number) => Math.max(0, Math.floor((h - HEAD - GAP) / (LINE + GAP)));
+
+interface Fit {
+  /** Lines in every week row. */
+  lines: number;
+  /** Lines in the last week's last day: the + button floats over its lower part (0: only "N more"). */
+  corner: number;
+}
+
+/**
+ * As many item lines as the week rows have room for, so a tall month shows
+ * more and a short one (large text, six weeks, the Home pane) never cuts
+ * "N more" off.
+ */
+function useFit(ref: RefObject<HTMLElement | null>, weeks: number): Fit {
+  const [fit, setFit] = useState<Fit>({ lines: 3, corner: 3 });
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => {
+      const rem = remPx();
+      const box = el.getBoundingClientRect();
+      const rowPx = box.height / weeks;
+      // At least one line, for "N more".
+      const lines = Math.max(1, fits(rowPx / rem));
+      let corner = lines;
+      const fab = document.querySelector('.fab')?.getBoundingClientRect();
+      const lastTop = box.bottom - rowPx;
+      if (fab && fab.left < box.right && fab.right > box.right - box.width / 7 && fab.top < box.bottom && fab.bottom > lastTop)
+        corner = Math.min(lines, fits((fab.top - lastTop) / rem - GAP));
+      setFit((f) => (f.lines === lines && f.corner === corner ? f : { lines, corner }));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [weeks]);
+  return fit;
+}
+
+/** 7-column month grid: as many items per day as fit, or one line fewer plus "N more" opening the day popup. */
 export function MonthView({ nav }: { nav: CalNav }) {
   const p = periodOf(nav);
   const items = itemsByDay(p.from, p.to);
   const weeks: ISODate[][] = [];
   for (let d = p.from; d <= p.to; d = addDays(d, 7)) weeks.push(dateRange(d, addDays(d, 6)));
+  const grid = useRef<HTMLDivElement>(null);
+  const fit = useFit(grid, weeks.length);
   return (
     <div class="monthv">
       <div class="month-head">
@@ -27,9 +76,15 @@ export function MonthView({ nav }: { nav: CalNav }) {
           </span>
         ))}
       </div>
-      <div class="month-weeks" style={{ gridTemplateRows: `repeat(${weeks.length}, minmax(0, 1fr))` }}>
-        {weeks.map((w) => (
-          <MonthWeek key={w[0]} days={w} items={items} month={p.month!} />
+      <div class="month-weeks" ref={grid} style={{ gridTemplateRows: `repeat(${weeks.length}, minmax(0, 1fr))` }}>
+        {weeks.map((w, i) => (
+          <MonthWeek
+            key={w[0]}
+            days={w}
+            items={items}
+            month={p.month!}
+            lines={i === weeks.length - 1 ? [...Array(6).fill(fit.lines), fit.corner] : fit.lines}
+          />
         ))}
       </div>
     </div>
@@ -38,7 +93,17 @@ export function MonthView({ nav }: { nav: CalNav }) {
 
 type Single = { id: string } & ({ ev: CalEvent } | { meal: MealItem });
 
-function MonthWeek({ days, items, month }: { days: ISODate[]; items: Map<ISODate, DayItems>; month: ISODate }) {
+function MonthWeek({
+  days,
+  items,
+  month,
+  lines,
+}: {
+  days: ISODate[];
+  items: Map<ISODate, DayItems>;
+  month: ISODate;
+  lines: number | number[];
+}) {
   const first = days[0];
   const last = days[6];
   const t = today.value;
@@ -48,9 +113,9 @@ function MonthWeek({ days, items, month }: { days: ISODate[]; items: Map<ISODate
   const bars: (WeekBar & { ev: CalEvent })[] = [];
   const seen = new Set<string>();
   const singles: Single[][] = days.map(() => []);
+  // All-day events, then meals, then timed events: a meal plan never pushes an event into "more".
   days.forEach((d, col) => {
     const it = items.get(d)!;
-    it.meals.forEach((m) => singles[col].push({ id: m.key, meal: m }));
     for (const ev of it.long) {
       const covered = daysOf(ev);
       if (covered.length === 1) {
@@ -70,13 +135,15 @@ function MonthWeek({ days, items, month }: { days: ISODate[]; items: Map<ISODate
         ev,
       });
     }
+    it.meals.forEach((m) => singles[col].push({ id: m.key, meal: m }));
     it.timed.forEach((ev) => singles[col].push({ id: ev.key, ev }));
   });
   const lay = layoutMonthWeek(
     bars,
     singles.map((s) => s.map((x) => x.id)),
-    LINES,
+    lines,
   );
+  const most = typeof lines === 'number' ? lines : Math.max(...lines);
   const barById = new Map(bars.map((b) => [b.id, b.ev]));
   const singleById = new Map(singles.flat().map((s) => [s.id, s]));
   const openDay = (d: ISODate) => (e: MouseEvent) => {
@@ -85,7 +152,7 @@ function MonthWeek({ days, items, month }: { days: ISODate[]; items: Map<ISODate
   };
 
   return (
-    <div class="month-week" style={{ gridTemplateRows: `3rem repeat(${LINES}, 2.7rem) 1fr` }}>
+    <div class="month-week" style={{ gridTemplateRows: `${HEAD}rem repeat(${most}, ${LINE}rem) 1fr` }}>
       {days.map((d, col) => {
         const cls = ['mcell'];
         if (startOfMonth(d) !== month) cls.push('other');
