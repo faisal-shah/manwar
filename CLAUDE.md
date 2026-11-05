@@ -140,6 +140,15 @@ generated from it: `node scripts/icons/render.mjs` after any brand change.
   Google returns a refresh token on the first consent only; `connectGoogle`
   keeps the stored one when a later connection returns none. Under Fully Kiosk,
   "Enable Popups" must be on for the consent window.
+- Sessions (`data/session.ts`): the household id is the ID token's `hid`
+  claim. Reading claims refreshes an expired token, which fails offline, so
+  the last household is remembered per user (`manwar.household.v1`) and
+  opened from it; with nothing remembered the screen waits for the network.
+  Show Firebase errors with `errorMessage()` (`data/errors.ts`): the
+  Functions SDK appends " [403]" and reports a failed request as
+  "internal [0]". A token refusal only a reconnect fixes sets
+  `googleProblem`; the top bar then offers the reconnect, and a calendar
+  whose sync keeps failing says how old its events are (`app/status.ts`).
 - Registered-or-not check without signing in: request
   `accounts.google.com/o/oauth2/v2/auth?client_id=...&redirect_uri=...` and
   look at the redirect; `signin/identifier` means registered, `authError`

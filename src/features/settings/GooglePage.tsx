@@ -5,10 +5,10 @@ import { calendars, defaultCalendarId, refresh, sync, writableCalendars } from '
 import type { CalendarInfo } from '../../calendar/types';
 import { asParent } from '../../core/lock';
 import { settings } from '../../data/store';
-import { disconnect, session } from '../../data/session';
+import { disconnect, googleProblem, session, startGoogleConnect } from '../../data/session';
 import { nowMs } from '../../lib/clock';
 import { Button } from '../../ui/controls';
-import { confirm } from '../../ui/overlays';
+import { confirm, toast } from '../../ui/overlays';
 import { ColorSwatches } from '../../ui/pickers';
 import { Avatar, everyoneProfile } from '../../ui/profile';
 import { timeAgo } from '../messages/logic';
@@ -41,7 +41,10 @@ export function GooglePage() {
   const target = defaultCalendarId();
   useResyncOnVisibilityChange(hidden);
 
-  const status = st.error ? (
+  const problem = googleProblem.value;
+  const status = problem ? (
+    <span class="set-error">{problem}</span>
+  ) : st.error ? (
     <span class="set-error">Sync failed: {st.error}</span>
   ) : st.loading ? (
     'Syncing now'
@@ -65,14 +68,34 @@ export function GooglePage() {
       <PageTitle>Google Calendar</PageTitle>
       <Group>
         <Row
-          lead={<span class={`status-dot${st.error ? ' bad' : ''}`} aria-hidden="true" />}
+          lead={<span class={`status-dot${st.error || problem ? ' bad' : ''}`} aria-hidden="true" />}
           label={demoMode ? 'Demo calendar (not Google)' : `Connected as ${session.value.account ?? 'the household account'}`}
           hint={status}
         >
-          <Button class="set-btn" disabled={st.loading} onClick={() => void refresh()}>
-            <RefreshCw size="2rem" />
-            Sync now
-          </Button>
+          {problem ? (
+            // Opens Google's popup, so it runs straight from the tap (Settings is already behind the PIN).
+            <Button
+              variant="primary"
+              class="set-btn"
+              onClick={() =>
+                startGoogleConnect({
+                  onDone: () => {
+                    toast('Google Calendar is connected again.');
+                    void refresh();
+                  },
+                  onError: (m) => toast(m),
+                })
+              }
+            >
+              <RefreshCw size="2rem" />
+              Reconnect
+            </Button>
+          ) : (
+            <Button class="set-btn" disabled={st.loading} onClick={() => void refresh()}>
+              <RefreshCw size="2rem" />
+              Sync now
+            </Button>
+          )}
         </Row>
       </Group>
 

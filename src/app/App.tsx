@@ -1,17 +1,19 @@
 import type { FunctionComponent } from 'preact';
-import { Moon, Plus, Settings as SettingsIcon } from 'lucide-preact';
+import { CloudOff, Moon, Plus, Settings as SettingsIcon, TriangleAlert } from 'lucide-preact';
+import { sync } from '../calendar/engine';
 import { demoMode } from '../config';
 import { sleeping, wake } from '../core/display';
 import { weather, toUnit } from '../core/weather';
 import { ready, settings } from '../data/store';
-import { session, startGoogleConnect } from '../data/session';
-import { now, today } from '../lib/clock';
+import { googleProblem, session, startGoogleConnect } from '../data/session';
+import { now, nowMs, today } from '../lib/clock';
 import { formatHeaderDate, formatTime } from '../lib/date';
 import { Button } from '../ui/controls';
 import { DialogHost, ToastHost } from '../ui/overlays';
 import { WeatherIcon } from '../ui/WeatherIcon';
 import { LogoMark, Wordmark } from '../ui/Logo';
-import { activeTab, goTo, settingsOpen, sleepMenuOpen } from './nav';
+import { activeTab, goTo, openSettings, settingsOpen, sleepMenuOpen } from './nav';
+import { calendarStatus } from './status';
 import { TABS, Overlays, RailBadges } from './tabs';
 import { SettingsSheet, SleepMenu } from '../features/settings';
 
@@ -23,12 +25,19 @@ export function App() {
 
 function ConnectScreen() {
   const s = session.value;
-  const busy = s.state === 'loading' || s.state === 'connecting' || (s.state === 'signedIn' && !ready.value);
+  const busy =
+    s.state === 'loading' || s.state === 'waiting' || s.state === 'connecting' || (s.state === 'signedIn' && !ready.value);
   return (
     <div class="connect">
       <Wordmark size={15} />
       {busy ? (
-        <p>{s.state === 'connecting' ? 'Connecting your Google account…' : 'Loading…'}</p>
+        <p>
+          {s.state === 'connecting'
+            ? 'Connecting your Google account…'
+            : s.state === 'waiting'
+              ? 'Waiting for the network to open the household…'
+              : 'Loading…'}
+        </p>
       ) : (
         <>
           <p>
@@ -38,7 +47,7 @@ function ConnectScreen() {
           </p>
           {s.state === 'error' && <p class="error">{s.error}</p>}
           {!demoMode && (
-            <Button variant="primary" onClick={startGoogleConnect}>
+            <Button variant="primary" onClick={() => startGoogleConnect()}>
               Connect Google account
             </Button>
           )}
@@ -103,8 +112,11 @@ function Shell() {
 }
 
 function TopBar({ title, Controls }: { title: string | null; Controls?: FunctionComponent }) {
-  const w = weather.value;
   const hour = now.value.getHours();
+  // Syncs are stamped with the real clock (not a pinned ?now=).
+  void nowMs.value;
+  const real = Date.now();
+  const w = weather.value;
   return (
     <header class="topbar">
       <div class="when">
@@ -117,7 +129,20 @@ function TopBar({ title, Controls }: { title: string | null; Controls?: Function
           {toUnit(w.tempC, settings.value.tempUnit)}°
         </span>
       )}
+      <SyncStatus now={real} />
       <div class="controls">{Controls && <Controls />}</div>
     </header>
+  );
+}
+
+/** A calendar that stopped syncing says so on the wall; the tap goes to Settings > Google Calendar. */
+function SyncStatus({ now: at }: { now: number }) {
+  const st = calendarStatus(sync.value, googleProblem.value, at);
+  if (!st) return null;
+  return (
+    <button type="button" class={`sync-status${st.reconnect ? ' bad' : ''}`} onClick={() => openSettings('google')}>
+      {st.reconnect ? <TriangleAlert size="2rem" strokeWidth={2.2} /> : <CloudOff size="2rem" strokeWidth={2.2} />}
+      {st.text}
+    </button>
   );
 }

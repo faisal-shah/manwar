@@ -24,6 +24,32 @@ async function openSettings(page: Page, section: string) {
   await page.locator('.set-menu button', { hasText: new RegExp(`^${section}$`) }).click();
 }
 
+test('a tablet that boots offline with an expired sign-in still opens its household', async ({ page }) => {
+  await open(page);
+  // Expire the stored ID token, then cut the token refresh (the Wi-Fi is not up yet).
+  await page.evaluate(async () => {
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const r = indexedDB.open('firebaseLocalStorageDb');
+      r.onsuccess = () => resolve(r.result);
+      r.onerror = () => reject(r.error);
+    });
+    const tx = db.transaction('firebaseLocalStorage', 'readwrite');
+    const store = tx.objectStore('firebaseLocalStorage');
+    const all = await new Promise<{ fbase_key: string; value: { stsTokenManager: { expirationTime: number } } }[]>((resolve) => {
+      const q = store.getAll();
+      q.onsuccess = () => resolve(q.result);
+    });
+    const user = all.find((x) => x.fbase_key.startsWith('firebase:authUser'))!;
+    user.value.stsTokenManager.expirationTime = Date.now() - 60_000;
+    store.put(user);
+    await new Promise((resolve) => (tx.oncomplete = resolve));
+  });
+  await page.route('**/securetoken.googleapis.com/**', (r) => r.abort('internetdisconnected'));
+  await page.reload();
+  await expect(page.locator('.shell')).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator('.connect')).toHaveCount(0);
+});
+
 test('typing counts as activity: idle return does not pull the wall away from an editor', async ({ page }) => {
   await page.clock.install();
   await open(page);
@@ -100,4 +126,30 @@ test('Sleep now survives a reload of the page', async ({ page }) => {
   await page.reload();
   await expect(page.locator('.shell')).toBeVisible({ timeout: 20_000 });
   await expect(page.locator('.sleep-screen')).toHaveCount(0);
+});
+
+test('a Google connection that needs a reconnect shows on the wall and leads to Settings', async ({ page }) => {
+  test.skip(!process.env.PW_BASE, 'calls the session module through the dev server');
+  await open(page);
+  await expect(page.locator('.sync-status')).toHaveCount(0);
+  // The demo household has no Google connection, so the token Function refuses it.
+  const message = await page.evaluate(async () => {
+    // The app's own instance of the module (after an edit, Vite serves it with a ?t= stamp).
+    const url = performance
+      .getEntriesByType('resource')
+      .map((e) => e.name)
+      .find((n) => new URL(n).pathname === '/src/data/session.ts')!;
+    const s = await import(/* @vite-ignore */ url);
+    return s.googleAccessToken().then(
+      () => 'no error',
+      (e: Error) => e.message,
+    );
+  });
+  expect(message).toBe('Google is not connected. Connect the Google account again.');
+  const chip = page.locator('.sync-status.bad');
+  await expect(chip).toHaveText('Reconnect Google Calendar');
+  await chip.click();
+  await expect(page.locator('.set-menu button.on')).toHaveText('Google Calendar');
+  await expect(page.locator('.set-page')).toContainText('Google is not connected. Connect the Google account again.');
+  await expect(page.locator('.set-page').getByRole('button', { name: 'Reconnect' })).toBeVisible();
 });

@@ -1,7 +1,8 @@
 import { signal } from '@preact/signals';
-import { onAuthStateChanged, signInWithCustomToken, signOut } from 'firebase/auth';
+import { onAuthStateChanged, signInWithCustomToken, signOut, type User } from 'firebase/auth';
 import { httpsCallable } from 'firebase/functions';
 import { demoMode, googleClientId, googleScopes } from '../config';
+import { errorMessage, isNetworkError, needsReconnect } from './errors';
 import { auth, functions } from './firebase';
 import { closeHousehold, openHousehold } from './store';
 
@@ -12,10 +13,20 @@ import { closeHousehold, openHousehold } from './store';
  * connectGoogle Function exchanges the code, keeps the refresh token
  * server-side and returns a Firebase custom token carrying the household id
  * (`hid` claim).
+ *
+ * 'waiting': signed in on this tablet, but the sign-in cannot be checked
+ * until the network is back (and no household is remembered for it).
  */
-export type SessionState = 'loading' | 'signedOut' | 'connecting' | 'signedIn' | 'error';
+export type SessionState = 'loading' | 'waiting' | 'signedOut' | 'connecting' | 'signedIn' | 'error';
 
 export const session = signal<{ state: SessionState; account?: string; error?: string }>({ state: 'loading' });
+
+/**
+ * A Google problem only connecting again fixes (access revoked, the account
+ * taken off the allowlist), from the last token request; null once a token
+ * comes through.
+ */
+export const googleProblem = signal<string | null>(null);
 
 interface ConnectResult {
   customToken: string;
@@ -67,12 +78,20 @@ function loadGis(): Promise<void> {
 
 const fail = (error: string) => (session.value = { state: 'error', error });
 
+interface ConnectOptions {
+  /** After the account is connected (a reconnect while signed in). */
+  onDone?: () => void;
+  /** Report errors here instead of on the sign-in screen (a reconnect while signed in). */
+  onError?: (message: string) => void;
+}
+
 /** Open Google's account chooser and consent popup. Must run in a tap handler. */
-export function startGoogleConnect(): void {
+export function startGoogleConnect(opts: ConnectOptions = {}): void {
+  const report = opts.onError ?? fail;
   const oauth2 = window.google?.accounts?.oauth2;
   if (!oauth2) {
-    fail('Google sign-in is still loading. Try again in a moment.');
-    void loadGis().catch((e: Error) => fail(e.message));
+    report('Google sign-in is still loading. Try again in a moment.');
+    void loadGis().catch((e: Error) => report(e.message));
     return;
   }
   oauth2
@@ -81,11 +100,11 @@ export function startGoogleConnect(): void {
       scope: googleScopes.join(' '),
       ux_mode: 'popup',
       callback: (r) => {
-        if (r.code) void exchange(r.code);
-        else fail(`Google sign-in did not finish (${r.error_description ?? r.error ?? 'no code'}).`);
+        if (r.code) void exchange(r.code, opts);
+        else report(`Google sign-in did not finish (${r.error_description ?? r.error ?? 'no code'}).`);
       },
       error_callback: (e) =>
-        fail(
+        report(
           e.type === 'popup_closed'
             ? 'The Google window was closed before finishing.'
             : 'The browser blocked the Google sign-in window.',
@@ -94,31 +113,132 @@ export function startGoogleConnect(): void {
     .requestCode();
 }
 
-async function exchange(code: string): Promise<void> {
-  session.value = { state: 'connecting' };
+const call = <Req, Res>(name: string) => httpsCallable<Req, Res>(functions, name);
+
+/**
+ * Trade the popup's code for a Firebase sign-in. A reconnect while signed in
+ * keeps the wall on screen: the same account keeps its household (the auth
+ * user does not change, so no auth event fires), another account switches
+ * to its own household through the auth listener.
+ */
+async function exchange(code: string, opts: ConnectOptions): Promise<void> {
+  const reconnecting = session.value.state === 'signedIn';
+  if (!reconnecting) session.value = { state: 'connecting' };
   try {
-    const res = await httpsCallable<{ code: string }, ConnectResult>(functions, 'connectGoogle')({ code });
+    const res = await call<{ code: string }, ConnectResult>('connectGoogle')({ code });
     cacheToken(res.data.accessToken, res.data.expiresAt);
+    googleProblem.value = null;
     await signInWithCustomToken(auth, res.data.customToken);
+    if (reconnecting && session.value.state === 'signedIn') session.value = { ...session.value, account: res.data.account };
+    opts.onDone?.();
   } catch (e) {
-    fail(e instanceof Error ? e.message : String(e));
+    (opts.onError ?? fail)(errorMessage(e));
   }
 }
 
 let token: { value: string; expiresAt: number } | null = null;
 const cacheToken = (value: string, expiresAt: number) => (token = { value, expiresAt });
+let tokenRequest: Promise<string> | null = null;
 
-/** A Google Calendar access token for the household, minted by the googleAccessToken Function. */
-export async function googleAccessToken(): Promise<string> {
-  if (token && token.expiresAt - 60_000 > Date.now()) return token.value;
-  const res = await httpsCallable<void, { accessToken: string; expiresAt: number }>(functions, 'googleAccessToken')();
-  cacheToken(res.data.accessToken, res.data.expiresAt);
-  return res.data.accessToken;
+/**
+ * A Google Calendar access token for the household, minted by the
+ * googleAccessToken Function. Concurrent callers share one request. Errors
+ * carry a message for people; the ones only a reconnect fixes also set
+ * googleProblem.
+ */
+export function googleAccessToken(): Promise<string> {
+  if (token && token.expiresAt - 60_000 > Date.now()) return Promise.resolve(token.value);
+  if (!auth.currentUser) return Promise.reject(new Error('Not signed in.'));
+  tokenRequest ??= (async () => {
+    try {
+      const res = await call<void, { accessToken: string; expiresAt: number }>('googleAccessToken')();
+      cacheToken(res.data.accessToken, res.data.expiresAt);
+      googleProblem.value = null;
+      return res.data.accessToken;
+    } catch (e) {
+      if (needsReconnect(e)) googleProblem.value = errorMessage(e);
+      throw new Error(errorMessage(e));
+    } finally {
+      tokenRequest = null;
+    }
+  })();
+  return tokenRequest;
 }
 
 export async function disconnect(): Promise<void> {
   token = null;
+  googleProblem.value = null;
+  forgetHousehold();
   await signOut(auth);
+}
+
+/*
+ * The household id rides in the ID token's claims. Reading them refreshes an
+ * expired token, which fails offline: a tablet that boots before the Wi-Fi is
+ * up would never open its household. So the last household opened is
+ * remembered for its user and used when the claims cannot be refreshed.
+ */
+const HOUSEHOLD_KEY = 'manwar.household.v1';
+
+interface Household {
+  uid: string;
+  hid: string;
+  account?: string;
+}
+
+function rememberHousehold(h: Household): void {
+  try {
+    localStorage.setItem(HOUSEHOLD_KEY, JSON.stringify(h));
+  } catch {
+    /* storage unavailable: an offline start waits for the network */
+  }
+}
+
+function recallHousehold(uid: string): Household | null {
+  try {
+    const h = JSON.parse(localStorage.getItem(HOUSEHOLD_KEY) ?? 'null') as Household | null;
+    return h?.uid === uid && typeof h.hid === 'string' ? h : null;
+  } catch {
+    return null;
+  }
+}
+
+function forgetHousehold(): void {
+  try {
+    localStorage.removeItem(HOUSEHOLD_KEY);
+  } catch {
+    /* nothing remembered */
+  }
+}
+
+/** The user's household from fresh claims, or the remembered one while the network is down; null without a hid claim. */
+async function householdOf(user: User): Promise<Household | null> {
+  try {
+    const { claims } = await user.getIdTokenResult();
+    if (typeof claims.hid !== 'string') return null;
+    const h = { uid: user.uid, hid: claims.hid, account: typeof claims.account === 'string' ? claims.account : undefined };
+    rememberHousehold(h);
+    return h;
+  } catch (e) {
+    const h = isNetworkError(e) ? recallHousehold(user.uid) : null;
+    if (h) return h;
+    throw e;
+  }
+}
+
+const RETRY_MS = 15_000;
+
+/** Run `fn` once: when the browser reports the network back, or after RETRY_MS. */
+function whenOnline(fn: () => void): void {
+  let done = false;
+  const run = () => {
+    if (done) return;
+    done = true;
+    window.removeEventListener('online', run);
+    fn();
+  };
+  window.addEventListener('online', run);
+  setTimeout(run, RETRY_MS);
 }
 
 /** `?demo=name` gives each demo (or test run) its own household in the emulator. */
@@ -142,8 +262,10 @@ function demoToken(): string {
 
 export function initSession(): void {
   if (!demoMode) void loadGis().catch(() => {});
+  let seq = 0;
+  onAuthStateChanged(auth, (user) => void signedInAs(user, ++seq));
 
-  onAuthStateChanged(auth, async (user) => {
+  async function signedInAs(user: User | null, n: number): Promise<void> {
     if (!user) {
       closeHousehold();
       if (session.value.state === 'connecting' || session.value.state === 'error') return;
@@ -151,13 +273,29 @@ export function initSession(): void {
       if (demoMode) await signInWithCustomToken(auth, demoToken());
       return;
     }
-    const claims = (await user.getIdTokenResult()).claims;
-    const hid = typeof claims.hid === 'string' ? claims.hid : null;
-    if (!hid) {
+    let h: Household | null;
+    try {
+      h = await householdOf(user);
+    } catch (e) {
+      if (n !== seq) return;
+      if (isNetworkError(e)) {
+        session.value = { state: 'waiting' };
+        whenOnline(() => {
+          if (n === seq && auth.currentUser) void signedInAs(auth.currentUser, n);
+        });
+        return;
+      }
+      // The sign-in itself was refused (revoked, disabled): connect again.
+      fail('The sign-in expired. Connect the Google account again.');
       await signOut(auth);
       return;
     }
-    openHousehold(hid);
-    session.value = { state: 'signedIn', account: typeof claims.account === 'string' ? claims.account : undefined };
-  });
+    if (n !== seq) return;
+    if (!h) {
+      await signOut(auth);
+      return;
+    }
+    openHousehold(h.hid);
+    session.value = { state: 'signedIn', account: h.account };
+  }
 }

@@ -76,6 +76,10 @@ has been idle for a few minutes.
 4. In Settings, add the family's profiles, pick the weather location and set a
    parental PIN.
 
+If the wall loses its Google connection (access revoked, or the calendar
+has not synced for a while), the top bar says so; tap the note to reconnect
+in Settings → Google Calendar.
+
 To add events from a phone, create them in that Google account's calendar,
 or invite that account to an event from your own Google account. To have a
 whole personal calendar appear, share it with that account.
