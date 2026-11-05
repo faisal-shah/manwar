@@ -14,18 +14,37 @@ class GoogleError extends Error {
   }
 }
 
+/**
+ * How long a request may take. One that never answers (a connection gone
+ * dead mid-request) would otherwise hold up every later sync and the save
+ * waiting on it.
+ */
+const TIMEOUT_MS = 30_000;
+
 /** Google Calendar API boundary: every response is validated here. */
 async function call<T>(path: string, init: RequestInit & { query?: Record<string, string> } = {}): Promise<T> {
   const url = new URL(API + path);
   for (const [k, v] of Object.entries(init.query ?? {})) url.searchParams.set(k, v);
   const token = await googleAccessToken();
-  const res = await fetch(url, {
-    ...init,
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...init.headers },
-  });
-  if (res.status === 204) return undefined as T;
-  const body = await res.json().catch(() => null);
+  let res: Response;
+  let body: any;
+  try {
+    res = await fetch(url, {
+      ...init,
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...init.headers },
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+    if (res.status === 204) return undefined as T;
+    body = await res.json().catch((e: unknown) => {
+      if (e instanceof DOMException && e.name === 'TimeoutError') throw e;
+      return null;
+    });
+  } catch (e) {
+    if (e instanceof DOMException && e.name === 'TimeoutError') throw new Error('Google Calendar did not answer in time.');
+    throw e;
+  }
   if (!res.ok) throw new GoogleError(res.status, `Google Calendar ${res.status}: ${body?.error?.message ?? res.statusText}`);
+  if (body === null) throw new GoogleError(res.status, 'Google Calendar sent a response that could not be read.');
   return body as T;
 }
 

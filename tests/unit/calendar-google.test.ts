@@ -264,6 +264,32 @@ describe('google calendar: reading events', () => {
     ]);
   });
 
+  it('gives up on a request Google never answers, so the sync queue behind it moves on', async () => {
+    // A connection that went dead mid-request: nothing comes back until the request is aborted.
+    vi.stubGlobal(
+      'fetch',
+      (_input: unknown, init: RequestInit = {}) =>
+        new Promise((_resolve, reject) => init.signal?.addEventListener('abort', () => reject(init.signal!.reason))),
+    );
+    const timeout = new AbortController();
+    let ms = 0;
+    const spy = vi.spyOn(AbortSignal, 'timeout').mockImplementation((n) => {
+      ms = n;
+      return timeout.signal;
+    });
+    const list = googleSource.listCalendars();
+    await vi.waitFor(() => expect(ms).toBeGreaterThan(0));
+    expect(ms).toBeLessThanOrEqual(60_000);
+    timeout.abort(new DOMException('The operation timed out.', 'TimeoutError'));
+    await expect(list).rejects.toThrow('Google Calendar did not answer in time.');
+    spy.mockRestore();
+  });
+
+  it('refuses a success response it cannot read', async () => {
+    vi.stubGlobal('fetch', async () => new Response('<html>captive portal</html>', { status: 200 }));
+    await expect(googleSource.listCalendars()).rejects.toThrow('Google Calendar sent a response that could not be read.');
+  });
+
   describe('next occurrence (countdowns past the window)', () => {
     const after = new Date('2026-11-04T00:00');
     it('returns a one-off event until it has ended', async () => {

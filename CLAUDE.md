@@ -80,7 +80,9 @@ flowchart LR
   overrides its series' document field by field (empty `profiles` = inherit);
   write through `assign`/`setCountdown`/`updateEvent`, which touch only the
   document they mean to change. `refresh()` called during a fetch gets one
-  more fetch after it, and a calendar that fails keeps its last events.
+  more fetch after it (each Google request gives up after 30 seconds, so a
+  dead connection cannot stall the queue or a save awaiting it), and a
+  calendar that fails keeps its last events.
   Events with no meta are **unassigned** and listed in `unassigned` (the
   triage queue, badge on the Calendar rail item). `[EVERYONE]` means the
   whole family. Countdowns past the window (setting Always) come from
