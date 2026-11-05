@@ -92,17 +92,24 @@ export function Popover({
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
-    const w = width * rem;
-    const h = el.offsetHeight;
-    const gap = 1.2 * rem;
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    let left = anchor.right + gap;
-    if (left + w > vw - gap) left = anchor.left - gap - w;
-    if (left < gap) left = Math.max(gap, Math.min(vw - w - gap, anchor.left + anchor.width / 2 - w / 2));
-    const top = Math.max(gap, Math.min(vh - h - gap, anchor.top + anchor.height / 2 - h / 2));
-    setPos({ left, top });
+    const place = () => {
+      const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
+      const w = width * rem;
+      const h = el.offsetHeight;
+      const gap = 1.2 * rem;
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      let left = anchor.right + gap;
+      if (left + w > vw - gap) left = anchor.left - gap - w;
+      if (left < gap) left = Math.max(gap, Math.min(vw - w - gap, anchor.left + anchor.width / 2 - w / 2));
+      const top = Math.max(gap, Math.min(vh - h - gap, anchor.top + anchor.height / 2 - h / 2));
+      setPos({ left, top });
+    };
+    place();
+    // Content that grows after opening (a picker, a late-loading line) must not push the card off screen.
+    const ro = new ResizeObserver(place);
+    ro.observe(el);
+    return () => ro.disconnect();
   }, [anchor, width]);
   return portal(
     <>
