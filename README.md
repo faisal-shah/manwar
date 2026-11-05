@@ -58,7 +58,8 @@ gets a "not on the allowlist" message, so strangers cannot use the backend.
 With a parent PIN set (Settings → Parental lock), anyone can browse and check
 off tasks and list items. Adding, editing, deleting, giving stars and
 redeeming rewards ask for the PIN, which then stays unlocked until the tablet
-has been idle for a few minutes.
+has been idle for a few minutes. After five wrong PINs in a row the pad pauses
+for 30 seconds, longer after each further five.
 
 ## Setting up the tablet
 

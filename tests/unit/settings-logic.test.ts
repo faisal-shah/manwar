@@ -9,6 +9,7 @@ import {
   planProfileDelete,
   setTabShown,
 } from '../../src/features/settings/logic';
+import { PIN_TRIES, pinPause } from '../../src/core/pin';
 
 describe('tab visibility', () => {
   it('hides and shows ordinary tabs', () => {
@@ -111,5 +112,13 @@ describe('PIN', () => {
     expect(isPin('123')).toBe(false);
     expect(isPin('12a4')).toBe(false);
     expect(isPin('12345')).toBe(false);
+  });
+  it('pauses the pad after repeated wrong PINs, longer each time', () => {
+    for (let n = 1; n < PIN_TRIES; n++) expect(pinPause(n)).toBe(0);
+    expect(pinPause(PIN_TRIES)).toBe(30_000);
+    expect(pinPause(PIN_TRIES + 1)).toBe(0);
+    expect(pinPause(2 * PIN_TRIES)).toBe(60_000);
+    expect(pinPause(3 * PIN_TRIES)).toBe(120_000);
+    expect(pinPause(10 * PIN_TRIES)).toBe(5 * 60_000);
   });
 });

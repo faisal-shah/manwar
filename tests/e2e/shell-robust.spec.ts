@@ -177,6 +177,31 @@ test('a Google connection that needs a reconnect shows on the wall and leads to 
   await expect(page.locator('.set-page').getByRole('button', { name: 'Reconnect' })).toBeVisible();
 });
 
+test('five wrong PINs pause the pad; the right PIN works after the pause', async ({ page }) => {
+  await page.clock.install();
+  await open(page);
+  const key = (scope: ReturnType<Page['locator']>, d: string) =>
+    scope.locator('.pin-keys button', { hasText: new RegExp(`^${d}$`) });
+  await openSettings(page, 'Parental lock');
+  await page.getByRole('button', { name: /Set a PIN/ }).click();
+  const setup = page.locator('.pin-setup');
+  for (const d of '2468') await key(setup, d).click();
+  await expect(setup).toContainText('Enter the PIN again');
+  for (const d of '2468') await key(setup, d).click();
+  await page.getByRole('button', { name: 'Lock now' }).click();
+
+  await rail(page, 'Settings').click();
+  const pad = page.locator('.modal', { hasText: 'Parent PIN' });
+  for (let i = 0; i < 5; i++) for (const d of '1111') await key(pad, d).click();
+  await expect(pad).toContainText('Too many wrong PINs. Try again in 30 s.');
+  await expect(key(pad, '2')).toBeDisabled();
+  await page.clock.fastForward('00:31');
+  await expect(key(pad, '2')).toBeEnabled();
+  for (const d of '2468') await key(pad, d).click();
+  await expect(pad).toHaveCount(0);
+  await expect(page.locator('.sheet')).toBeVisible();
+});
+
 test('weather is fetched once per place, not on every settings change, and hides when stale', async ({ page }) => {
   await page.clock.install();
   let fetches = 0;

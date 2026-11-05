@@ -85,7 +85,9 @@ flowchart LR
   entry and marks the original `undoneAt`.
 - **Parental lock** (`core/lock.ts`): with a PIN set, only checking off tasks
   is open; wrap every other mutation in `asParent(() => ...)` or
-  `await requireParent()`.
+  `await requireParent()`. Repeated wrong PINs pause the pad
+  (`core/pin.ts`, in memory). The Calendar filter is a view preference and
+  stays open.
 - **Display** (`core/display.ts`): night window switches to the dark theme
   and dims (Fully Kiosk), sleep window blanks the screen, a tap wakes it and
   it stays awake until 3 minutes pass without a touch. "Sleep now" is kept in

@@ -467,6 +467,13 @@ textarea.input {
 .pin-keys button:active {
   background: var(--line-strong);
 }
+.pin-keys button:disabled {
+  opacity: 0.35;
+}
+.pin-paused {
+  color: var(--danger);
+  font-weight: 600;
+}
 
 .empty {
   display: flex;

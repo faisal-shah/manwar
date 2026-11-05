@@ -3,7 +3,8 @@ import type { ComponentChildren } from 'preact';
 import { createPortal } from 'preact/compat';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { ArrowLeft, X } from 'lucide-preact';
-import { checkPin, pinRequest } from '../core/lock';
+import { checkPin, pinPausedUntil, pinRequest } from '../core/lock';
+import { nowMs } from '../lib/clock';
 import { IconButton } from './controls';
 
 const portal = (node: ComponentChildren) => createPortal(node, document.body);
@@ -245,7 +246,10 @@ function PinPadHost() {
     setBad(false);
   }, [req]);
   if (!req) return null;
+  const pausedFor = Math.ceil((pinPausedUntil.value - nowMs.value) / 1000);
+  const paused = pausedFor > 0;
   const press = async (d: string) => {
+    if (paused) return;
     const next = (pin + d).slice(0, 4);
     setPin(next);
     setBad(false);
@@ -260,8 +264,8 @@ function PinPadHost() {
   };
   return (
     <Modal title="Parent PIN" onClose={() => req.resolve(false)}>
-      <p class="muted" style={{ textAlign: 'center', margin: 0 }}>
-        {req.reason ?? 'Enter the PIN to make changes.'}
+      <p class={paused ? 'pin-paused' : 'muted'} style={{ textAlign: 'center', margin: 0 }} aria-live="polite">
+        {paused ? `Too many wrong PINs. Try again in ${pausedFor} s.` : (req.reason ?? 'Enter the PIN to make changes.')}
       </p>
       <div class={`pin-dots${bad ? ' shake' : ''}`}>
         {[0, 1, 2, 3].map((i) => (
@@ -270,14 +274,14 @@ function PinPadHost() {
       </div>
       <div class="pin-keys">
         {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((d) => (
-          <button type="button" onClick={() => press(d)}>
+          <button type="button" disabled={paused} onClick={() => press(d)}>
             {d}
           </button>
         ))}
         <button type="button" style={{ fontSize: '1.6rem' }} onClick={() => req.resolve(false)}>
           Cancel
         </button>
-        <button type="button" onClick={() => press('0')}>
+        <button type="button" disabled={paused} onClick={() => press('0')}>
           0
         </button>
         <button type="button" style={{ fontSize: '1.6rem' }} onClick={() => setPin(pin.slice(0, -1))}>

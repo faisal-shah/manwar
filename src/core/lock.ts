@@ -4,6 +4,7 @@ import { saveSettings, settings } from '../data/store';
 import type { Settings } from '../data/types';
 import { currentTime, nowMs } from '../lib/clock';
 import { onActivity } from './activity';
+import { pinPause } from './pin';
 
 /**
  * Parental lock. With a PIN set, the tablet is in kid mode: anyone can look
@@ -28,11 +29,22 @@ function extend() {
   unlockedUntil.value = currentTime() + settings.value.lock.relockMinutes * 60_000;
 }
 
+let wrongPins = 0;
+/** The PIN pad refuses entries until this instant (after repeated wrong PINs). */
+export const pinPausedUntil = signal(0);
+
 export async function checkPin(pin: string): Promise<boolean> {
   const { pinHash, salt } = settings.value.lock;
   if (!pinHash || !salt) return true;
+  if (currentTime() < pinPausedUntil.value) return false;
   const ok = (await hash(salt, pin)) === pinHash;
-  if (ok) extend();
+  if (ok) {
+    wrongPins = 0;
+    extend();
+  } else {
+    const pause = pinPause(++wrongPins);
+    if (pause) pinPausedUntil.value = currentTime() + pause;
+  }
   return ok;
 }
 
