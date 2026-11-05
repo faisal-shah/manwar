@@ -43,21 +43,31 @@ const near = (e: MouseEvent, at: { x: number; y: number }) => {
  * An overlay that a tap just closed (a menu item, Clear, OK, its scrim) is
  * gone before the rest of that double tap lands, which would then press
  * whatever the overlay covered: on a phone, where menus and popovers are
- * bottom sheets over the list, a check box. For the rest of the double-tap
- * time, taps near that one press nothing.
+ * bottom sheets over the list, a check box. So the next tap, when it comes
+ * within the double-tap time and near that one, presses nothing; a tap
+ * anywhere else ends the shield.
  */
 function shieldClosingTap(): void {
   const from = lastDown;
   const until = lastDownAt + DOUBLE_TAP_MS;
   if (performance.now() >= until) return;
   const types = ['pointerdown', 'mousedown', 'click'] as const;
+  /** The tap under way is the rest of the double tap. */
+  let dropping = false;
+  const off = () => types.forEach((t) => window.removeEventListener(t, drop, true));
   const drop = (e: MouseEvent) => {
-    if (performance.now() >= until || !near(e, from)) return;
+    if (e.type === 'pointerdown') {
+      dropping = performance.now() < until && near(e, from);
+      if (!dropping) return off();
+    }
+    if (!dropping) return;
     e.stopPropagation();
     e.preventDefault();
+    if (e.type === 'click') off();
   };
   types.forEach((t) => window.addEventListener(t, drop, true));
-  setTimeout(() => types.forEach((t) => window.removeEventListener(t, drop, true)), until - performance.now());
+  // A double tap that never came: let go once its time is over (its click, if one is under way, is dropped first).
+  setTimeout(() => !dropping && off(), until - performance.now());
 }
 
 /** Whether a tap is the rest of the double tap that opened the calling overlay. */
