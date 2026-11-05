@@ -252,4 +252,34 @@ describe('calendar sync across a change of account', () => {
     store.settings.value = { ...store.settings.value, hiddenCalendars: [] };
     await settle();
   });
+
+  it('keeps a far countdown of a calendar hidden during its lookup off the wall', async () => {
+    const school = 'school@group.calendar.google.com';
+    const camp = ev(school, 'camp', {
+      allDay: true,
+      start: new Date(Date.now() + 200 * 86_400_000),
+      end: new Date(Date.now() + 201 * 86_400_000),
+    });
+    source.listCalendars = async () => [cal('ours@gmail.com'), cal(school)];
+    source.listEvents = async () => [];
+    const lookup = deferred();
+    source.nextOccurrence = async () => {
+      await lookup.promise;
+      return camp;
+    };
+    // Switching to Always fetches once (nothing to count down to yet).
+    store.settings.value = { ...store.settings.value, countdownWindow: 'always' };
+    await settle();
+    store.data.eventMeta.value = [{ id: engine.metaKey(school, 'camp'), profiles: [], countdown: true, updatedAt: 0 }];
+    const poll = engine.refresh();
+    await settle();
+    // Hidden while Google is asked for the camp's next occurrence.
+    store.settings.value = { ...store.settings.value, hiddenCalendars: [school] };
+    lookup.resolve();
+    await poll;
+    expect(engine.countdowns.value).toEqual([]);
+    store.settings.value = { ...store.settings.value, hiddenCalendars: [], countdownWindow: '3m' };
+    store.data.eventMeta.value = [];
+    await settle();
+  });
 });

@@ -213,7 +213,9 @@ async function fetchAll(): Promise<void> {
     loaded = w;
     const far = await fetchFarCountdowns(new Set(answered.map((c) => c.id)));
     if (stale()) return;
-    farCountdowns.value = far.found;
+    // Hidden while they were looked up: left off too.
+    const hiddenNow = settings.peek().hiddenCalendars;
+    farCountdowns.value = far.found.filter((e) => !hiddenNow.includes(e.calendarId));
     const limit = limitIn([...errors, ...far.errors]);
     if (limit) pauseSync(limit);
     else pause.step = 0;
