@@ -90,7 +90,7 @@ export function EventDetail({ ev, anchor, onClose }: { ev: CalEvent; anchor: DOM
         <header class="evd-head">
           <h2 class="serif">
             {emoji && <span class="evd-emoji">{emoji}</span>}
-            {ev.title}
+            <span dir="auto">{ev.title}</span>
           </h2>
           {ev.editable && (
             <div class="evd-tools">
@@ -168,10 +168,16 @@ export function EventDetail({ ev, anchor, onClose }: { ev: CalEvent; anchor: DOM
             <span>{ev.organizer}</span>
           </Row>
         )}
-        {ev.location && <Row icon={<MapPin {...ICON} />}>{ev.location}</Row>}
+        {ev.location && (
+          <Row icon={<MapPin {...ICON} />}>
+            <span dir="auto">{ev.location}</span>
+          </Row>
+        )}
         {ev.description && (
           <Row icon={<StickyNote {...ICON} />}>
-            <span class="evd-notes">{plainText(ev.description)}</span>
+            <span class="evd-notes" dir="auto">
+              {plainText(ev.description)}
+            </span>
           </Row>
         )}
         <div class="evd-toggle">

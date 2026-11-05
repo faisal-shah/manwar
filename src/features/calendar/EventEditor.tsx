@@ -16,8 +16,10 @@ import { Button, Field, Toggle } from '../../ui/controls';
 import { Sheet, toast } from '../../ui/overlays';
 import { ProfilePicker } from '../../ui/profile';
 import { RepeatEditor } from '../../ui/pickers';
+import { settings } from '../../data/store';
+import type { Repeat } from '../../data/types';
 import { askScope, deleteFlow, errorToast } from './actions';
-import { draftFromForm, formFromEvent, formProblem, newForm, shiftStart, type Form } from './form';
+import { draftFromForm, formFromEvent, formProblem, newForm, sameRepeat, setAllDay, shiftStart, type Form } from './form';
 import { calendarName, reminderLabel } from './model';
 import type { EditorRequest } from './state';
 
@@ -34,7 +36,8 @@ export function EventEditor({ req, onClose }: { req: EditorRequest; onClose: () 
       : newForm(req.day, currentTime(), defaultCalendarId(), req.countdown),
   );
   const [rs, setRs] = useState<RepeatState>(ev?.seriesId ? { status: 'loading' } : { status: 'none' });
-  const [repeatTouched, setRepeatTouched] = useState(false);
+  /** The series' rule as loaded, to tell whether the repeat was changed. */
+  const [loadedRule, setLoadedRule] = useState<Repeat | undefined>(undefined);
   const [busy, setBusy] = useState(false);
   const set = (patch: Partial<Form>) => setForm((f) => ({ ...f, ...patch }));
 
@@ -48,6 +51,7 @@ export function EventEditor({ req, onClose }: { req: EditorRequest; onClose: () 
         const rule = fromRecurrence(lines);
         if (rule) {
           setForm((f) => ({ ...f, repeat: rule }));
+          setLoadedRule(rule);
           setRs({ status: 'ok' });
         } else setRs({ status: 'custom', lines });
       })
@@ -66,9 +70,10 @@ export function EventEditor({ req, onClose }: { req: EditorRequest; onClose: () 
 
   const save = () =>
     asParent(async () => {
-      const scope = ev ? await askScope(ev, 'Edit recurring event') : 'all';
+      const repeatChanged = !!ev?.seriesId && rs.status === 'ok' && !sameRepeat(form.repeat, loadedRule);
+      const scope = ev ? await askScope(ev, 'Edit recurring event', repeatChanged) : 'all';
       if (!scope) return;
-      const keep = rs.status === 'custom' || (!!ev?.seriesId && !repeatTouched);
+      const keep = rs.status === 'custom' || (!!ev?.seriesId && !repeatChanged);
       const draft = draftFromForm(form, keep);
       setBusy(true);
       try {
@@ -115,6 +120,7 @@ export function EventEditor({ req, onClose }: { req: EditorRequest; onClose: () 
           <input
             class="input"
             name="title"
+            dir="auto"
             value={form.title}
             placeholder="Event title"
             autoFocus={!ev}
@@ -124,7 +130,7 @@ export function EventEditor({ req, onClose }: { req: EditorRequest; onClose: () 
 
         <div class="cal-ed-toggle">
           <span>All day</span>
-          <Toggle label="All day" on={form.allDay} onChange={(allDay) => set({ allDay })} />
+          <Toggle label="All day" on={form.allDay} onChange={(allDay) => setForm((f) => setAllDay(f, allDay))} />
         </div>
 
         <div class="cal-ed-times">
@@ -199,14 +205,7 @@ export function EventEditor({ req, onClose }: { req: EditorRequest; onClose: () 
             <span class="muted">This event has a custom repeat rule from Google Calendar. It is kept as it is.</span>
           )}
           {(rs.status === 'none' || rs.status === 'ok') && (
-            <RepeatEditor
-              value={form.repeat}
-              start={form.startDate}
-              onChange={(repeat) => {
-                setRepeatTouched(true);
-                set({ repeat });
-              }}
-            />
+            <RepeatEditor value={form.repeat} start={form.startDate} onChange={(repeat) => set({ repeat })} />
           )}
         </Field>
 
@@ -222,7 +221,7 @@ export function EventEditor({ req, onClose }: { req: EditorRequest; onClose: () 
             >
               {writable.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.name}
+                  {settings.value.hiddenCalendars.includes(c.id) ? `${c.name} (hidden on the wall)` : c.name}
                 </option>
               ))}
             </select>
@@ -252,6 +251,7 @@ export function EventEditor({ req, onClose }: { req: EditorRequest; onClose: () 
           <input
             class="input"
             name="location"
+            dir="auto"
             value={form.location}
             onInput={(e) => set({ location: (e.target as HTMLInputElement).value })}
           />
@@ -261,6 +261,7 @@ export function EventEditor({ req, onClose }: { req: EditorRequest; onClose: () 
           <textarea
             class="input"
             name="notes"
+            dir="auto"
             value={form.notes}
             onInput={(e) => set({ notes: (e.target as HTMLTextAreaElement).value })}
           />

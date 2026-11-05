@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import type { CalEvent } from '../../src/calendar/types';
-import { draftFromForm, formFromEvent, formProblem, newForm, shiftStart, type Form } from '../../src/features/calendar/form';
+import {
+  draftFromForm,
+  formFromEvent,
+  formProblem,
+  newForm,
+  sameRepeat,
+  setAllDay,
+  shiftStart,
+  type Form,
+} from '../../src/features/calendar/form';
 
 const at = (s: string) => new Date(s).getTime();
 
@@ -63,5 +72,36 @@ describe('event editor form', () => {
       'default',
       true,
     ]);
+  });
+  it('gives an all-day event real times when it becomes timed', () => {
+    const ev: CalEvent = {
+      key: 'c::b',
+      calendarId: 'c',
+      id: 'b',
+      title: "Hashim's birthday",
+      allDay: true,
+      start: new Date('2026-11-16T00:00'),
+      end: new Date('2026-11-17T00:00'),
+      editable: true,
+    };
+    const f = setAllDay(formFromEvent(ev, ['hashim'], false), false);
+    expect([f.allDay, f.startDate, f.startTime, f.endDate, f.endTime]).toEqual([
+      false,
+      '2026-11-16',
+      '09:00',
+      '2026-11-16',
+      '10:00',
+    ]);
+    expect(formProblem(f)).toBeNull();
+    // A timed event keeps its times through a round trip.
+    const t = valid({ startTime: '14:00', endTime: '15:30' });
+    expect(setAllDay(setAllDay(t, true), false)).toEqual(t);
+  });
+  it('compares repeat rules regardless of weekday order', () => {
+    expect(sameRepeat({ every: 1, unit: 'week', weekdays: [4, 6] }, { every: 1, unit: 'week', weekdays: [6, 4] })).toBe(true);
+    expect(sameRepeat({ every: 1, unit: 'week', weekdays: [4] }, { every: 1, unit: 'week', weekdays: [4, 6] })).toBe(false);
+    expect(sameRepeat({ every: 1, unit: 'day' }, { every: 1, unit: 'day', until: '2026-12-31' })).toBe(false);
+    expect(sameRepeat(undefined, { every: 1, unit: 'day' })).toBe(false);
+    expect(sameRepeat(undefined, undefined)).toBe(true);
   });
 });

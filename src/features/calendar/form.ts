@@ -97,6 +97,23 @@ export function draftFromForm(f: Form, keepRecurrence: boolean): EventDraft {
   return { ...base, start: dateAt(f.startDate, f.startTime), end: dateAt(f.endDate, f.endTime) };
 }
 
+/**
+ * Switch between all-day and timed. An all-day event read back has no real
+ * times (midnight to midnight), so turning it timed starts at 9 AM for an hour
+ * on its days instead of offering an empty or inverted range.
+ */
+export function setAllDay(f: Form, allDay: boolean): Form {
+  if (allDay || f.allDay === allDay || f.startTime !== '00:00' || f.endTime !== '00:00') return { ...f, allDay };
+  return { ...f, allDay, startTime: '09:00', endTime: '10:00' };
+}
+
+/** Same repeat rule (weekday order does not matter). */
+export function sameRepeat(a: Repeat | undefined, b: Repeat | undefined): boolean {
+  if (!a || !b) return a === b;
+  const days = (r: Repeat) => [...(r.weekdays ?? [])].sort().join(',');
+  return a.every === b.every && a.unit === b.unit && days(a) === days(b) && (a.until ?? '') === (b.until ?? '');
+}
+
 /** Move the start and keep the duration. */
 export function shiftStart(f: Form, startDate: ISODate, startTime: HHMM): Form {
   if (f.allDay) {

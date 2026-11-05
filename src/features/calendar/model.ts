@@ -115,8 +115,9 @@ export function timeLabel(ev: CalEvent): string {
   return formatTimeRange(ev.start, ev.end, fmt());
 }
 
-/** Month pill prefix: "11:30 AM", "3 PM". */
-export const timePrefix = (ev: CalEvent) => formatTime(ev.start, fmt());
+/** Month pill prefix: "11:30 AM", "3 PM"; on the day an overnight event ends, "until 2 AM". */
+export const timePrefix = (ev: CalEvent, day?: ISODate) =>
+  day && toISODate(ev.start) < day ? `until ${formatTime(ev.end, fmt())}` : formatTime(ev.start, fmt());
 
 /** Detail line: "Wednesday, Nov 4 : 11:15 - 11:45 AM", "Fri, Nov 13 - Mon, Nov 16 : All day". */
 export function whenLabel(ev: CalEvent): string {

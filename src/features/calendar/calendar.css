@@ -862,6 +862,9 @@
 }
 .evd-head h2 {
   flex: 1;
+  min-width: 0;
+  /* A long unbroken title (a pasted link) wraps instead of pushing Edit and Delete out of the card. */
+  overflow-wrap: anywhere;
   margin: 0;
   font-size: 3.2rem;
   font-weight: 400;
@@ -897,6 +900,7 @@
 .evd-body {
   flex: 1;
   min-width: 0;
+  overflow-wrap: anywhere;
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
@@ -1014,6 +1018,7 @@
   font-size: 1.6rem;
 }
 .triage-info h3 {
+  overflow-wrap: anywhere;
   margin: 0 0 0.2rem;
   font-size: 2.4rem;
   font-weight: 400;

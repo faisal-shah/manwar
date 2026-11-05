@@ -1,5 +1,6 @@
 import type { ComponentChildren } from 'preact';
 import type { CalEvent } from '../../calendar/types';
+import type { ISODate } from '../../data/types';
 import { goTo } from '../../app/nav';
 import { Avatar } from '../../ui/profile';
 import { fillStyle, isPast, isUnassigned, timeLabel, timePrefix, whoOf, type MealItem, type Who } from './model';
@@ -54,7 +55,9 @@ export function EventCard({ ev, extra }: { ev: CalEvent; extra?: ComponentChildr
       data-event={ev.key}
     >
       <span class="ev-text">
-        <span class="ev-title">{ev.title}</span>
+        <span class="ev-title" dir="auto">
+          {ev.title}
+        </span>
         <span class="ev-time">{timeLabel(ev)}</span>
         {extra}
       </span>
@@ -63,8 +66,8 @@ export function EventCard({ ev, extra }: { ev: CalEvent; extra?: ComponentChildr
   );
 }
 
-/** Single-line month pill: "11:30 AM Title" or the title alone for all-day events. */
-export function EventPill({ ev, bar }: { ev: CalEvent; bar?: { startsHere: boolean; endsHere: boolean } }) {
+/** Single-line month pill: "11:30 AM Title" or the title alone for all-day events. `day` is the cell it is drawn in. */
+export function EventPill({ ev, bar, day }: { ev: CalEvent; bar?: { startsHere: boolean; endsHere: boolean }; day?: ISODate }) {
   const cls = ['ev-pill'];
   if (isPast(ev)) cls.push('ev-past');
   if (isUnassigned(ev)) cls.push('ev-unassigned');
@@ -72,8 +75,10 @@ export function EventPill({ ev, bar }: { ev: CalEvent; bar?: { startsHere: boole
   if (bar && !bar.endsHere) cls.push('cont-r');
   return (
     <button type="button" class={cls.join(' ')} style={fillStyle(ev)} onClick={open(ev)} data-event={ev.key}>
-      {!ev.allDay && !bar && <span class="ev-prefix">{timePrefix(ev)}</span>}
-      <span class="ev-title">{ev.title}</span>
+      {!ev.allDay && !bar && <span class="ev-prefix">{timePrefix(ev, day)}</span>}
+      <span class="ev-title" dir="auto">
+        {ev.title}
+      </span>
       {isUnassigned(ev) && <Unassigned size={1.8} />}
     </button>
   );
@@ -93,7 +98,9 @@ export function MealPill({ item, badge }: { item: MealItem; badge?: boolean }) {
       title={`${item.category.name}: ${item.meal.title}`}
     >
       {badge && <span class="cal-meal-badge">{item.category.name}</span>}
-      <span class="ev-title">{item.meal.title}</span>
+      <span class="ev-title" dir="auto">
+        {item.meal.title}
+      </span>
     </button>
   );
 }

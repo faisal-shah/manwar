@@ -53,7 +53,9 @@ function TriageRow({ ev }: { ev: CalEvent }) {
   return (
     <article class="triage-row" data-triage={seriesOf(ev)}>
       <div class="triage-info">
-        <h3 class="serif">{ev.title}</h3>
+        <h3 class="serif" dir="auto">
+          {ev.title}
+        </h3>
         <span>
           {whenLabel(ev)}
           {ev.seriesId && (
