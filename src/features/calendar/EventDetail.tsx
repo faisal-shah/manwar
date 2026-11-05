@@ -22,7 +22,8 @@ import { Button, IconButton, Toggle } from '../../ui/controls';
 import { choose, Popover } from '../../ui/overlays';
 import { Avatar, ProfilePicker } from '../../ui/profile';
 import { assignFlow, countdownFlow, deleteFlow } from './actions';
-import { calendarName, countdownEmoji, plainText, reminderLabel, whenLabel, whoOf } from './model';
+import { calendarName, countdownEmoji, reminderLabel, whenLabel, whoOf } from './model';
+import { plainText } from './text';
 import { Unassigned } from './parts';
 import { openEditor } from './state';
 

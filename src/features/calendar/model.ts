@@ -140,19 +140,6 @@ export function reminderLabel(minutes: number | null | undefined): string | null
   return `${minutes} minutes before`;
 }
 
-/** Google descriptions may carry HTML; show plain text. */
-export function plainText(s: string): string {
-  return s
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/p>/gi, '\n')
-    .replace(/<[^>]+>/g, '')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .trim();
-}
-
 /** The clock at minute resolution: views that only need minutes re-render once a minute, not every second. */
 export const nowMinute = computed(() => Math.floor(nowMs.value / 60_000) * 60_000);
 

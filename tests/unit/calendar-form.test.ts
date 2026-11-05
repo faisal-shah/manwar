@@ -10,6 +10,7 @@ import {
   shiftStart,
   type Form,
 } from '../../src/features/calendar/form';
+import { plainText } from '../../src/features/calendar/text';
 
 const at = (s: string) => new Date(s).getTime();
 
@@ -103,5 +104,35 @@ describe('event editor form', () => {
     expect(sameRepeat({ every: 1, unit: 'day' }, { every: 1, unit: 'day', until: '2026-12-31' })).toBe(false);
     expect(sameRepeat(undefined, { every: 1, unit: 'day' })).toBe(false);
     expect(sameRepeat(undefined, undefined)).toBe(true);
+  });
+});
+
+describe('event notes', () => {
+  const html =
+    '<b>Field trip</b><br>Bring:<ul><li>water</li><li>a hat</li></ul>Don&#39;t forget &quot;permission&quot; slips &amp; lunch&nbsp;money.<br>Write &amp;lt;3 on the card.';
+  it('shows Google HTML descriptions as plain text', () => {
+    expect(plainText(html)).toBe(
+      'Field trip\nBring:\n- water\n- a hat\nDon\'t forget "permission" slips & lunch money.\nWrite &lt;3 on the card.',
+    );
+    expect(plainText('Plain notes stay as they are')).toBe('Plain notes stay as they are');
+    expect(plainText('&#x1F382; party &bogus;')).toBe('🎂 party &bogus;');
+  });
+  const ev: CalEvent = {
+    key: 'c::t',
+    calendarId: 'c',
+    id: 't',
+    title: 'Field trip',
+    allDay: false,
+    start: new Date('2026-11-06T09:00'),
+    end: new Date('2026-11-06T15:00'),
+    description: html,
+    editable: true,
+  };
+  it('edits the plain text and keeps the original HTML when the notes are not changed', () => {
+    const f = formFromEvent(ev, ['asiyah'], false);
+    expect(f.notes).toBe(plainText(html));
+    expect(draftFromForm({ ...f, title: 'Field trip!' }, false).description).toBe(html);
+    expect(draftFromForm({ ...f, notes: 'Only water' }, false).description).toBe('Only water');
+    expect(draftFromForm({ ...f, notes: '  ' }, false).description).toBeUndefined();
   });
 });
