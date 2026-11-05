@@ -43,7 +43,9 @@ function ProgressPill({ profile, done, total }: { profile: Profile; done: number
       aria-label={`${profile.name}: ${done} of ${total} tasks done`}
     >
       <Avatar profile={profile} size={3.2} />
-      <span class="cal-prog-name">{profile.name}</span>
+      <span class="cal-prog-name" dir="auto">
+        {profile.name}
+      </span>
       {total > 0 && <span class="cal-prog-count">{complete ? <Check size="2rem" strokeWidth={2.6} /> : `${done}/${total}`}</span>}
     </button>
   );
@@ -76,7 +78,9 @@ function CountdownPill({ wide }: { wide: boolean }) {
       onClick={(e) => (countdownPopup.value = (e.currentTarget as Element).getBoundingClientRect())}
     >
       <CountdownIcon ev={ev} />
-      <span class="cal-cd-title">{ev.title}</span>
+      <span class="cal-cd-title" dir="auto">
+        {ev.title}
+      </span>
       <span class="cal-cd-days">{daysText(days)}</span>
       {list.length > 1 && <span class="cal-cd-n">+{list.length - 1}</span>}
     </button>
@@ -105,7 +109,9 @@ export function CountdownList({ anchor, onClose }: { anchor: DOMRect; onClose: (
           }}
         >
           <CountdownIcon ev={ev} />
-          <span class="cal-cd-title">{ev.title}</span>
+          <span class="cal-cd-title" dir="auto">
+            {ev.title}
+          </span>
           <span class="cal-cd-days">{daysText(days)}</span>
           <Avatars who={whoOf(ev)} size={2.4} />
         </button>

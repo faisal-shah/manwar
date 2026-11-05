@@ -112,11 +112,12 @@ test('creates an event', async ({ page }) => {
   await sheet.locator('input[name="startTime"]').fill('16:00');
   await expect(sheet.locator('input[name="endTime"]')).toHaveValue('17:00');
   await sheet.locator('.picker button', { hasText: 'Asiyah' }).click();
-  await sheet.getByRole('button', { name: 'Add', exact: true }).click();
+  // A double tap adds one event.
+  await sheet.getByRole('button', { name: 'Add', exact: true }).dblclick();
   await expect(page.locator('.toast')).toContainText('Event added');
   await expect(sheet).toHaveCount(0);
   const block = page.locator('.sched-col[data-day="2026-11-05"] .ev-block', { hasText: 'Science fair' });
-  await expect(block).toBeVisible();
+  await expect(block).toHaveCount(1);
   await expect(block).not.toHaveClass(/ev-unassigned/);
   await block.click();
   await expect(page.locator('.ev-detail')).toContainText('Asiyah');
@@ -215,6 +216,132 @@ test('deletes an event, toggles a countdown, and prefills the day from Week', as
   expect(errors).toEqual([]);
 });
 
+/** Add a timed event through the editor (Asiyah, Family calendar). */
+async function addEvent(page: Page, title: string, date: string, start: string, end: string) {
+  await page.locator('.fab').click();
+  const sheet = page.locator('.sheet');
+  await sheet.locator('input[name="title"]').fill(title);
+  await sheet.locator('input[name="startDate"]').fill(date);
+  await sheet.locator('input[name="startTime"]').fill(start);
+  await sheet.locator('input[name="endTime"]').fill(end);
+  await sheet.locator('.picker button', { hasText: 'Asiyah' }).click();
+  await sheet.getByRole('button', { name: 'Add', exact: true }).click();
+  await expect(sheet).toHaveCount(0);
+}
+
+test('keeps an event card on screen when its profile picker opens near the bottom', async ({ page }) => {
+  const errors = await open(page);
+  await page.locator('[data-event="family@demo::isha_20261107"]').click();
+  await page.locator('.ev-detail').getByRole('button', { name: 'Change' }).click();
+  const save = page.locator('.ev-detail').getByRole('button', { name: 'Save' });
+  await expect(save).toBeVisible();
+  const bottom = async () => {
+    const b = (await page.locator('.popover').boundingBox())!;
+    return b.y + b.height;
+  };
+  await expect.poll(bottom).toBeLessThanOrEqual(1000);
+  await expect(save).toBeInViewport({ ratio: 1 });
+  expect(errors).toEqual([]);
+});
+
+test('keeps Edit and Delete in reach for a title with a long link in it', async ({ page }) => {
+  const errors = await open(page);
+  const title = 'Zoom: https://us02web.zoom.us/j/81234567890?pwd=QWxhZGRpbjpvcGVuIHNlc2FtZQ_and_more';
+  await addEvent(page, title, '2026-11-05', '16:00', '17:00');
+  await page.locator('.sched-col[data-day="2026-11-05"] .ev-block', { hasText: 'Zoom' }).click();
+  const card = (await page.locator('.popover').boundingBox())!;
+  for (const name of ['Edit', 'Delete']) {
+    const b = (await page.locator('.ev-detail').getByRole('button', { name }).boundingBox())!;
+    expect(b.x + b.width).toBeLessThanOrEqual(card.x + card.width);
+  }
+  expect(errors).toEqual([]);
+});
+
+test('reads Arabic titles from their start', async ({ page }) => {
+  const errors = await open(page);
+  await addEvent(page, 'درس القرآن الكريم مع الشيخ عبد الله في المسجد', '2026-11-05', '16:00', '17:00');
+  const t = page.locator('.sched-col[data-day="2026-11-05"] .ev-block .ev-title', { hasText: 'درس' });
+  await expect(t).toBeVisible();
+  // Right to left, so a clipped title loses its end, not its beginning.
+  expect(await t.evaluate((el) => getComputedStyle(el).direction)).toBe('rtl');
+  expect(
+    await page
+      .locator('.ev-title', { hasText: 'Math' })
+      .first()
+      .evaluate((el) => getComputedStyle(el).direction),
+  ).toBe('ltr');
+  expect(errors).toEqual([]);
+});
+
+test('draws an overnight event on both of its days in Month', async ({ page }) => {
+  // A sparse demo calendar, so neither day folds the event into "N more".
+  const timed = (id: string, title: string, day: string, startMin: number, durMin: number) => ({
+    id,
+    calendarId: 'family@demo',
+    title,
+    allDay: false,
+    day,
+    startMin,
+    durMin,
+    days: 1,
+    exdates: [],
+    overrides: {},
+  });
+  await page.addInitScript(
+    (ms) => localStorage.setItem('manwar.demoCalendar.v1', JSON.stringify(ms)),
+    [timed('night', 'Night shift', '2026-11-10', 22 * 60, 4 * 60), timed('dentist', 'Dentist', '2026-11-11', 9 * 60, 60)],
+  );
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(String(e)));
+  page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
+  await page.goto(`/?demo=e2e-cal-${RUN}-${++seq}&now=2026-11-04T11:44`);
+  await pickView(page, 'Month');
+  const items = page.locator('.month-week').nth(1).locator('.month-item', { hasText: 'Night shift' });
+  await expect(items).toHaveCount(2);
+  await expect(items.nth(0)).toContainText('10 PM');
+  await expect(items.nth(1)).toContainText('until 2 AM');
+  // Re-render in place (meals filter) and both pills stay.
+  await page.locator('.cal-filter-btn').click();
+  await page.locator('.cal-menu .cal-filter-row', { hasText: 'Meals' }).getByRole('switch').click();
+  await expect(items).toHaveCount(2);
+  expect(errors).toEqual([]);
+});
+
+test('a changed repeat rule applies to the series, not one occurrence', async ({ page }) => {
+  const errors = await open(page);
+  await page.locator('[data-event="family@demo::swim_20261107"]').click();
+  await page.locator('.ev-detail').getByRole('button', { name: 'Edit' }).click();
+  const sheet = page.locator('.sheet');
+  await expect(sheet).toContainText('Weekly on Saturday');
+  await sheet.getByRole('tab', { name: 'Daily' }).click();
+  await sheet.getByRole('button', { name: 'Save', exact: true }).click();
+  const modal = page.locator('.modal');
+  await expect(modal.getByRole('button', { name: 'All events' })).toBeVisible();
+  await expect(modal.getByRole('button', { name: 'This event', exact: true })).toHaveCount(0);
+  await modal.getByRole('button', { name: 'All events' }).click();
+  await expect(page.locator('.toast')).toContainText('Event saved');
+  // Daily from the first lesson (Sat Nov 7) on: Sunday has one now.
+  await page.getByRole('button', { name: 'Next' }).click();
+  await expect(page.locator('[data-event="family@demo::swim_20261108"]')).toBeVisible();
+  await expect(page.locator('[data-event="family@demo::swim_20261109"]')).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test('keeps the event counts whole in the narrow Week cells on Home', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const errors = await open(page);
+  await page.locator('.rail button', { hasText: 'Home' }).click();
+  const pane = page.locator('.cal-pane');
+  await pane.locator('.cal-view-btn').click();
+  await page.getByRole('menuitemradio', { name: 'Week' }).click();
+  await expect(pane.locator('.cal-week-cell[data-day="2026-11-04"] .cal-week-count')).toHaveText(/events today/);
+  for (const count of await pane.locator('.cal-week-count').all())
+    expect(await count.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+  // The add button keeps its name for touch and screen readers.
+  await expect(pane.getByRole('button', { name: 'Add event' })).toHaveCount(7);
+  expect(errors).toEqual([]);
+});
+
 test('zooms the schedule hours with Ctrl + wheel', async ({ page }) => {
   const errors = await open(page);
   const grid = page.locator('.sched-grid');
@@ -265,3 +392,44 @@ for (const [name, area] of [
     await ctx.close();
   });
 }
+
+/** One finger: sideways pages every view, also over its scrolling lists; up and down still scrolls. */
+test('pages with a sideways swipe over the scrolling parts of each view', async ({ browser }) => {
+  const ctx = await browser.newContext({
+    viewport: { width: 1600, height: 1000 },
+    hasTouch: true,
+    timezoneId: 'America/Chicago',
+  });
+  const page = await ctx.newPage();
+  const errors = await open(page);
+  const cdp = await ctx.newCDPSession(page);
+  const drag = async (sel: string, dx: number, dy: number) => {
+    const box = (await page.locator(sel).first().boundingBox())!;
+    const x = box.x + box.width / 2 - dx / 2;
+    const y = box.y + Math.min(box.height / 2, 150) - dy / 2;
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y, id: 1 }] });
+    for (let i = 1; i <= 10; i++)
+      await cdp.send('Input.dispatchTouchEvent', {
+        type: 'touchMove',
+        touchPoints: [{ x: x + (dx * i) / 10, y: y + (dy * i) / 10, id: 1 }],
+      });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  };
+  const body = page.locator('.cal-body');
+  const scroller = page.locator('.sched-scroll');
+  const top = await scroller.evaluate((el) => el.scrollTop);
+  await drag('.sched-scroll', 0, 300);
+  await expect.poll(() => scroller.evaluate((el) => el.scrollTop)).toBeLessThan(top - 100);
+  await expect(body).toHaveAttribute('data-from', '2026-11-04');
+  await drag('.sched-scroll', -500, 0);
+  await expect(body).toHaveAttribute('data-from', '2026-11-08');
+  await page.getByRole('button', { name: 'Today' }).click();
+  await pickView(page, 'Week');
+  await drag('.cal-week-items', -500, 0);
+  await expect(body).toHaveAttribute('data-from', '2026-11-08');
+  await pickView(page, 'Day');
+  await drag('.dayv-items', 500, 0);
+  await expect(body).toHaveAttribute('data-from', '2026-11-07');
+  expect(errors).toEqual([]);
+  await ctx.close();
+});

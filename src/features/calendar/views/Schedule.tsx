@@ -161,7 +161,9 @@ function TimedBlock({ ev, style, short }: { ev: CalEvent; style: Record<string, 
       }}
     >
       <span class="ev-text">
-        <span class="ev-title">{ev.title}</span>
+        <span class="ev-title" dir="auto">
+          {ev.title}
+        </span>
         <span class="ev-time">{timeLabel(ev)}</span>
       </span>
       <EventWho ev={ev} size={2.6} />

@@ -1,4 +1,4 @@
-import { computed, signal } from '@preact/signals';
+import { computed, effect, signal } from '@preact/signals';
 import { demoMode } from '../config';
 import { data, profileById, put, remove as removeDoc, settings } from '../data/store';
 import { EVERYONE, type EventMeta, type ISODate } from '../data/types';
@@ -25,9 +25,25 @@ export const sync = signal<{ loading: boolean; lastSync: number | null; error: s
   error: null,
 });
 
-/** Loaded window [from, to) as ISO dates. Views call ensureRange to widen it. */
-let loadedFrom: ISODate = addDays(today.value, -42);
-let loadedTo: ISODate = addMonths(today.value, 4);
+/**
+ * The fetched window [from, to): six weeks back and four months ahead of
+ * today, widened to the days the latest view asked for (ensureRange). It
+ * follows today, so a wall left running for months does not keep fetching
+ * and caching an ever longer past.
+ */
+let wanted: { from: ISODate; to: ISODate } | null = null;
+
+function fetchWindow(): { from: ISODate; to: ISODate } {
+  const t = today.value;
+  let from = addDays(t, -42);
+  let to = addMonths(t, 4);
+  if (wanted && wanted.from < from) from = addDays(wanted.from, -14);
+  if (wanted && wanted.to >= to) to = addDays(wanted.to, 30);
+  return { from, to };
+}
+
+/** The window of the last successful fetch. */
+let loaded = fetchWindow();
 
 const SNAPSHOT_KEY = demoMode ? 'manwar.demoEvents.v1' : 'manwar.events.v1';
 
@@ -44,8 +60,8 @@ function saveSnapshot() {
     const s: Snapshot = {
       calendars: calendars.value,
       events: events.value.map((e) => ({ ...e, start: e.start.getTime(), end: e.end.getTime() })),
-      from: loadedFrom,
-      to: loadedTo,
+      from: loaded.from,
+      to: loaded.to,
       at: Date.now(),
     };
     localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(s));
@@ -69,42 +85,56 @@ function loadSnapshot() {
 
 const visibleCalendars = () => calendars.value.filter((c) => !settings.value.hiddenCalendars.includes(c.id));
 
-let inflight: Promise<void> | null = null;
+const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
-/** Re-fetch every shown calendar for the loaded window. */
+async function fetchAll(): Promise<void> {
+  sync.value = { ...sync.value, loading: true };
+  try {
+    calendars.value = await source.listCalendars();
+    const w = fetchWindow();
+    const shown = visibleCalendars();
+    const results = await Promise.allSettled(shown.map((c) => source.listEvents(c.id, dateAt(w.from), dateAt(w.to))));
+    // A calendar that fails keeps the events it had, so one bad calendar neither blanks nor freezes the wall.
+    const failed = shown.filter((_, i) => results[i].status === 'rejected');
+    const kept = events.value.filter((e) => failed.some((c) => c.id === e.calendarId));
+    const fresh = results.flatMap((r) => (r.status === 'fulfilled' ? r.value : []));
+    events.value = [...kept, ...fresh].sort((a, b) => a.start.getTime() - b.start.getTime());
+    const firstError = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
+    if (!failed.length) loaded = w;
+    await fetchFarCountdowns();
+    sync.value = firstError
+      ? { loading: false, lastSync: sync.value.lastSync, error: `${failed[0].name}: ${message(firstError.reason)}` }
+      : { loading: false, lastSync: Date.now(), error: null };
+    saveSnapshot();
+  } catch (e) {
+    sync.value = { ...sync.value, loading: false, error: message(e) };
+  }
+}
+
+let running: Promise<void> | null = null;
+let queued: Promise<void> | null = null;
+
+/**
+ * Re-fetch every shown calendar. A call made while a fetch is running gets
+ * one more fetch after it (shared by every such call), so what it awaits
+ * includes any change made before the call: a saved event, a wider window.
+ */
 export function refresh(): Promise<void> {
-  if (inflight) return inflight;
-  inflight = (async () => {
-    sync.value = { ...sync.value, loading: true };
-    try {
-      calendars.value = await source.listCalendars();
-      const timeMin = dateAt(loadedFrom);
-      const timeMax = dateAt(loadedTo);
-      const lists = await Promise.all(visibleCalendars().map((c) => source.listEvents(c.id, timeMin, timeMax)));
-      events.value = lists.flat().sort((a, b) => a.start.getTime() - b.start.getTime());
-      sync.value = { loading: false, lastSync: Date.now(), error: null };
-      saveSnapshot();
-    } catch (e) {
-      sync.value = { ...sync.value, loading: false, error: e instanceof Error ? e.message : String(e) };
-    } finally {
-      inflight = null;
-    }
-  })();
-  return inflight;
+  if (!running) {
+    running = fetchAll().finally(() => (running = null));
+    return running;
+  }
+  queued ??= running.then(() => {
+    queued = null;
+    return refresh();
+  });
+  return queued;
 }
 
 /** Make sure [from, to] is loaded (views call this when paging). */
 export function ensureRange(from: ISODate, to: ISODate): void {
-  let grew = false;
-  if (from < loadedFrom) {
-    loadedFrom = addDays(from, -14);
-    grew = true;
-  }
-  if (to >= loadedTo) {
-    loadedTo = addDays(to, 30);
-    grew = true;
-  }
-  if (grew) void refresh();
+  wanted = { from, to };
+  if (from < loaded.from || to >= loaded.to) void refresh();
 }
 
 let started = false;
@@ -120,6 +150,13 @@ export function startCalendarSync(): void {
     if (document.visibilityState === 'visible') void refresh();
   });
   window.addEventListener('online', () => void refresh());
+  // Switching to Always needs the countdowns past the window.
+  let win = settings.peek().countdownWindow;
+  effect(() => {
+    const next = settings.value.countdownWindow;
+    if (next !== win && next === 'always') void refresh();
+    win = next;
+  });
 }
 
 /* ---------- Event metadata (profiles, countdowns) ---------- */
@@ -129,10 +166,30 @@ export const metaKey = (calendarId: string, id: string) => encodeURIComponent(ev
 
 const metaById = computed(() => new Map(data.eventMeta.value.map((m) => [m.id, m])));
 
-/** Instance-level meta wins over series-level meta. */
-export function metaFor(ev: CalEvent): EventMeta | undefined {
+/** The event's own meta document (its instance key) and its series' document. */
+function metaDocs(ev: CalEvent): { own?: EventMeta; series?: EventMeta; ownKey: string; seriesKey: string | null } {
   const m = metaById.value;
-  return m.get(metaKey(ev.calendarId, ev.id)) ?? (ev.seriesId ? m.get(metaKey(ev.calendarId, ev.seriesId)) : undefined);
+  const ownKey = metaKey(ev.calendarId, ev.id);
+  const seriesKey = ev.seriesId ? metaKey(ev.calendarId, ev.seriesId) : null;
+  return { own: m.get(ownKey), series: seriesKey ? m.get(seriesKey) : undefined, ownKey, seriesKey };
+}
+
+/**
+ * The event's meta: series-level fields, overridden field by field by the
+ * occurrence's own document. An occurrence document overrides profiles only
+ * when it lists some (empty = inherit), and countdown/emoji only when set.
+ */
+export function metaFor(ev: CalEvent): EventMeta | undefined {
+  const { own, series } = metaDocs(ev);
+  if (!own || !series) return own ?? series;
+  return {
+    ...series,
+    id: own.id,
+    updatedAt: own.updatedAt,
+    profiles: own.profiles.length ? own.profiles : series.profiles,
+    ...(own.countdown != null && { countdown: own.countdown }),
+    ...(own.emoji != null && { emoji: own.emoji }),
+  };
 }
 
 /** Assigned profile ids ([EVERYONE] for the family), or null when unassigned. */
@@ -168,19 +225,21 @@ export function passesFilter(ev: CalEvent): boolean {
 export function eventsBetween(from: ISODate, to: ISODate): CalEvent[] {
   const a = dateAt(from).getTime();
   const b = dateAt(addDays(to, 1)).getTime();
-  return events.value.filter((e) => e.end.getTime() > a && e.start.getTime() < b && passesFilter(e));
+  return events.value.filter((e) => endMs(e) > a && e.start.getTime() < b && passesFilter(e));
 }
+
+/** End instant for overlap tests: a zero-length event counts as an instant long, so it lands on its start day. */
+const endMs = (e: CalEvent) => Math.max(e.end.getTime(), e.start.getTime() + 1);
 
 /** Events on one day, all-day first, then by start. */
 export function eventsOn(day: ISODate): CalEvent[] {
   return eventsBetween(day, day).sort((x, y) => Number(y.allDay) - Number(x.allDay) || x.start.getTime() - y.start.getTime());
 }
 
-/** ISO dates an event covers (all-day end is exclusive). */
+/** ISO dates an event covers (all-day end is exclusive; a zero-length event is on its start day). */
 export function daysOf(ev: CalEvent): ISODate[] {
   const first = toISODate(ev.start);
-  const lastInstant = new Date(ev.end.getTime() - 1);
-  const last = ev.allDay || toISODate(lastInstant) !== first ? toISODate(lastInstant) : first;
+  const last = toISODate(new Date(endMs(ev) - 1));
   const out: ISODate[] = [];
   for (let d = first; d <= last; d = addDays(d, 1)) out.push(d);
   return out;
@@ -188,7 +247,7 @@ export function daysOf(ev: CalEvent): ISODate[] {
 
 /**
  * Triage queue: upcoming events nobody is assigned to, one row per series
- * (its next occurrence), soonest first.
+ * (its next unassigned occurrence), soonest first.
  */
 export const unassigned = computed(() => {
   void data.eventMeta.value;
@@ -197,33 +256,86 @@ export const unassigned = computed(() => {
   const seen = new Set<string>();
   const out: CalEvent[] = [];
   for (const ev of events.value) {
-    if (ev.end.getTime() <= from || settings.value.hiddenCalendars.includes(ev.calendarId)) continue;
+    if (endMs(ev) <= from || settings.value.hiddenCalendars.includes(ev.calendarId) || profilesOf(ev)) continue;
     const series = eventKey(ev.calendarId, ev.seriesId ?? ev.id);
     if (seen.has(series)) continue;
     seen.add(series);
-    if (!profilesOf(ev)) out.push(ev);
+    out.push(ev);
   }
   return out;
 });
 
 /**
- * Assign profiles. 'series' writes the series-level entry (and clears this
- * occurrence's override); 'instance' writes an override for one occurrence.
+ * Write the occurrence's own document with `fields` changed (undefined
+ * clears a field). A document left with nothing of its own is removed, so
+ * the occurrence follows its series again.
  */
-export function assign(ev: CalEvent, profileIds: string[], scope: 'series' | 'instance' = 'series'): void {
-  const base = metaFor(ev);
-  const id = scope === 'series' && ev.seriesId ? metaKey(ev.calendarId, ev.seriesId) : metaKey(ev.calendarId, ev.id);
-  void put('eventMeta', { ...base, id, profiles: profileIds, updatedAt: currentTime() });
-  if (scope === 'series' && ev.seriesId) {
-    const inst = metaKey(ev.calendarId, ev.id);
-    if (data.eventMeta.value.some((m) => m.id === inst)) void removeDoc('eventMeta', inst);
+function putOwn(ev: CalEvent, fields: Partial<Pick<EventMeta, 'profiles' | 'countdown' | 'emoji'>>): void {
+  const { own, ownKey } = metaDocs(ev);
+  const next: EventMeta = { profiles: [], ...own, ...fields, id: ownKey, updatedAt: currentTime() };
+  if (!next.profiles.length && next.countdown == null && next.emoji == null) {
+    if (own) void removeDoc('eventMeta', ownKey);
+    return;
   }
+  void put('eventMeta', next);
 }
 
+/** Write the series document (or the event's own one, for a one-off event) with `fields` changed. */
+function putSeries(ev: CalEvent, fields: Partial<Pick<EventMeta, 'profiles' | 'countdown' | 'emoji'>>): void {
+  const { own, series, ownKey, seriesKey } = metaDocs(ev);
+  const base = seriesKey ? series : own;
+  void put('eventMeta', { profiles: [], ...base, ...fields, id: seriesKey ?? ownKey, updatedAt: currentTime() });
+}
+
+/**
+ * Assign profiles. 'series' writes the series-level entry (and drops this
+ * occurrence's own profiles); 'instance' overrides one occurrence's profiles.
+ */
+export function assign(ev: CalEvent, profileIds: string[], scope: 'series' | 'instance' = 'series'): void {
+  if (!ev.seriesId) return putSeries(ev, { profiles: profileIds });
+  if (scope === 'instance') return putOwn(ev, { profiles: profileIds });
+  putSeries(ev, { profiles: profileIds });
+  if (metaDocs(ev).own) putOwn(ev, { profiles: [] });
+}
+
+/** Countdowns are per series: the series flag changes and this occurrence's own flag is dropped. */
 export function setCountdown(ev: CalEvent, on: boolean): void {
-  const base = metaFor(ev);
-  const id = ev.seriesId ? metaKey(ev.calendarId, ev.seriesId) : metaKey(ev.calendarId, ev.id);
-  void put('eventMeta', { profiles: [], ...base, id, countdown: on, updatedAt: currentTime() });
+  putSeries(ev, { countdown: on });
+  if (ev.seriesId && metaDocs(ev).own?.countdown != null) putOwn(ev, { countdown: undefined });
+}
+
+/**
+ * Countdown events past the fetched window, fetched one by one: with the
+ * Always setting a countdown months ahead (a summer trip) still shows.
+ */
+const farCountdowns = signal<CalEvent[]>([]);
+/** Next occurrence per countdown meta id, re-checked hourly rather than on every poll. */
+const farCache = new Map<string, { at: number; ev: CalEvent | null }>();
+const FAR_TTL_MS = 60 * 60_000;
+
+async function fetchFarCountdowns(): Promise<void> {
+  if (settings.value.countdownWindow !== 'always') {
+    farCountdowns.value = [];
+    return;
+  }
+  const shown = new Set(visibleCalendars().map((c) => c.id));
+  const loadedKeys = new Set(
+    events.value.flatMap((e) => [metaKey(e.calendarId, e.id), metaKey(e.calendarId, e.seriesId ?? e.id)]),
+  );
+  const wanted = data.eventMeta.value
+    .filter((m) => m.countdown && !loadedKeys.has(m.id))
+    .map((m) => {
+      const key = decodeURIComponent(m.id);
+      const at = key.lastIndexOf('::');
+      return { metaId: m.id, calendarId: key.slice(0, at), id: key.slice(at + 2) };
+    })
+    .filter((k) => shown.has(k.calendarId));
+  const now = currentTime();
+  const after = dateAt(today.value);
+  const stale = wanted.filter((k) => (farCache.get(k.metaId)?.at ?? -Infinity) <= now - FAR_TTL_MS);
+  const found = await Promise.allSettled(stale.map((k) => source.nextOccurrence(k.calendarId, k.id, after)));
+  found.forEach((r, i) => r.status === 'fulfilled' && farCache.set(stale[i].metaId, { at: now, ev: r.value }));
+  farCountdowns.value = wanted.flatMap((k) => farCache.get(k.metaId)?.ev ?? []);
 }
 
 /** Countdown events within the configured window, soonest first, one per series. */
@@ -234,7 +346,7 @@ export const countdowns = computed(() => {
   const horizon = win === 'always' ? '9999-12-31' : addMonths(t0, win === '3m' ? 3 : 1);
   const seen = new Set<string>();
   const out: { ev: CalEvent; days: number }[] = [];
-  for (const ev of events.value) {
+  for (const ev of [...events.value, ...farCountdowns.value]) {
     const day = toISODate(ev.start);
     if (day < t0 || day > horizon || !passesFilter(ev)) continue;
     const series = eventKey(ev.calendarId, ev.seriesId ?? ev.id);
@@ -257,13 +369,15 @@ export function defaultCalendarId(): string {
   return (w.find((c) => c.id === chosen) ?? w.find((c) => c.primary) ?? w[0])?.id ?? '';
 }
 
+/** Add an event; `id` comes from newEventId() once per editor, so retrying a failed save is safe. */
 export async function createEvent(
   calendarId: string,
+  id: string,
   draft: EventDraft,
   profileIds: string[],
   opts: { countdown?: boolean } = {},
 ): Promise<void> {
-  const { id } = await source.insert(calendarId, draft);
+  await source.insert(calendarId, id, draft);
   // Firestore writes apply to the local cache at once; awaiting the server ack would hang offline.
   void put('eventMeta', {
     id: metaKey(calendarId, id),
@@ -281,17 +395,40 @@ export async function updateEvent(
   profileIds: string[],
   opts: { countdown?: boolean } = {},
 ): Promise<void> {
-  const before = metaFor(ev);
+  const shown = metaFor(ev);
   const { newSeriesId } = await source.update(ev, draft, scope);
-  const meta = { profiles: profileIds, countdown: opts.countdown, updatedAt: currentTime() };
-  const id = newSeriesId ?? (ev.seriesId && scope === 'this' ? ev.id : (ev.seriesId ?? ev.id));
-  void put('eventMeta', { ...before, ...meta, id: metaKey(ev.calendarId, id) });
+  const countdown = !!opts.countdown;
+  if (newSeriesId) {
+    // The new series starts out as the edited occurrence looked.
+    void put('eventMeta', {
+      id: metaKey(ev.calendarId, newSeriesId),
+      profiles: profileIds,
+      countdown,
+      emoji: shown?.emoji,
+      updatedAt: currentTime(),
+    });
+  } else if (ev.seriesId && scope === 'this') {
+    // The occurrence keeps only what differs from its series.
+    const series = metaDocs(ev).series;
+    putOwn(ev, {
+      profiles: sameIds(profileIds, series?.profiles ?? []) ? [] : profileIds,
+      countdown: countdown === !!series?.countdown ? undefined : countdown,
+    });
+  } else {
+    putSeries(ev, { profiles: profileIds, countdown });
+    // "All events" applies to this occurrence too.
+    if (ev.seriesId && metaDocs(ev).own) putOwn(ev, { profiles: [], countdown: undefined });
+  }
   await refresh();
 }
 
+const sameIds = (a: string[], b: string[]) => a.length === b.length && a.every((x) => b.includes(x));
+
 export async function deleteEvent(ev: CalEvent, scope: EditScope): Promise<void> {
   await source.remove(ev, scope);
-  if (!ev.seriesId || scope === 'all') void removeDoc('eventMeta', metaKey(ev.calendarId, ev.seriesId ?? ev.id)).catch(() => {});
+  const { own, ownKey, seriesKey } = metaDocs(ev);
+  if (!seriesKey || scope === 'all') void removeDoc('eventMeta', seriesKey ?? ownKey).catch(() => {});
+  if (seriesKey && own) void removeDoc('eventMeta', ownKey).catch(() => {});
   await refresh();
 }
 

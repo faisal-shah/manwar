@@ -28,6 +28,10 @@
   touch-action: pan-y;
   overflow: hidden;
 }
+/* Scrollers reset touch-action, so each one inside the body leaves sideways swipes to the pager too. */
+.cal-body .scroll {
+  touch-action: pan-y;
+}
 .cal-page {
   height: 100%;
 }
@@ -728,6 +732,15 @@
   font-weight: 600;
   white-space: nowrap;
 }
+/* Narrow cells (the Home pane) keep the event count whole and show only the plus. */
+.cal-week-cell {
+  container-type: inline-size;
+}
+@container (max-width: 22rem) {
+  .cal-week-add-label {
+    display: none;
+  }
+}
 .cal-week-add::after {
   content: '';
   position: absolute;
@@ -862,6 +875,9 @@
 }
 .evd-head h2 {
   flex: 1;
+  min-width: 0;
+  /* A long unbroken title (a pasted link) wraps instead of pushing Edit and Delete out of the card. */
+  overflow-wrap: anywhere;
   margin: 0;
   font-size: 3.2rem;
   font-weight: 400;
@@ -897,6 +913,7 @@
 .evd-body {
   flex: 1;
   min-width: 0;
+  overflow-wrap: anywhere;
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
@@ -1014,6 +1031,7 @@
   font-size: 1.6rem;
 }
 .triage-info h3 {
+  overflow-wrap: anywhere;
   margin: 0 0 0.2rem;
   font-size: 2.4rem;
   font-weight: 400;

@@ -67,6 +67,26 @@ export function fromRecurrence(lines: string[]): Repeat | null {
   return r;
 }
 
+const rruleParts = (line: string) => line.slice(6).split(';');
+
+/** The RRULE's COUNT, or null when it has none. */
+export function recurrenceCount(lines: string[]): number | null {
+  const line = lines.find((l) => l.startsWith('RRULE:'));
+  const count = line && rruleParts(line).find((p) => p.startsWith('COUNT='));
+  return count ? Number(count.slice(6)) : null;
+}
+
+/** The same recurrence with the RRULE's COUNT replaced. */
+export function withCount(lines: string[], count: number): string[] {
+  return lines.map((l) =>
+    l.startsWith('RRULE:')
+      ? `RRULE:${rruleParts(l)
+          .map((p) => (p.startsWith('COUNT=') ? `COUNT=${count}` : p))
+          .join(';')}`
+      : l,
+  );
+}
+
 /** End a series just before an occurrence: rewrite UNTIL to the day before `beforeDay`. */
 export function endSeriesBefore(lines: string[], beforeDay: ISODate, allDay: boolean): string[] {
   const [y, m, d] = beforeDay.split('-').map(Number);

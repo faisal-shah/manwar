@@ -115,8 +115,9 @@ export function timeLabel(ev: CalEvent): string {
   return formatTimeRange(ev.start, ev.end, fmt());
 }
 
-/** Month pill prefix: "11:30 AM", "3 PM". */
-export const timePrefix = (ev: CalEvent) => formatTime(ev.start, fmt());
+/** Month pill prefix: "11:30 AM", "3 PM"; on the day an overnight event ends, "until 2 AM". */
+export const timePrefix = (ev: CalEvent, day?: ISODate) =>
+  day && toISODate(ev.start) < day ? `until ${formatTime(ev.end, fmt())}` : formatTime(ev.start, fmt());
 
 /** Detail line: "Wednesday, Nov 4 : 11:15 - 11:45 AM", "Fri, Nov 13 - Mon, Nov 16 : All day". */
 export function whenLabel(ev: CalEvent): string {
@@ -137,19 +138,6 @@ export function reminderLabel(minutes: number | null | undefined): string | null
   if (minutes % 1440 === 0) return `${minutes / 1440} ${minutes === 1440 ? 'day' : 'days'} before`;
   if (minutes % 60 === 0) return `${minutes / 60} ${minutes === 60 ? 'hour' : 'hours'} before`;
   return `${minutes} minutes before`;
-}
-
-/** Google descriptions may carry HTML; show plain text. */
-export function plainText(s: string): string {
-  return s
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/p>/gi, '\n')
-    .replace(/<[^>]+>/g, '')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .trim();
 }
 
 /** The clock at minute resolution: views that only need minutes re-render once a minute, not every second. */

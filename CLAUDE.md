@@ -70,13 +70,21 @@ flowchart LR
   not await them. `settings/main` is one document merged over
   `DEFAULT_SETTINGS` (`data/settings.ts`).
 - **Calendar events** live in the household's Google calendars. `calendar/engine.ts`
-  fetches the loaded window (`ensureRange` widens it), caches a snapshot in
-  localStorage for offline display, polls every 3 minutes, and joins each
+  fetches a window around today (six weeks back, four months ahead, widened
+  to the days the latest view asked for with `ensureRange`), caches a snapshot
+  in localStorage for offline display, polls every 3 minutes, and joins each
   event with `EventMeta` (Firestore `eventMeta`, keyed by
-  `metaKey(calendarId, seriesId ?? id)`; instance keys override series keys).
+  `metaKey(calendarId, seriesId ?? id)`). An occurrence's own document
+  overrides its series' document field by field (empty `profiles` = inherit);
+  write through `assign`/`setCountdown`/`updateEvent`, which touch only the
+  document they mean to change. `refresh()` called during a fetch gets one
+  more fetch after it, and a calendar that fails keeps its last events.
   Events with no meta are **unassigned** and listed in `unassigned` (the
   triage queue, badge on the Calendar rail item). `[EVERYONE]` means the
-  whole family.
+  whole family. Countdowns past the window (setting Always) come from
+  `CalendarSource.nextOccurrence`. New events get their id from
+  `newEventId()` once per editor, so a retried save updates instead of
+  duplicating.
 - **Tasks**: `tasks/engine.ts` is pure (occurrences from schedules; late
   chores; Up for Grabs; repeat-after-done via `Task.lastDone`), unit-tested.
   `tasks/state.ts` has the reactive views and the writes. Stars use an

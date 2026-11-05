@@ -58,9 +58,9 @@ export function WeekView({ nav }: { nav: CalNav }) {
 
 function AddOn({ day }: { day: ISODate }) {
   return (
-    <button type="button" class="cal-week-add" onClick={() => openEditor({ day })}>
+    <button type="button" class="cal-week-add" aria-label="Add event" onClick={() => openEditor({ day })}>
       <Plus size="1.8rem" strokeWidth={2.2} />
-      Add event
+      <span class="cal-week-add-label">Add event</span>
     </button>
   );
 }

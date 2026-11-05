@@ -58,11 +58,27 @@ export interface CalendarSource {
   listCalendars(): Promise<CalendarInfo[]>;
   /** Occurrences overlapping [timeMin, timeMax), recurring events expanded. */
   listEvents(calendarId: string, timeMin: Date, timeMax: Date): Promise<CalEvent[]>;
+  /**
+   * The first occurrence of an event, a series or one occurrence (by id) that
+   * has not ended by `after`; null when there is none. For countdowns beyond
+   * the fetched window.
+   */
+  nextOccurrence(calendarId: string, id: string, after: Date): Promise<CalEvent | null>;
   /** The series' recurrence lines (RRULE/EXDATE), for the editor. */
   seriesRecurrence(calendarId: string, seriesId: string): Promise<string[]>;
-  insert(calendarId: string, draft: EventDraft): Promise<{ id: string }>;
+  /**
+   * Add an event under an id the app chose (newEventId), so a save retried
+   * after a lost response updates the event instead of adding it twice.
+   */
+  insert(calendarId: string, id: string, draft: EventDraft): Promise<void>;
   update(ev: CalEvent, draft: EventDraft, scope: EditScope): Promise<{ newSeriesId?: string }>;
   remove(ev: CalEvent, scope: EditScope): Promise<void>;
 }
 
 export const eventKey = (calendarId: string, id: string) => `${calendarId}::${id}`;
+
+/** A new event id in Google's alphabet (base32hex: 0-9, a-v), 26 characters (130 random bits). */
+export function newEventId(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(26));
+  return Array.from(bytes, (b) => '0123456789abcdefghijklmnopqrstuv'[b & 31]).join('');
+}

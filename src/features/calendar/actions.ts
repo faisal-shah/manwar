@@ -11,10 +11,14 @@ const SCOPES: { value: EditScope; label: string }[] = [
   { value: 'all', label: 'All events' },
 ];
 
-/** For a recurring event, ask which occurrences a change applies to. Null = cancelled. */
-export async function askScope(ev: CalEvent, title: string): Promise<EditScope | null> {
+/**
+ * For a recurring event, ask which occurrences a change applies to. Null =
+ * cancelled. A changed repeat rule belongs to the series, so `seriesOnly`
+ * leaves out "This event" (one occurrence cannot repeat differently).
+ */
+export async function askScope(ev: CalEvent, title: string, seriesOnly = false): Promise<EditScope | null> {
   if (!ev.seriesId) return 'all';
-  return choose(title, SCOPES);
+  return choose(title, seriesOnly ? SCOPES.filter((s) => s.value !== 'this') : SCOPES);
 }
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
