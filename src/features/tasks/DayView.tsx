@@ -109,9 +109,10 @@ function DayColumn({ col, day }: { col: Col; day: string }) {
     allDone,
   });
   const toggles = sectionToggles.value[`${day}:${col.id}`] ?? {};
-  const isOpen = (s: (typeof sections)[number]) => toggles[s] ?? defaults.has(s);
-  const color = col.profile?.color ?? UFG_COLOR;
   const onlyChores = sections.length === 1 && sections[0] === 'chores';
+  // A column of chores alone has no section buttons, so its cards never fold away (all done, they stay to uncheck).
+  const isOpen = (s: (typeof sections)[number]) => onlyChores || (toggles[s] ?? defaults.has(s));
+  const color = col.profile?.color ?? UFG_COLOR;
   return (
     <section class="pcol" style={{ '--c': color }} aria-label={col.profile?.name ?? 'Up for Grabs'} data-column={col.id}>
       <ColumnHead col={col} />

@@ -179,3 +179,29 @@ test('Tasks: a kid cannot take back stars that were already spent', async ({ bro
   await expect(page.locator('.modal .pin-keys')).toHaveCount(0);
   await ctx.close();
 });
+
+test('Tasks: a column of chores alone keeps its cards once all are done', async ({ browser }) => {
+  const { ctx, page, name } = await tablet(browser, '&seed=none');
+  await seedDoc(name, 'profiles', { id: 'p1', name: 'Yusuf', color: '#FEB306', order: 0, stars: 0, createdAt: 1 });
+  await seedDoc(name, 'tasks', {
+    id: 'tA',
+    kind: 'chore',
+    title: 'Feed the cat',
+    assignees: ['p1'],
+    upForGrabs: false,
+    stars: 0,
+    date: '2026-11-04',
+    order: 1,
+    createdAt: 1,
+  });
+  await rail(page, 'Tasks').click();
+  const col = page.locator('.pcol[aria-label="Yusuf"]');
+  await col.getByRole('button', { name: 'Complete Feed the cat' }).click();
+  await expect(col.locator('.tk-alldone')).toBeVisible();
+  // A mistaken check-off can still be undone after its toast is gone: the card is there to uncheck
+  // (a moment later: a second tap at once is taken as the rest of a double tap).
+  await page.waitForTimeout(700);
+  await col.getByRole('button', { name: 'Uncheck Feed the cat' }).click();
+  await expect(col.getByRole('button', { name: 'Complete Feed the cat' })).toBeVisible();
+  await ctx.close();
+});
