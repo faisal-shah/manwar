@@ -315,7 +315,11 @@ generated from it: `node scripts/icons/render.mjs` after any brand change.
   Show Firebase errors with `errorMessage()` (`data/errors.ts`): the
   Functions SDK appends " [403]" and reports a failed request as
   "internal [0]". A token refusal only a reconnect fixes sets
-  `googleProblem`; the top bar then offers the reconnect, and a calendar
+  `googleProblem`. A Calendar token request answers for the account
+  connected when it was made: one still on its way when another account
+  connects (or the wall disconnects) neither caches its token nor sets
+  `googleProblem` (`connection` in session.ts). The top bar offers the
+  reconnect, and a calendar
   whose sync keeps failing says how old its events are (`app/status.ts`):
   the engine keeps each calendar's last good fetch (`syncedAt`, also in the
   snapshot), so one failing calendar is named with its own age while the

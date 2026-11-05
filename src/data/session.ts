@@ -127,6 +127,7 @@ async function exchange(code: string, opts: ConnectOptions): Promise<void> {
   if (!reconnecting) session.value = { state: 'connecting' };
   try {
     const res = await call<{ code: string }, ConnectResult>('connectGoogle')({ code });
+    newConnection();
     cacheToken(res.data.accessToken, res.data.expiresAt);
     googleProblem.value = null;
     await signInWithCustomToken(auth, res.data.customToken);
@@ -140,6 +141,20 @@ async function exchange(code: string, opts: ConnectOptions): Promise<void> {
 let token: { value: string; expiresAt: number } | null = null;
 const cacheToken = (value: string, expiresAt: number) => (token = { value, expiresAt });
 let tokenRequest: Promise<string> | null = null;
+/**
+ * Counts connections (a Google account connected, or disconnected). A
+ * token request answers for the account connected when it was made: one
+ * that answers after another connection neither caches its token nor
+ * reports its problem.
+ */
+let connection = 0;
+
+/** Another account (or none) from now on: forget its token and any request on its way. */
+function newConnection(): void {
+  connection++;
+  token = null;
+  tokenRequest = null;
+}
 
 /**
  * A Google Calendar access token for the household, minted by the
@@ -150,17 +165,23 @@ let tokenRequest: Promise<string> | null = null;
 export function googleAccessToken(): Promise<string> {
   if (token && token.expiresAt - 60_000 > Date.now()) return Promise.resolve(token.value);
   if (!auth.currentUser) return Promise.reject(new Error('Not signed in.'));
-  tokenRequest ??= (async () => {
+  if (tokenRequest) return tokenRequest;
+  const asked = connection;
+  const current = () => asked === connection;
+  tokenRequest = (async () => {
     try {
       const res = await call<void, { accessToken: string; expiresAt: number }>('googleAccessToken')();
-      cacheToken(res.data.accessToken, res.data.expiresAt);
-      googleProblem.value = null;
+      if (current()) {
+        cacheToken(res.data.accessToken, res.data.expiresAt);
+        googleProblem.value = null;
+      }
       return res.data.accessToken;
     } catch (e) {
-      if (needsReconnect(e)) googleProblem.value = errorMessage(e);
+      if (current() && needsReconnect(e)) googleProblem.value = errorMessage(e);
       throw new Error(errorMessage(e));
     } finally {
-      tokenRequest = null;
+      // After another connection, tokenRequest is that connection's (or none).
+      if (current()) tokenRequest = null;
     }
   })();
   return tokenRequest;
@@ -176,7 +197,7 @@ export function dropGoogleToken(value: string): void {
 }
 
 export async function disconnect(): Promise<void> {
-  token = null;
+  newConnection();
   googleProblem.value = null;
   forgetHousehold();
   await signOut(auth);
