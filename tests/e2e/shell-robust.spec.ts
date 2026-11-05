@@ -45,6 +45,20 @@ async function openSettings(page: Page, section: string) {
   await page.locator('.set-menu button', { hasText: new RegExp(`^${section}$`) }).click();
 }
 
+/**
+ * Settings > Display > Return to Home after 1 minute. Waits for the demo seed
+ * and the write to settle first: a fake-clock jump while they are in flight
+ * can show the settings document without the change for a moment.
+ */
+async function setIdleReturn(page: Page) {
+  await expect(page.locator('.rail .badge')).toHaveText('3', { timeout: 15_000 });
+  await openSettings(page, 'Display');
+  const one = page.getByRole('tab', { name: '1 min' });
+  await one.click();
+  await expect(one).toHaveAttribute('aria-selected', 'true');
+  await page.waitForTimeout(1000);
+}
+
 test('a first-run household shows how to add people, and the button opens Profiles', async ({ page }) => {
   await open(page, '&seed=none');
   await rail(page, 'Tasks').click();
@@ -66,6 +80,18 @@ test('a first-run household shows how to add people, and the button opens Profil
   await page.getByRole('button', { name: 'Close' }).click();
   await expect(page.locator('.home-tasks .no-profiles')).toHaveCount(0);
   await expect(page.locator('.home-tasks .tp-card', { hasText: 'Zaid' })).toBeVisible();
+});
+
+test('a first run that cannot reach the database yet seeds once it can', async ({ page }) => {
+  test.setTimeout(90_000);
+  // Firestore (the emulator on :8080) is unreachable at first: the app opens from an empty cache.
+  const firestore = /^https?:\/\/[^/]+:8080\//;
+  await page.route(firestore, (r) => r.abort('internetdisconnected'));
+  await open(page, '&seed=none');
+  await rail(page, 'Home').click();
+  await expect(page.locator('.home-lists')).toContainText('No lists yet.');
+  await page.unroute(firestore);
+  await expect(page.locator('.home-lists')).toContainText('Grocery List', { timeout: 60_000 });
 });
 
 test('a tablet that boots offline with an expired sign-in still opens its household', async ({ page }) => {
@@ -97,8 +123,7 @@ test('a tablet that boots offline with an expired sign-in still opens its househ
 test('typing counts as activity: idle return does not pull the wall away from an editor', async ({ page }) => {
   await page.clock.install();
   await open(page);
-  await openSettings(page, 'Display');
-  await page.getByRole('tab', { name: '1 min' }).click();
+  await setIdleReturn(page);
   await page.getByRole('button', { name: 'Close' }).click();
 
   await rail(page, 'Recipes').click();
@@ -108,22 +133,21 @@ test('typing counts as activity: idle return does not pull the wall away from an
   // Two minutes of typing on the keyboard, no taps.
   for (let i = 0; i < 4; i++) {
     await page.keyboard.type('Stir. ');
-    await page.clock.fastForward('00:30');
+    await page.clock.runFor('00:30');
   }
   await expect(rail(page, 'Recipes')).toHaveClass(/on/);
   await expect(steps).toHaveValue('Stir. Stir. Stir. Stir. ');
 
   // Left alone, the wall goes Home.
-  await page.clock.fastForward('01:20');
+  await page.clock.runFor('01:20');
   await expect(rail(page, 'Home')).toHaveClass(/on/);
 });
 
 test('idle return closes a Settings sheet left open', async ({ page }) => {
   await page.clock.install();
   await open(page);
-  await openSettings(page, 'Display');
-  await page.getByRole('tab', { name: '1 min' }).click();
-  await page.clock.fastForward('01:20');
+  await setIdleReturn(page);
+  await page.clock.runFor('01:20');
   await expect(page.locator('.sheet')).toHaveCount(0);
   await expect(rail(page, 'Home')).toHaveClass(/on/);
 });
