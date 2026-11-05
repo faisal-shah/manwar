@@ -1,3 +1,4 @@
+import { Fragment } from 'preact';
 import { useRef, useState } from 'preact/hooks';
 import { Check, Repeat } from 'lucide-preact';
 import { assign, calendars, events, profilesOf, triageScope, unassigned } from '../../calendar/engine';
@@ -108,7 +109,7 @@ function AssignRow({ row }: { row: VisitRow }) {
         <h3 dir="auto">{ev.title}</h3>
         <span>{whenLabel(ev)}</span>
         <span class="muted">
-          {calendarName(ev.calendarId)}
+          <bdi>{calendarName(ev.calendarId)}</bdi>
           {ev.organizer ? ` · from ${ev.organizer}` : ''}
         </span>
         {ev.seriesId && (
@@ -127,7 +128,14 @@ function AssignRow({ row }: { row: VisitRow }) {
       {done && who.length > 0 && (
         <p class="phc-tri-done" role="status">
           <Check size="1.8rem" strokeWidth={2.4} />
-          {who[0].id === EVERYONE ? 'For everyone' : `For ${who.map((w) => w.profile.name).join(', ')}`}
+          {who[0].id === EVERYONE
+            ? 'For everyone'
+            : who.map((w, i) => (
+                <Fragment key={w.id}>
+                  {i ? ', ' : 'For '}
+                  <bdi>{w.profile.name}</bdi>
+                </Fragment>
+              ))}
         </p>
       )}
     </article>

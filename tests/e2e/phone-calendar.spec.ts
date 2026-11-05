@@ -217,7 +217,9 @@ test('event details: maps, why a read-only event cannot be changed, countdowns b
   // Mamma's calendar is shared read-only: no Edit or Delete, and it says why.
   await page.locator(`[data-event="${PT}"]`).click();
   await expect(sheet).toContainText("Can't be changed here");
-  await expect(sheet).toContainText("Mamma's calendar is shared with the household to read only.");
+  await expect(sheet.locator('.evd-why')).toContainText(
+    /^\u2068Mamma's calendar\u2069 is shared with the household to read only\./,
+  );
   await expect(sheet.getByRole('button', { name: 'Edit' })).toHaveCount(0);
   await expect(sheet.getByRole('button', { name: 'Delete' })).toHaveCount(0);
   await page.goBack();
