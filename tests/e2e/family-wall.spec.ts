@@ -205,3 +205,21 @@ test('Tasks: a column of chores alone keeps its cards once all are done', async 
   await expect(col.getByRole('button', { name: 'Complete Feed the cat' })).toBeVisible();
   await ctx.close();
 });
+
+test('Settings: three quick taps on one Move up button move that person up three places', async ({ browser }) => {
+  const { ctx, page, name } = await tablet(browser, '&seed=none');
+  for (const [i, n] of ['Baba', 'Mama', 'Alexandria', 'Maryam', 'Yusuf'].entries())
+    await seedDoc(name, 'profiles', { id: `p${i}`, name: n, color: '#2177AE', order: i, stars: 0, createdAt: i });
+  await rail(page, 'Settings').click();
+  const names = page.locator('.profile-name');
+  await expect(names).toHaveText(['Baba', 'Mama', 'Alexandria', 'Maryam', 'Yusuf']);
+  // A finger tapping where Yusuf's button was: after each move his row (and button) has gone up.
+  await page.locator('.sheet').evaluate((el) => Promise.all(el.getAnimations({ subtree: true }).map((a) => a.finished)));
+  const up = (await page.getByRole('button', { name: 'Move Yusuf up' }).boundingBox())!;
+  for (let i = 0; i < 3; i++) {
+    await page.touchscreen.tap(up.x + up.width / 2, up.y + up.height / 2);
+    await page.waitForTimeout(250);
+  }
+  await expect(names).toHaveText(['Baba', 'Yusuf', 'Mama', 'Alexandria', 'Maryam']);
+  await ctx.close();
+});

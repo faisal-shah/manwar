@@ -10,7 +10,7 @@ import { Button, Field, IconButton } from '../../ui/controls';
 import { confirm, toast, useCloseWhenGone } from '../../ui/overlays';
 import { ColorSwatches, EmojiPicker, PROFILE_COLORS } from '../../ui/pickers';
 import { Avatar } from '../../ui/profile';
-import { describeProfileDelete, moveId, nameTaken, planProfileDelete } from './logic';
+import { describeProfileDelete, moveId, moveTarget, nameTaken, planProfileDelete, type MoveRun } from './logic';
 import { Group, PageTitle } from './parts';
 
 const REASON = 'Enter the PIN to change profiles.';
@@ -22,18 +22,20 @@ const formatBirthday = (iso: string) => {
   return `${monthShort(d.getMonth())} ${d.getDate()}`;
 };
 
+/** The run of Move taps in progress (see moveTarget). */
+let moveRun: MoveRun | null = null;
+
 export function ProfilesPage() {
   const [editing, setEditing] = useState<Profile | 'new' | null>(null);
   if (editing) return <ProfileEditor profile={editing === 'new' ? null : editing} onDone={() => setEditing(null)} />;
   const list = profiles.value;
-  const move = (from: number, to: number) =>
+  const move = (tapped: number, dir: -1 | 1) =>
     asParent(() => {
+      const ids = profiles.value.map((p) => p.id);
+      const t = moveTarget(ids, tapped, dir, moveRun, performance.now());
+      moveRun = t.run;
       const b = batch();
-      moveId(
-        list.map((p) => p.id),
-        from,
-        to,
-      ).forEach((id, order) => b.patch('profiles', id, { order }));
+      moveId(ids, t.index, t.index + dir).forEach((id, order) => b.patch('profiles', id, { order }));
       void b.commit();
     }, REASON);
   return (
@@ -52,10 +54,10 @@ export function ProfilesPage() {
               </span>
               <ChevronRight size="2.4rem" class="muted" />
             </button>
-            <IconButton label={`Move ${p.name} up`} disabled={i === 0} onClick={() => move(i, i - 1)}>
+            <IconButton label={`Move ${p.name} up`} disabled={i === 0} onClick={() => move(i, -1)}>
               <ChevronUp size="2.6rem" />
             </IconButton>
-            <IconButton label={`Move ${p.name} down`} disabled={i === list.length - 1} onClick={() => move(i, i + 1)}>
+            <IconButton label={`Move ${p.name} down`} disabled={i === list.length - 1} onClick={() => move(i, 1)}>
               <ChevronDown size="2.6rem" />
             </IconButton>
           </div>

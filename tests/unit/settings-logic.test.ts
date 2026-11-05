@@ -5,7 +5,9 @@ import {
   describeProfileDelete,
   fallbackTab,
   isPin,
+  MOVE_RUN_MS,
   moveId,
+  moveTarget,
   nameTaken,
   planProfileDelete,
   setTabShown,
@@ -37,6 +39,29 @@ describe('profile order', () => {
     expect(moveId(['a', 'b', 'c'], 2, 0)).toEqual(['c', 'a', 'b']);
     expect(moveId(['a', 'b'], 0, -1)).toEqual(['a', 'b']);
     expect(moveId(['a', 'b'], 1, 2)).toEqual(['a', 'b']);
+  });
+
+  it('keeps moving the same row when taps repeat on one spot', () => {
+    // e moves up from index 4; the finger stays on index 4, which now holds d's button.
+    let ids = ['a', 'b', 'c', 'd', 'e'];
+    let run = null as ReturnType<typeof moveTarget>['run'] | null;
+    for (const at of [0, 250, 500]) {
+      const t = moveTarget(ids, 4, -1, run, at);
+      ids = moveId(ids, t.index, t.index - 1);
+      run = t.run;
+    }
+    expect(ids).toEqual(['a', 'e', 'b', 'c', 'd']);
+  });
+
+  it('starts a new run on another spot, the other way, or after a pause', () => {
+    const run = { id: 'e', dir: -1 as const, spot: 4, at: 0 };
+    const ids = ['a', 'b', 'c', 'e', 'd'];
+    expect(moveTarget(ids, 4, -1, run, 300).index).toBe(3);
+    expect(moveTarget(ids, 3, -1, run, 300).index).toBe(3);
+    expect(moveTarget(ids, 4, 1, run, 300).index).toBe(4);
+    expect(moveTarget(ids, 4, -1, run, MOVE_RUN_MS + 1).index).toBe(4);
+    // The row the run moved is gone (deleted meanwhile): the tap moves what it landed on.
+    expect(moveTarget(['a', 'b', 'c', 'd'], 3, -1, run, 300).index).toBe(3);
   });
 });
 

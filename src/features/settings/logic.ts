@@ -40,6 +40,37 @@ export function moveId(ids: string[], from: number, to: number): string[] {
   return out;
 }
 
+/** A quick run of Move taps on one spot: which row it moves, which way, where the finger is, and when. */
+export interface MoveRun {
+  id: string;
+  dir: -1 | 1;
+  spot: number;
+  at: number;
+}
+
+/** Taps on one spot this close together are one run. */
+export const MOVE_RUN_MS = 800;
+
+/**
+ * Which row a Move up or down tap moves. A moved row takes its buttons with
+ * it, so the next tap on the same spot lands on the neighbour that took its
+ * place: within a quick run of taps on one spot (same direction), the tap
+ * goes on moving the row the run started with. Returns the index to move
+ * and the run to remember.
+ */
+export function moveTarget(
+  ids: string[],
+  tapped: number,
+  dir: -1 | 1,
+  run: MoveRun | null,
+  now: number,
+): { index: number; run: MoveRun } {
+  const same = run && run.dir === dir && run.spot === tapped && now - run.at < MOVE_RUN_MS;
+  const index = same ? ids.indexOf(run.id) : -1;
+  if (same && index >= 0) return { index, run: { ...run, at: now } };
+  return { index: tapped, run: { id: ids[tapped], dir, spot: tapped, at: now } };
+}
+
 export interface ProfileDeletePlan {
   /** Tasks only this profile had: archived. */
   archiveTasks: string[];
