@@ -217,6 +217,15 @@ html[data-layout='phone'] .sheet-wide {
   padding-top: env(safe-area-inset-top);
   padding-bottom: env(safe-area-inset-bottom);
 }
+/*
+ * A sheet on the phone opens under the finger: it fades in where it will
+ * stay rather than sliding, since a tap aimed at it while it slid would
+ * find the scrim there and close it.
+ */
+html[data-layout='phone'] .sheet,
+html[data-layout='phone'] .popover {
+  animation: fade-in 0.15s ease;
+}
 html[data-layout='phone'] .sheet-head h2 {
   font-size: 2.4rem;
 }

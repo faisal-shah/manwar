@@ -427,7 +427,6 @@ html[data-layout='phone'] .popover-scrim:has(+ .popover .ev-detail) {
 }
 html[data-layout='phone'] .popover:has(.ev-detail) {
   padding: 2rem 1.6rem calc(1.6rem + env(safe-area-inset-bottom));
-  animation: sheet-up 0.2s ease;
 }
 html[data-layout='phone'] .evd-head h2 {
   font-size: 2.6rem;
@@ -464,10 +463,4 @@ html[data-layout='phone'] .cal-editor .seg {
 }
 html[data-layout='phone'] .cal-editor .seg button {
   flex: 1 0 auto;
-}
-
-@keyframes sheet-up {
-  from {
-    transform: translateY(100%);
-  }
 }
