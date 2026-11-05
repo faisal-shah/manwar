@@ -217,6 +217,27 @@ export const fakeSource: CalendarSource = {
     return out.sort((a, b) => a.start.getTime() - b.start.getTime());
   },
 
+  async nextOccurrence(calendarId, id, after) {
+    const { masterId, day } = /_\d{8}$/.test(id) ? parseInstance(id) : { masterId: id, day: null };
+    const ms = load().find((x) => x.id === masterId && x.calendarId === calendarId);
+    if (!ms) return null;
+    if (!ms.repeat) {
+      const ev = occurrence(ms, ms.day, false);
+      return ev.end > after ? ev : null;
+    }
+    if (day) {
+      const ev = occurrence(ms, day, true);
+      return ev.end > after ? ev : null;
+    }
+    const from = toISODate(after) > ms.day ? toISODate(after) : ms.day;
+    for (let d = from, n = 0; n < 800; d = addDays(d, 1), n++) {
+      if (!occursOn(ms.repeat, ms.day, d) || ms.exdates.includes(d)) continue;
+      const ev = occurrence(ms, d, true);
+      if (ev.end > after) return ev;
+    }
+    return null;
+  },
+
   async seriesRecurrence(_calendarId, seriesId) {
     const ms = load().find((x) => x.id === seriesId);
     return ms?.repeat ? [toRRule(ms.repeat, ms.allDay)] : [];

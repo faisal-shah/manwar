@@ -263,6 +263,61 @@ describe('google calendar: reading events', () => {
       ['Holidays in United States', 'reader', false],
     ]);
   });
+
+  describe('next occurrence (countdowns past the window)', () => {
+    const after = new Date('2026-11-04T00:00');
+    it('returns a one-off event until it has ended', async () => {
+      routes.push((c) =>
+        c.path === `/calendars/${CAL}/events/trip`
+          ? { body: base({ id: 'trip', summary: 'Umrah', start: { date: '2027-06-10' }, end: { date: '2027-06-20' } }) }
+          : undefined,
+      );
+      const ev = await googleSource.nextOccurrence(CAL, 'trip', after);
+      expect([ev?.title, ev?.allDay, ev?.start]).toEqual(['Umrah', true, new Date(2027, 5, 10)]);
+      expect(await googleSource.nextOccurrence(CAL, 'trip', new Date('2027-06-20T00:00'))).toBeNull();
+    });
+    it('asks a series for its first instance from the date on', async () => {
+      routes.push((c) =>
+        c.path === `/calendars/${CAL}/events/bday`
+          ? {
+              body: base({
+                id: 'bday',
+                summary: 'Hashim turns 7',
+                recurrence: ['RRULE:FREQ=YEARLY'],
+                start: { date: '2020-08-14' },
+                end: { date: '2020-08-15' },
+              }),
+            }
+          : undefined,
+      );
+      routes.push((c) =>
+        c.path === `/calendars/${CAL}/events/bday/instances`
+          ? {
+              body: {
+                items: [
+                  base({
+                    id: 'bday_20270814',
+                    recurringEventId: 'bday',
+                    summary: 'Hashim turns 7',
+                    start: { date: '2027-08-14' },
+                    end: { date: '2027-08-15' },
+                  }),
+                ],
+              },
+            }
+          : undefined,
+      );
+      const ev = await googleSource.nextOccurrence(CAL, 'bday', after);
+      expect([ev?.id, ev?.seriesId]).toEqual(['bday_20270814', 'bday']);
+      expect(calls.at(-1)!.query).toMatchObject({ timeMin: after.toISOString(), maxResults: '1' });
+    });
+    it('treats an event deleted meanwhile as none', async () => {
+      routes.push((c) =>
+        c.path === `/calendars/${CAL}/events/old` ? { status: 410, body: { error: { message: 'Gone' } } } : undefined,
+      );
+      expect(await googleSource.nextOccurrence(CAL, 'old', after)).toBeNull();
+    });
+  });
 });
 
 describe('google calendar: writing events', () => {

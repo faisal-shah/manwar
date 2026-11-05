@@ -282,3 +282,30 @@ describe('refresh', () => {
     expect(engine.sync.value.error).toContain('404');
   });
 });
+
+describe('countdowns past the fetched window', () => {
+  it('fetches them one by one with the Always setting, and only hourly', async () => {
+    const trip = ev('trip', day(200, '00:00'), day(203, '00:00'), { allDay: true, title: 'Umrah trip' });
+    const asked: string[] = [];
+    source.listCalendars = async () => [CAL];
+    source.listEvents = async () => [];
+    source.nextOccurrence = async (_cal, id) => {
+      asked.push(id);
+      return id === 'trip' ? trip : null;
+    };
+    store.data.eventMeta.value = [meta('trip', ['asiyah'], { countdown: true }), meta('gone', ['asiyah'], { countdown: true })];
+    store.settings.value = { ...DEFAULT_SETTINGS, countdownWindow: '3m' };
+    await engine.refresh();
+    expect(asked).toEqual([]);
+    expect(engine.countdowns.value).toEqual([]);
+
+    store.settings.value = { ...DEFAULT_SETTINGS, countdownWindow: 'always' };
+    await engine.refresh();
+    expect(asked.sort()).toEqual(['gone', 'trip']);
+    expect(engine.countdowns.value.map((c) => [c.ev.id, c.days])).toEqual([['trip', 200]]);
+    // The next poll reuses what it found.
+    await engine.refresh();
+    expect(asked).toHaveLength(2);
+    expect(engine.countdowns.value.map((c) => c.ev.id)).toEqual(['trip']);
+  });
+});

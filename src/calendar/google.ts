@@ -179,6 +179,28 @@ export const googleSource: CalendarSource = {
     return out;
   },
 
+  async nextOccurrence(calendarId, id, after) {
+    const cal = encodeURIComponent(calendarId);
+    const role = roles.get(calendarId) ?? 'reader';
+    let g: GEvent;
+    try {
+      g = await call<GEvent>(`/calendars/${cal}/events/${encodeURIComponent(id)}`);
+    } catch (e) {
+      if (e instanceof GoogleError && (e.status === 404 || e.status === 410)) return null;
+      throw e;
+    }
+    if (g.status === 'cancelled' || !g.start || !g.end) return null;
+    if (!g.recurrence?.length) {
+      const ev = toCalEvent(calendarId, g, role);
+      return ev.end > after ? ev : null;
+    }
+    const r = await call<{ items?: GEvent[] }>(`/calendars/${cal}/events/${encodeURIComponent(id)}/instances`, {
+      query: { timeMin: after.toISOString(), maxResults: '1' },
+    });
+    const next = r.items?.find((i) => i.status !== 'cancelled' && i.start && i.end);
+    return next ? toCalEvent(calendarId, next, role) : null;
+  },
+
   async seriesRecurrence(calendarId, seriesId) {
     const g = await call<GEvent>(`/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(seriesId)}`);
     return g.recurrence ?? [];

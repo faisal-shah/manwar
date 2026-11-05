@@ -58,6 +58,12 @@ export interface CalendarSource {
   listCalendars(): Promise<CalendarInfo[]>;
   /** Occurrences overlapping [timeMin, timeMax), recurring events expanded. */
   listEvents(calendarId: string, timeMin: Date, timeMax: Date): Promise<CalEvent[]>;
+  /**
+   * The first occurrence of an event, a series or one occurrence (by id) that
+   * has not ended by `after`; null when there is none. For countdowns beyond
+   * the fetched window.
+   */
+  nextOccurrence(calendarId: string, id: string, after: Date): Promise<CalEvent | null>;
   /** The series' recurrence lines (RRULE/EXDATE), for the editor. */
   seriesRecurrence(calendarId: string, seriesId: string): Promise<string[]>;
   insert(calendarId: string, draft: EventDraft): Promise<{ id: string }>;

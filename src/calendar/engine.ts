@@ -1,4 +1,4 @@
-import { computed, signal } from '@preact/signals';
+import { computed, effect, signal } from '@preact/signals';
 import { demoMode } from '../config';
 import { data, profileById, put, remove as removeDoc, settings } from '../data/store';
 import { EVERYONE, type EventMeta, type ISODate } from '../data/types';
@@ -101,6 +101,7 @@ async function fetchAll(): Promise<void> {
     events.value = [...kept, ...fresh].sort((a, b) => a.start.getTime() - b.start.getTime());
     const firstError = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
     if (!failed.length) loaded = w;
+    await fetchFarCountdowns();
     sync.value = firstError
       ? { loading: false, lastSync: sync.value.lastSync, error: `${failed[0].name}: ${message(firstError.reason)}` }
       : { loading: false, lastSync: Date.now(), error: null };
@@ -149,6 +150,13 @@ export function startCalendarSync(): void {
     if (document.visibilityState === 'visible') void refresh();
   });
   window.addEventListener('online', () => void refresh());
+  // Switching to Always needs the countdowns past the window.
+  let win = settings.peek().countdownWindow;
+  effect(() => {
+    const next = settings.value.countdownWindow;
+    if (next !== win && next === 'always') void refresh();
+    win = next;
+  });
 }
 
 /* ---------- Event metadata (profiles, countdowns) ---------- */
@@ -296,6 +304,40 @@ export function setCountdown(ev: CalEvent, on: boolean): void {
   if (ev.seriesId && metaDocs(ev).own?.countdown != null) putOwn(ev, { countdown: undefined });
 }
 
+/**
+ * Countdown events past the fetched window, fetched one by one: with the
+ * Always setting a countdown months ahead (a summer trip) still shows.
+ */
+const farCountdowns = signal<CalEvent[]>([]);
+/** Next occurrence per countdown meta id, re-checked hourly rather than on every poll. */
+const farCache = new Map<string, { at: number; ev: CalEvent | null }>();
+const FAR_TTL_MS = 60 * 60_000;
+
+async function fetchFarCountdowns(): Promise<void> {
+  if (settings.value.countdownWindow !== 'always') {
+    farCountdowns.value = [];
+    return;
+  }
+  const shown = new Set(visibleCalendars().map((c) => c.id));
+  const loadedKeys = new Set(
+    events.value.flatMap((e) => [metaKey(e.calendarId, e.id), metaKey(e.calendarId, e.seriesId ?? e.id)]),
+  );
+  const wanted = data.eventMeta.value
+    .filter((m) => m.countdown && !loadedKeys.has(m.id))
+    .map((m) => {
+      const key = decodeURIComponent(m.id);
+      const at = key.lastIndexOf('::');
+      return { metaId: m.id, calendarId: key.slice(0, at), id: key.slice(at + 2) };
+    })
+    .filter((k) => shown.has(k.calendarId));
+  const now = currentTime();
+  const after = dateAt(today.value);
+  const stale = wanted.filter((k) => (farCache.get(k.metaId)?.at ?? -Infinity) <= now - FAR_TTL_MS);
+  const found = await Promise.allSettled(stale.map((k) => source.nextOccurrence(k.calendarId, k.id, after)));
+  found.forEach((r, i) => r.status === 'fulfilled' && farCache.set(stale[i].metaId, { at: now, ev: r.value }));
+  farCountdowns.value = wanted.flatMap((k) => farCache.get(k.metaId)?.ev ?? []);
+}
+
 /** Countdown events within the configured window, soonest first, one per series. */
 export const countdowns = computed(() => {
   void data.eventMeta.value;
@@ -304,7 +346,7 @@ export const countdowns = computed(() => {
   const horizon = win === 'always' ? '9999-12-31' : addMonths(t0, win === '3m' ? 3 : 1);
   const seen = new Set<string>();
   const out: { ev: CalEvent; days: number }[] = [];
-  for (const ev of events.value) {
+  for (const ev of [...events.value, ...farCountdowns.value]) {
     const day = toISODate(ev.start);
     if (day < t0 || day > horizon || !passesFilter(ev)) continue;
     const series = eventKey(ev.calendarId, ev.seriesId ?? ev.id);
