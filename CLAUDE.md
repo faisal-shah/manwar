@@ -8,13 +8,11 @@ Recipes, Sleep, Settings. Not built: Photos, Disney, Magic Import, Sidekick.
 
 ## Accounts and infrastructure
 
-- Firebase/GCP project `manwar-home` (owner faisal.shah@gmail.com). Pass
-  `--account faisal.shah@gmail.com` to gcloud; the gcloud default is another
-  account. `firebase` CLI login on this machine is stale; use gcloud or the
-  GitHub workflow.
-- GitHub repo `faisal-shah/manwar` (public). The default `gh` account is
-  `faisal-shah-sabeel`; use `GH_TOKEN=$(gh auth token --user faisal-shah)` for
-  repo admin.
+- Firebase/GCP project `manwar-home`. Run gcloud as an account with Owner on
+  the project (pass `--account <owner>` where the machine's gcloud default is
+  a different account). Deploys normally go through the GitHub workflow.
+- GitHub repo `faisal-shah/manwar` (public). Repo admin (secrets, alerts,
+  workflow runs) needs a `gh` login with admin on the repo.
 - Deploys: `.github/workflows/deploy.yml` on push to main, keyless via
   Workload Identity Federation (pool `github`, provider `github`, restricted
   to this repo) as `github-deployer@manwar-home.iam.gserviceaccount.com`.
@@ -34,7 +32,7 @@ Recipes, Sleep, Settings. Not built: Photos, Disney, Magic Import, Sidekick.
   Only accounts in the Secret Manager secret `ALLOWED_ACCOUNTS` (emails,
   comma separated) may connect or get Calendar tokens, so strangers cannot
   run up the bill. Change it with
-  `gcloud secrets versions add ALLOWED_ACCOUNTS --data-file=- --project manwar-home --account faisal.shah@gmail.com`
+  `gcloud secrets versions add ALLOWED_ACCOUNTS --data-file=- --project manwar-home`
   and redeploy the Functions (re-run the workflow). No account names belong
   in the repo.
 - Budget alert "manwar-home monthly", $10.

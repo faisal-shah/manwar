@@ -140,7 +140,7 @@ flowchart LR
 
 | Piece | Value |
 |---|---|
-| Firebase / GCP project | `manwar-home` (number 1056874888372), owner faisal.shah@gmail.com |
+| Firebase / GCP project | `manwar-home` (number 1056874888372) |
 | Billing | Blaze, "My Billing Account"; budget alert "manwar-home monthly" at $10 (50/90/100%) |
 | Hosting | `manwar-home.web.app`, `manwar-home.firebaseapp.com` |
 | Firestore | `(default)`, `nam5`, rules deny all client access for now |
