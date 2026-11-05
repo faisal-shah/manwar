@@ -6,6 +6,7 @@ import {
   fallbackTab,
   isPin,
   moveId,
+  nameTaken,
   planProfileDelete,
   setTabShown,
 } from '../../src/features/settings/logic';
@@ -120,5 +121,21 @@ describe('PIN', () => {
     expect(pinPause(2 * PIN_TRIES)).toBe(60_000);
     expect(pinPause(3 * PIN_TRIES)).toBe(120_000);
     expect(pinPause(10 * PIN_TRIES)).toBe(5 * 60_000);
+  });
+});
+
+describe('profile names', () => {
+  const people = [
+    { id: 'a', name: 'Sam' },
+    { id: 'b', name: 'Asiyah ' },
+  ];
+  it('finds a name another profile has, ignoring case and spaces', () => {
+    expect(nameTaken('sam', people)).toBe(true);
+    expect(nameTaken('  Asiyah', people)).toBe(true);
+    expect(nameTaken('Sami', people)).toBe(false);
+  });
+  it('lets a profile keep its own name', () => {
+    expect(nameTaken('Sam', people, 'a')).toBe(false);
+    expect(nameTaken('Sam', people, 'b')).toBe(true);
   });
 });

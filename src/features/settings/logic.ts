@@ -25,6 +25,12 @@ export function fallbackTab(hidden: TabId[]): TabId {
 
 /* ---------- Profiles ---------- */
 
+/** Another profile already has this name (trimmed, any case): columns and pickers would show two alike. */
+export function nameTaken(name: string, others: { id: string; name: string }[], self?: string): boolean {
+  const n = name.trim().toLocaleLowerCase();
+  return others.some((p) => p.id !== self && p.name.trim().toLocaleLowerCase() === n);
+}
+
 /** Move the item at `from` to `to`, returning the new order of ids. */
 export function moveId(ids: string[], from: number, to: number): string[] {
   if (to < 0 || to >= ids.length || from === to) return ids;

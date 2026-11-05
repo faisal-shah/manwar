@@ -284,6 +284,21 @@ test("a failed place search shows only the failure, not the last query's places"
   await expect(page.getByText('No places found.')).toHaveCount(0);
 });
 
+test('a second profile with the same name is refused; renaming one to its own name is fine', async ({ page }) => {
+  await open(page);
+  await openSettings(page, 'Profiles');
+  await page.getByRole('button', { name: 'Add a profile' }).click();
+  await page.getByRole('textbox', { name: 'Name' }).fill(' mamma ');
+  await expect(page.getByRole('alert')).toHaveText('Another profile is already called mamma.');
+  await expect(page.getByRole('button', { name: 'Create profile' })).toBeDisabled();
+  await page.getByRole('textbox', { name: 'Name' }).fill('Maryam');
+  await expect(page.getByRole('button', { name: 'Create profile' })).toBeEnabled();
+  await page.getByRole('button', { name: 'Cancel' }).click();
+  await page.getByRole('button', { name: 'Edit Mamma' }).click();
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeEnabled();
+});
+
 test('five wrong PINs pause the pad; the right PIN works after the pause', async ({ page }) => {
   await page.clock.install();
   await open(page);

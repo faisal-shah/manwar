@@ -10,7 +10,7 @@ import { Button, Field, IconButton } from '../../ui/controls';
 import { confirm, toast } from '../../ui/overlays';
 import { ColorSwatches, EmojiPicker, PROFILE_COLORS } from '../../ui/pickers';
 import { Avatar } from '../../ui/profile';
-import { describeProfileDelete, moveId, planProfileDelete, type ProfileDeletePlan } from './logic';
+import { describeProfileDelete, moveId, nameTaken, planProfileDelete, type ProfileDeletePlan } from './logic';
 import { Group, PageTitle } from './parts';
 
 const REASON = 'Enter the PIN to change profiles.';
@@ -103,6 +103,7 @@ function ProfileEditor({ profile, onDone }: { profile: Profile | null; onDone: (
   const [emoji, setEmoji] = useState<string | undefined>(profile?.emoji);
   const [birthday, setBirthday] = useState(profile?.birthday ?? '');
   const trimmed = name.trim();
+  const taken = nameTaken(trimmed, profiles.value, profile?.id);
 
   const save = () =>
     asParent(() => {
@@ -170,6 +171,11 @@ function ProfileEditor({ profile, onDone }: { profile: Profile | null; onDone: (
           value={name}
           onInput={(e) => setName((e.target as HTMLInputElement).value)}
         />
+        {taken && (
+          <span class="set-error" role="alert">
+            Another profile is already called {trimmed}.
+          </span>
+        )}
       </Field>
       <Field label="Color">
         <ColorSwatches value={color} onChange={setColor} />
@@ -202,7 +208,7 @@ function ProfileEditor({ profile, onDone }: { profile: Profile | null; onDone: (
         )}
         <span class="grow" />
         <Button onClick={onDone}>Cancel</Button>
-        <Button variant="primary" disabled={!trimmed} onClick={() => void save()}>
+        <Button variant="primary" disabled={!trimmed || taken} onClick={() => void save()}>
           {profile ? 'Save' : 'Create profile'}
         </Button>
       </div>
