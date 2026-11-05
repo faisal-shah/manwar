@@ -82,7 +82,8 @@ export const todayPressed = signal(0);
 
 /* ---------- Per-device preferences ---------- */
 
-function stored<T>(key: string, fallback: T, valid: (v: unknown) => v is T): Signal<T> {
+/** A signal kept in this device's localStorage under `key` (a stored value `valid` refuses reads as `fallback`). */
+export function stored<T>(key: string, fallback: T, valid: (v: unknown) => v is T): Signal<T> {
   let initial = fallback;
   try {
     const raw = localStorage.getItem(key);

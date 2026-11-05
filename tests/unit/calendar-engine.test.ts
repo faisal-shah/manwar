@@ -276,6 +276,28 @@ describe('triage queue', () => {
   });
 });
 
+describe('profile filters', () => {
+  it('shows an event while any of its people is shown, and always one for everyone or no one', () => {
+    const [both, hers, family, nobody] = ['both', 'hers', 'family', 'nobody'].map((id) => ev(id, day(1), day(1, '10:00')));
+    store.data.eventMeta.value = [meta('both', ['asiyah', 'hashim']), meta('hers', ['asiyah']), meta('family', ['*'])];
+    const shown = (hidden: string[]) =>
+      [both, hers, family, nobody].filter((e) => engine.passesHidden(e, hidden)).map((e) => e.id);
+    expect(shown([])).toEqual(['both', 'hers', 'family', 'nobody']);
+    expect(shown(['asiyah'])).toEqual(['both', 'family', 'nobody']);
+    expect(shown(['asiyah', 'hashim'])).toEqual(['family', 'nobody']);
+    // The wall's filter is the household's setting, through the same rule.
+    store.settings.value = { ...DEFAULT_SETTINGS, filter: { ...DEFAULT_SETTINGS.filter, hiddenProfiles: ['hashim'] } };
+    expect([both, hers, family, nobody].filter(engine.passesFilter).map((e) => e.id)).toEqual([
+      'both',
+      'hers',
+      'family',
+      'nobody',
+    ]);
+    store.settings.value = { ...DEFAULT_SETTINGS, filter: { ...DEFAULT_SETTINGS.filter, hiddenProfiles: ['asiyah'] } };
+    expect([both, hers, family, nobody].filter(engine.passesFilter).map((e) => e.id)).toEqual(['both', 'family', 'nobody']);
+  });
+});
+
 describe('which days an event is on', () => {
   it('shows a zero-length event at midnight on its day', () => {
     const z = ev('z', '2026-11-08T00:00', '2026-11-08T00:00');
