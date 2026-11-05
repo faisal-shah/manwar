@@ -1,5 +1,5 @@
-import type { ISODate, MealCategoryId, MealEntry } from '../../data/types';
-import { addDays, fromISODate, monthShort, startOfWeek } from '../../lib/date';
+import type { ISODate, MealCategoryId, MealEntry, Repeat, Weekday } from '../../data/types';
+import { addDays, diffDays, fromISODate, monthShort, startOfWeek } from '../../lib/date';
 import { occursOn } from '../../lib/repeat';
 
 /**
@@ -86,6 +86,12 @@ export type Scope = 'one' | 'following' | 'all';
 export type MealOp =
   { op: 'put'; entry: MealEntry } | { op: 'patch'; id: string; data: Partial<MealEntry> } | { op: 'remove'; id: string };
 
+/** A weekly rule moved by `days`: its weekdays move with it (other rules follow their start date). */
+function shiftRepeat(rule: Repeat, days: number): Repeat {
+  if (rule.unit !== 'week' || !rule.weekdays?.length) return rule;
+  return { ...rule, weekdays: rule.weekdays.map((d) => ((((d + days) % 7) + 7) % 7) as Weekday).sort() };
+}
+
 /**
  * Writes that change (or, with `changes` null, remove) the occurrence of
  * `entry` on `date`. A one-off entry ignores `scope`. For a repeating entry:
@@ -93,6 +99,12 @@ export type MealOp =
  * and starts a new one with the changes; 'one' ends it the day before, adds
  * a one-off with the changes, and continues the series from its next
  * occurrence. `newId` mints ids for the entries this creates.
+ *
+ * Moving the occurrence to another day (`changes.date`) moves the series
+ * with it: 'all' shifts every occurrence by the same number of days,
+ * 'following' starts the new series there, and a weekly rule's weekdays
+ * shift too, so the moved meal is on the day it was moved to. A repeat in
+ * `changes` is taken as given.
  */
 export function editOccurrence(
   entry: MealEntry,
@@ -101,6 +113,13 @@ export function editOccurrence(
   changes: Partial<Omit<MealEntry, 'id'>> | null,
   newId: () => string,
 ): MealOp[] {
+  if (changes && entry.repeat && scope !== 'one') {
+    const moved = changes.date && changes.date !== date ? diffDays(date, changes.date) : 0;
+    const repeat = 'repeat' in changes ? changes.repeat : shiftRepeat(entry.repeat, moved);
+    // 'all' keeps the series start (shifted); a repeat turned off leaves one meal on the day being edited.
+    const start = scope === 'following' ? (changes.date ?? date) : repeat ? addDays(entry.date, moved) : (changes.date ?? date);
+    changes = { ...changes, date: start, repeat };
+  }
   if (!entry.repeat || scope === 'all') {
     if (!changes) return [{ op: 'remove', id: entry.id }];
     return [{ op: 'put', entry: { ...entry, ...changes } }];

@@ -2,6 +2,7 @@ import { useState } from 'preact/hooks';
 import type { TargetedEvent } from 'preact';
 import { ChevronDown, ChevronUp, Repeat as RepeatIcon } from 'lucide-preact';
 import type { ISODate, MealCategory, MealCategoryId, Repeat } from '../../data/types';
+import { today } from '../../lib/clock';
 import { addDays, dayShort, fromISODate } from '../../lib/date';
 import { describeRepeat } from '../../lib/repeat';
 import { RepeatEditor } from '../../ui/pickers';
@@ -60,17 +61,22 @@ export function CategoryPicker({
   );
 }
 
-/** The next seven days as chips (Today, Tomorrow, Fri 6, ...) plus a date field for anything else. */
+/** Seven days from `from` as chips (Today, Tomorrow, Fri 6, ...) plus a date field for anything else. */
 export function DayPicker({ value, from, onChange }: { value: ISODate; from: ISODate; onChange: (d: ISODate) => void }) {
   const days = Array.from({ length: 7 }, (_, i) => addDays(from, i));
-  const label = (d: ISODate, i: number) =>
-    i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : `${dayShort(fromISODate(d).getDay())} ${fromISODate(d).getDate()}`;
+  // `from` may be a past day (planning last Monday), so the names go by the real date.
+  const label = (d: ISODate) =>
+    d === today.value
+      ? 'Today'
+      : d === addDays(today.value, 1)
+        ? 'Tomorrow'
+        : `${dayShort(fromISODate(d).getDay())} ${fromISODate(d).getDate()}`;
   return (
     <div class="day-picker">
       <div class="chips">
-        {days.map((d, i) => (
+        {days.map((d) => (
           <button type="button" class={`chip${d === value ? ' on' : ''}`} aria-pressed={d === value} onClick={() => onChange(d)}>
-            {label(d, i)}
+            {label(d)}
           </button>
         ))}
       </div>

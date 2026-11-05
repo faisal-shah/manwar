@@ -195,6 +195,34 @@ test('a planned meal opens its recipe', async ({ page }) => {
   await expect(page.locator('.recipe-card .rc-title')).toHaveText('Chicken biryani');
 });
 
+test('moving a weekly meal to another day for this and following days keeps it on that day', async ({ page }) => {
+  await seedDoc('repeat-move', 'meals', {
+    id: 'mondays',
+    date: '2026-10-26',
+    category: 'dinner',
+    title: 'Pasta night',
+    repeat: { every: 1, unit: 'week', weekdays: [1] },
+    order: 0,
+    createdAt: 1,
+  });
+  await open(page, 'repeat-move', 'Meals');
+  const pasta = (d: string) => page.locator(`[data-cell="2026-11-${d}|dinner"] .mg-entry`, { hasText: 'Pasta night' });
+  await pasta('02').click();
+  await page.locator('.popover').getByRole('button', { name: 'Edit meal' }).click();
+  const sheet = page.getByRole('dialog', { name: 'Edit meal' });
+  await sheet.locator('.slot-day').click();
+  // The chips start at the meal's own (past) day; only the real today is called Today.
+  await expect(sheet.locator('.day-picker .chip')).toHaveText(['Mon 2', 'Tue 3', 'Today', 'Tomorrow', 'Fri 6', 'Sat 7', 'Sun 8']);
+  await sheet.getByRole('button', { name: 'Tue 3' }).click();
+  await sheet.getByRole('button', { name: 'Save' }).click();
+  await page.getByRole('button', { name: 'This and following days' }).click();
+  await expect(pasta('03')).toHaveCount(1);
+  await expect(pasta('02')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Next week' }).click();
+  await expect(pasta('10')).toHaveCount(1);
+  await expect(pasta('09')).toHaveCount(0);
+});
+
 test('the item editor keeps a move made before Save', async ({ page }) => {
   await open(page, 'item-move-save', 'Lists');
   const produce = groceryCard(page).locator('.ls-group', { has: page.locator('.ls-title', { hasText: 'Produce' }) });
