@@ -18,6 +18,7 @@ import {
   deleteItem,
   deleteList,
   itemsByList,
+  lists,
   setDone,
   settling,
   toggleCollapsed,
@@ -415,7 +416,9 @@ function ItemEditor({
     void asParent(() => {
       void deleteItem(item);
       onClose();
-      toast(`Deleted ${item.text}`, { label: 'Undo', run: () => void asParent(() => void put('listItems', item)) });
+      // The undo brings the item back only onto a list that still exists (not one deleted since on another device).
+      const restore = () => lists.value.some((l) => l.id === item.listId) && void put('listItems', item);
+      toast(`Deleted ${item.text}`, { label: 'Undo', run: () => void asParent(restore) });
     });
   return (
     <Popover anchor={anchor} width={48} onClose={onClose}>

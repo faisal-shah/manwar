@@ -1,9 +1,9 @@
 import { useState } from 'preact/hooks';
-import { data, newId, profiles, saveEdited } from '../../data/store';
+import { data, newId, profileById, profiles, saveEdited } from '../../data/store';
 import type { PartOfDay, Task } from '../../data/types';
 import { currentTime, today } from '../../lib/clock';
 import { Button, Chips, Field, Segmented, Stepper, Toggle } from '../../ui/controls';
-import { Sheet, toast } from '../../ui/overlays';
+import { Sheet, toast, useCloseWhenGone } from '../../ui/overlays';
 import { EmojiPicker, RepeatEditor } from '../../ui/pickers';
 import { ProfilePicker } from '../../ui/profile';
 import { archiveTask, editing } from './actions';
@@ -32,6 +32,8 @@ const PARTS: PartOfDay[] = ['morning', 'afternoon', 'evening'];
 
 function TaskEditor({ task, onClose }: { task: Task | null; onClose: () => void }) {
   const [d, setD] = useState<Draft>(() => draftFrom(task, today.value, currentPart.value));
+  const stored = task && data.tasks.value.find((t) => t.id === task.id);
+  useCloseWhenGone(!!task && (!stored || !!stored.archived), onClose, `"${task?.title}" was deleted on another device.`);
   const [pickEmoji, setPickEmoji] = useState(false);
   const [customStars, setCustomStars] = useState(() => !STAR_CHOICES.includes(d.stars));
   const [error, setError] = useState<string | null>(null);
@@ -42,12 +44,14 @@ function TaskEditor({ task, onClose }: { task: Task | null; onClose: () => void 
   const chore = d.kind === 'chore';
 
   const save = () => {
-    const problem = validateDraft(d);
+    // A profile deleted on another device while the editor was open is not saved back onto the task.
+    const draft = { ...d, assignees: d.assignees.filter((id) => profileById.value.has(id)) };
+    const problem = validateDraft(draft);
     if (problem) return setError(problem);
     const order = task?.order ?? Math.max(0, ...data.tasks.value.map((t) => t.order)) + 1;
     // The stored task, not the copy the editor opened with: a check-off meanwhile may have moved lastDone.
     const base = (task && data.tasks.value.find((t) => t.id === task.id)) ?? task;
-    const out = taskFrom(d, base ?? { id: newId(), order, createdAt: currentTime() });
+    const out = taskFrom(draft, base ?? { id: newId(), order, createdAt: currentTime() });
     void saveEdited('tasks', out, !task, [
       'kind',
       'title',

@@ -1,6 +1,6 @@
 import { computed, effect, signal } from '@preact/signals';
 import { demoMode } from '../config';
-import { data, profileById, put, remove as removeDoc, settings } from '../data/store';
+import { data, profileById, put, remove as removeDoc, settings, upsert } from '../data/store';
 import { EVERYONE, type EventMeta, type ISODate } from '../data/types';
 import { addDays, addMonths, dateAt, diffDays, toISODate } from '../lib/date';
 import { currentTime, today } from '../lib/clock';
@@ -265,26 +265,36 @@ export const unassigned = computed(() => {
   return out;
 });
 
+type MetaFields = Partial<Pick<EventMeta, 'profiles' | 'countdown' | 'emoji'>>;
+
+/**
+ * Write `fields` (undefined clears one) into a meta document, creating it
+ * when there is none. Only those fields are written, so a change another
+ * device made to the others (an assignment, a countdown) is kept.
+ */
+function writeMeta(id: string, existing: EventMeta | undefined, fields: MetaFields): void {
+  void upsert('eventMeta', id, { ...(existing ? {} : { profiles: [] }), ...fields, id, updatedAt: currentTime() });
+}
+
 /**
  * Write the occurrence's own document with `fields` changed (undefined
  * clears a field). A document left with nothing of its own is removed, so
  * the occurrence follows its series again.
  */
-function putOwn(ev: CalEvent, fields: Partial<Pick<EventMeta, 'profiles' | 'countdown' | 'emoji'>>): void {
+function putOwn(ev: CalEvent, fields: MetaFields): void {
   const { own, ownKey } = metaDocs(ev);
   const next: EventMeta = { profiles: [], ...own, ...fields, id: ownKey, updatedAt: currentTime() };
   if (!next.profiles.length && next.countdown == null && next.emoji == null) {
     if (own) void removeDoc('eventMeta', ownKey);
     return;
   }
-  void put('eventMeta', next);
+  writeMeta(ownKey, own, fields);
 }
 
 /** Write the series document (or the event's own one, for a one-off event) with `fields` changed. */
-function putSeries(ev: CalEvent, fields: Partial<Pick<EventMeta, 'profiles' | 'countdown' | 'emoji'>>): void {
+function putSeries(ev: CalEvent, fields: MetaFields): void {
   const { own, series, ownKey, seriesKey } = metaDocs(ev);
-  const base = seriesKey ? series : own;
-  void put('eventMeta', { profiles: [], ...base, ...fields, id: seriesKey ?? ownKey, updatedAt: currentTime() });
+  writeMeta(seriesKey ?? ownKey, seriesKey ? series : own, fields);
 }
 
 /**

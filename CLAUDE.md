@@ -71,6 +71,16 @@ flowchart LR
   `DEFAULT_SETTINGS` (`data/settings.ts`). Firestore ends a listener for
   good on an error, so `listen()` in the store reports it (`loadError`,
   shown on the loading screen) and subscribes again after 30 seconds.
+- **Several tablets, one household**: `put` (a whole document) is for new
+  documents only. A change to an existing one writes only the fields it
+  changes (`patch`, `saveEdited` for editors, `upsert` to create or merge,
+  `fieldChanges` turns undefined into a field delete; `arrayUnion`/
+  `arrayRemove` for one element of a list), so another tablet's change to
+  the other fields survives, and a document deleted elsewhere is not
+  written back. Writes start from the store's current document, not the
+  copy an editor opened with. An editor or popover whose document is
+  deleted elsewhere closes itself through `useCloseWhenGone`
+  (`ui/overlays.tsx`), with a toast for an editor.
 - **Calendar events** live in the household's Google calendars. `calendar/engine.ts`
   fetches a window around today (six weeks back, four months ahead, widened
   to the days the latest view asked for with `ensureRange`), caches a snapshot
@@ -97,7 +107,9 @@ flowchart LR
   through `exclusive()` until `onSnapshotsInSync` fires, since the local
   snapshot lags the write by milliseconds and a second tap in between would
   award or charge twice; writes return null when they did nothing.
-  Check-offs on another day are stamped on that day (`madeAt`).
+  Check-offs on another day are stamped on that day (`madeAt`), and are
+  written only for an occurrence still on that day (`stillOn`: not for a
+  task deleted or reassigned on another tablet while its popover was open).
   `HISTORY_DAYS` bounds the task views, late carry-over, the writes and the
   store's `taskStates` query. Two devices completing the same occurrence in
   the same instant can still both award (the balance is an increment).

@@ -5,11 +5,11 @@ import { asParent } from '../../core/lock';
 import { newId } from '../../data/store';
 import type { List, ListKind, ListSection } from '../../data/types';
 import { Button, Field, IconButton, Segmented, SettingRow, Toggle } from '../../ui/controls';
-import { Sheet } from '../../ui/overlays';
+import { Sheet, useCloseWhenGone } from '../../ui/overlays';
 import { ColorSwatches, EmojiPicker } from '../../ui/pickers';
 import { askDeleteList } from './ListCard';
 import { KIND_COLORS, listColor } from './logic';
-import { itemsByList, saveList } from './state';
+import { createList, itemsByList, lists, updateList } from './state';
 
 const KINDS: { value: ListKind; label: string }[] = [
   { value: 'todo', label: 'To Do' },
@@ -42,10 +42,17 @@ export function ListEditor({ list, onClose }: { list?: List; onClose: () => void
     [next[i], next[i + d]] = [next[i + d], next[i]];
     setSections(next);
   };
+  useCloseWhenGone(
+    !!list && !lists.value.some((l) => l.id === list.id),
+    onClose,
+    `${list?.title} was deleted on another device.`,
+  );
   const save = () =>
     void asParent(() => {
       const named = sections.map((s) => ({ ...s, name: s.name.trim() })).filter((s) => s.name);
-      saveList({ title: title.trim(), kind, emoji, color, sections: named, isDefaultGrocery: isDefault }, list);
+      const draft = { title: title.trim(), kind, emoji, color, sections: named, isDefaultGrocery: isDefault };
+      if (list) updateList(list, draft);
+      else createList(draft);
       onClose();
     });
 

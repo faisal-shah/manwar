@@ -1,10 +1,10 @@
 import { computed, signal } from '@preact/signals';
-import { batch, data, newId, put, settings } from '../../data/store';
+import { batch, data, fieldChanges, newId, put, settings } from '../../data/store';
 import type { ISODate, MealCategory, MealCategoryId, MealEntry, Recipe, Repeat } from '../../data/types';
 import { goTo } from '../../app/nav';
 import { currentTime, today } from '../../lib/clock';
 import { diffDays } from '../../lib/date';
-import { editOccurrence, mealOccurrences, nextCellOrder, weekOf, type MealOp, type Scope } from './plan';
+import { editOccurrence, mealOccurrences, nextCellOrder, undoOps, weekOf, type MealOp, type Scope } from './plan';
 
 /** Reactive views of the meal plan and its writes. Callers wrap writes in asParent(). */
 
@@ -52,23 +52,33 @@ export function applyMealOps(ops: MealOp[]): void {
   const b = batch();
   for (const o of ops) {
     if (o.op === 'put') b.put('meals', o.entry);
-    else if (o.op === 'patch') b.patch('meals', o.id, o.data);
+    else if (o.op === 'patch') b.patch('meals', o.id, fieldChanges(o.data) as Partial<MealEntry>);
     else b.remove('meals', o.id);
   }
   void b.commit();
 }
 
-/** Change or remove one occurrence (see plan.editOccurrence). Returns an undo. */
+/** The planned meal as the store has it now; undefined once it is deleted. */
+export const liveMeal = (id: string) => data.meals.value.find((m) => m.id === id);
+
+/**
+ * Change or remove one occurrence (see plan.editOccurrence) of `entry` as
+ * the store has it now, not as the caller saw it. Returns an undo, or null
+ * when the entry was deleted meanwhile (nothing is written).
+ */
 export function changeOccurrence(
   entry: MealEntry,
   date: ISODate,
   scope: Scope,
   changes: Partial<Omit<MealEntry, 'id'>> | null,
-): () => void {
-  const ops = editOccurrence(entry, date, scope, changes, newId);
+): (() => void) | null {
+  const live = liveMeal(entry.id);
+  if (!live) return null;
+  const ops = editOccurrence(live, date, scope, changes, newId);
   applyMealOps(ops);
-  const created = ops.flatMap((o) => (o.op === 'put' && o.entry.id !== entry.id ? [o.entry.id] : []));
-  return () => applyMealOps([{ op: 'put', entry }, ...created.map((id) => ({ op: 'remove' as const, id }))]);
+  const undo = undoOps(live, ops);
+  // A patch on an entry deleted since would fail the whole batch.
+  return () => applyMealOps(undo.filter((o) => o.op !== 'patch' || liveMeal(o.id)));
 }
 
 export interface CalendarMeal {

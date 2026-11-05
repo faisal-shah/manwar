@@ -4,17 +4,18 @@ import type { ISODate, MealEntry } from '../../data/types';
 import { formatLongDate } from '../../lib/date';
 import { describeRepeat } from '../../lib/repeat';
 import { IconButton } from '../../ui/controls';
-import { Popover, choose, toast } from '../../ui/overlays';
+import { Popover, choose, toast, useCloseWhenGone } from '../../ui/overlays';
 import { openRecipe } from '../recipes/state';
 import { ingredientRows } from '../recipes/text';
 import { openIngredients } from './IngredientsModal';
 import { SCOPES } from './PlanMealSheet';
-import { categoryById, changeOccurrence, mealEmoji, planTarget, recipeOf } from './state';
+import { mealOccurrences } from './plan';
+import { categoryById, changeOccurrence, liveMeal, mealEmoji, planTarget, recipeOf } from './state';
 import { CategoryBadge } from './ui';
 
 /** Tap a planned meal: title, edit and remove, Add ingredients, Open recipe, date, category, repeat, notes. */
 export function MealPopover({
-  entry,
+  entry: opened,
   date,
   anchor,
   onClose,
@@ -24,6 +25,10 @@ export function MealPopover({
   anchor: DOMRect;
   onClose: () => void;
 }) {
+  // What it shows follows the stored entry; it closes once the meal is no longer on this day.
+  const live = liveMeal(opened.id);
+  const entry = live ?? opened;
+  useCloseWhenGone(!live || !mealOccurrences([live], date, date).length, onClose);
   const recipe = recipeOf(entry);
   const cat = categoryById.value.get(entry.category);
   const emoji = mealEmoji(entry);
@@ -39,7 +44,7 @@ export function MealPopover({
       if (!scope) return;
       const undo = changeOccurrence(entry, date, scope, null);
       onClose();
-      toast(`Removed ${entry.title}.`, { label: 'Undo', run: () => void asParent(undo) });
+      if (undo) toast(`Removed ${entry.title}.`, { label: 'Undo', run: () => void asParent(undo) });
     });
 
   return (

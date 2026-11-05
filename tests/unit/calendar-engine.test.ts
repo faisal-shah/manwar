@@ -7,19 +7,36 @@ import type { EventMeta, Profile } from '../../src/data/types';
  * source (no Firestore, no network). Unit tests run with TZ=America/Chicago.
  */
 
+/**
+ * The eventMeta documents as the database holds them. Writes land here the
+ * way Firestore applies them (put replaces, upsert merges) and in the local
+ * view; a test can put a document here that the local view has not seen
+ * (another device's write still on its way).
+ */
+const server = vi.hoisted(() => new Map<string, EventMeta>());
+
 vi.mock('../../src/data/store', async () => {
   const { computed, signal } = await import('@preact/signals');
   const { DEFAULT_SETTINGS } = await import('../../src/data/settings');
   const data = { eventMeta: signal<EventMeta[]>([]), profiles: signal<Profile[]>([]) };
   const settings = signal(DEFAULT_SETTINGS);
   const profileById = computed(() => new Map(data.profiles.value.map((p) => [p.id, p])));
-  const put = async (coll: 'eventMeta', doc: EventMeta) => {
-    data[coll].value = [...data[coll].value.filter((d) => d.id !== doc.id), doc];
+  const show = (doc: EventMeta) => (data.eventMeta.value = [...data.eventMeta.value.filter((d) => d.id !== doc.id), doc]);
+  const put = async (_coll: 'eventMeta', doc: EventMeta) => {
+    server.set(doc.id, doc);
+    show(doc);
   };
-  const remove = async (coll: 'eventMeta', id: string) => {
-    data[coll].value = data[coll].value.filter((d) => d.id !== id);
+  const upsert = async (_coll: 'eventMeta', id: string, partial: Partial<EventMeta>) => {
+    const merge = (base?: EventMeta) =>
+      Object.fromEntries(Object.entries({ ...base, ...partial }).filter(([, v]) => v !== undefined)) as unknown as EventMeta;
+    server.set(id, merge(server.get(id)));
+    show(merge(data.eventMeta.value.find((d) => d.id === id)));
   };
-  return { data, settings, profileById, put, remove };
+  const remove = async (_coll: 'eventMeta', id: string) => {
+    server.delete(id);
+    data.eventMeta.value = data.eventMeta.value.filter((d) => d.id !== id);
+  };
+  return { data, settings, profileById, put, upsert, remove };
 });
 
 const source = vi.hoisted(() => ({}) as CalendarSource);
@@ -67,6 +84,7 @@ const swim = (offset: number) =>
   ev(`swim_${offset}`, day(offset, '09:30'), day(offset, '10:15'), { seriesId: 'swim', title: 'Swim lesson' });
 
 beforeEach(() => {
+  server.clear();
   store.data.eventMeta.value = [];
   store.data.profiles.value = [profile('asiyah'), profile('hashim')];
   store.settings.value = DEFAULT_SETTINGS;
@@ -95,6 +113,20 @@ describe('event metadata for series and occurrences', () => {
     // Countdowns stay a series setting: turning it off for the series turns it off here too.
     engine.setCountdown(a, false);
     expect(engine.metaFor(a)?.countdown).toBeFalsy();
+  });
+
+  it('writes only what it changes, so a change another device made meanwhile is kept', () => {
+    const a = swim(3);
+    engine.events.value = [a];
+    // The other device turned the countdown on; this one has not seen that yet.
+    store.data.eventMeta.value = [meta('swim', ['asiyah'])];
+    server.set(engine.metaKey('fam', 'swim'), meta('swim', ['asiyah'], { countdown: true }));
+    engine.assign(a, ['hashim'], 'series');
+    expect(server.get(engine.metaKey('fam', 'swim'))).toMatchObject({ profiles: ['hashim'], countdown: true });
+    // And the other way round: a countdown change keeps profiles assigned elsewhere.
+    server.set(engine.metaKey('fam', 'swim'), meta('swim', ['asiyah', 'hashim'], { countdown: true }));
+    engine.setCountdown(a, false);
+    expect(server.get(engine.metaKey('fam', 'swim'))).toMatchObject({ profiles: ['asiyah', 'hashim'], countdown: false });
   });
 
   it('assigning the whole series keeps its countdown and drops the occurrence override', () => {

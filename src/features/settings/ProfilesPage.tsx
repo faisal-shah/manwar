@@ -1,16 +1,16 @@
 import { useState } from 'preact/hooks';
-import { deleteField } from 'firebase/firestore';
+import { arrayRemove, deleteField } from 'firebase/firestore';
 import { ArrowLeft, ChevronDown, ChevronRight, ChevronUp, Plus, Trash2 } from 'lucide-preact';
 import { asParent } from '../../core/lock';
-import { batch, data, newId, patch, profiles, put, saveSettings, settings } from '../../data/store';
+import { batch, data, newId, patch, profileById, profiles, put, saveSettings, settings } from '../../data/store';
 import type { Profile } from '../../data/types';
 import { currentTime } from '../../lib/clock';
 import { fromISODate, monthShort } from '../../lib/date';
 import { Button, Field, IconButton } from '../../ui/controls';
-import { confirm, toast } from '../../ui/overlays';
+import { confirm, toast, useCloseWhenGone } from '../../ui/overlays';
 import { ColorSwatches, EmojiPicker, PROFILE_COLORS } from '../../ui/pickers';
 import { Avatar } from '../../ui/profile';
-import { describeProfileDelete, moveId, nameTaken, planProfileDelete, type ProfileDeletePlan } from './logic';
+import { describeProfileDelete, moveId, nameTaken, planProfileDelete } from './logic';
 import { Group, PageTitle } from './parts';
 
 const REASON = 'Enter the PIN to change profiles.';
@@ -75,26 +75,28 @@ function nextColor(): string {
   return PROFILE_COLORS.find((c) => !used.has(c.toLowerCase())) ?? PROFILE_COLORS[0];
 }
 
-/** Archive what only this profile had, take it off shared items, then remove it. */
-function applyDelete(p: Profile, plan: ProfileDeletePlan): void {
+/**
+ * Archive what only this profile had, take it off shared items, then remove
+ * it. The profile is taken out of each list (arrayRemove) rather than the
+ * list rewritten, so an assignment changed on another device meanwhile is kept.
+ */
+function applyDelete(p: Profile): void {
+  const plan = planProfileDelete(p.id, { tasks: data.tasks.value, rewards: data.rewards.value, eventMeta: data.eventMeta.value });
+  const without = arrayRemove(p.id) as never;
   const b = batch();
   plan.archiveTasks.forEach((id) => b.patch('tasks', id, { archived: true }));
-  plan.unassignTasks.forEach(({ id, assignees }) => b.patch('tasks', id, { assignees }));
+  plan.unassignTasks.forEach(({ id }) => b.patch('tasks', id, { assignees: without }));
   plan.archiveRewards.forEach((id) => b.patch('rewards', id, { archived: true }));
-  plan.unassignRewards.forEach(({ id, profiles: ids }) => b.patch('rewards', id, { profiles: ids }));
+  plan.unassignRewards.forEach(({ id }) => b.patch('rewards', id, { profiles: without }));
   b.remove('profiles', p.id);
   void b.commit();
   const at = currentTime();
   for (let i = 0; i < plan.eventMeta.length; i += BATCH_LIMIT) {
     const mb = batch();
-    plan.eventMeta
-      .slice(i, i + BATCH_LIMIT)
-      .forEach(({ id, profiles: ids }) => mb.patch('eventMeta', id, { profiles: ids, updatedAt: at }));
+    plan.eventMeta.slice(i, i + BATCH_LIMIT).forEach(({ id }) => mb.patch('eventMeta', id, { profiles: without, updatedAt: at }));
     void mb.commit();
   }
-  const filter = settings.value.filter;
-  if (filter.hiddenProfiles.includes(p.id))
-    void saveSettings({ filter: { ...filter, hiddenProfiles: filter.hiddenProfiles.filter((x) => x !== p.id) } });
+  if (settings.value.filter.hiddenProfiles.includes(p.id)) void saveSettings({ filter: { hiddenProfiles: without } as never });
 }
 
 function ProfileEditor({ profile, onDone }: { profile: Profile | null; onDone: () => void }) {
@@ -104,6 +106,7 @@ function ProfileEditor({ profile, onDone }: { profile: Profile | null; onDone: (
   const [birthday, setBirthday] = useState(profile?.birthday ?? '');
   const trimmed = name.trim();
   const taken = nameTaken(trimmed, profiles.value, profile?.id);
+  useCloseWhenGone(!!profile && !profileById.value.has(profile.id), onDone, `${profile?.name} was deleted on another device.`);
 
   const save = () =>
     asParent(() => {
@@ -145,7 +148,8 @@ function ProfileEditor({ profile, onDone }: { profile: Profile | null; onDone: (
     });
     if (!ok) return;
     await asParent(() => {
-      applyDelete(profile, plan);
+      // Planned again: tasks or events may have changed while the dialog was up.
+      applyDelete(profile);
       toast(`${profile.name} was deleted.`);
       onDone();
     }, REASON);

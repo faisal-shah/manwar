@@ -211,6 +211,20 @@ export function patch<K extends CollectionName>(name: K, id: string, partial: Pa
   return updateDoc(docRef(name, id), partial as object);
 }
 
+/** `partial` as a field-by-field change: an undefined value deletes the field (plain writes skip it). */
+export function fieldChanges(partial: object): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(partial).map(([k, v]) => [k, v === undefined ? deleteField() : v]));
+}
+
+/**
+ * Write only the fields in `partial` (undefined deletes one), creating the
+ * document when it does not exist. For documents more than one device may
+ * change at once: fields this write does not name are kept.
+ */
+export function upsert<K extends CollectionName>(name: K, id: string, partial: Partial<Collections[K]>): Promise<void> {
+  return setDoc(docRef(name, id), fieldChanges(partial), { merge: true });
+}
+
 /**
  * Save what an editor shows: create the document when it is new, otherwise
  * update only `fields` (undefined deletes the field). Fields the editor does
@@ -224,9 +238,7 @@ export function saveEdited<K extends CollectionName>(
   fields: readonly (keyof Collections[K] & string)[],
 ): Promise<void> {
   if (isNew) return put(name, value);
-  const partial: Record<string, unknown> = {};
-  for (const f of fields) partial[f] = value[f] === undefined ? deleteField() : value[f];
-  return updateDoc(docRef(name, value.id), partial);
+  return updateDoc(docRef(name, value.id), fieldChanges(Object.fromEntries(fields.map((f) => [f, value[f]]))));
 }
 
 export function remove(name: CollectionName, id: string): Promise<void> {
