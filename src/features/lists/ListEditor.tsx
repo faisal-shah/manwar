@@ -89,7 +89,8 @@ export function ListEditor({ list, onClose }: { list?: List; onClose: () => void
             <input
               class="input grow"
               value={title}
-              placeholder="Grocery List"
+              aria-label="Title"
+              placeholder="List name, e.g. To Do"
               onInput={(e: TargetedEvent<HTMLInputElement>) => setTitle(e.currentTarget.value)}
             />
           </div>
