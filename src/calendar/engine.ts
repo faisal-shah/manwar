@@ -316,8 +316,8 @@ export function startCalendarSync(): void {
     const shownAgain = hidden.some((id) => !next.includes(id));
     hidden = next;
     signalBatch(() => {
-      events.value = events.value.filter((e) => !next.includes(e.calendarId));
-      farCountdowns.value = farCountdowns.value.filter((e) => !next.includes(e.calendarId));
+      events.value = events.peek().filter((e) => !next.includes(e.calendarId));
+      farCountdowns.value = farCountdowns.peek().filter((e) => !next.includes(e.calendarId));
     });
     if (shownAgain) void refresh();
   });
