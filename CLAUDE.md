@@ -181,7 +181,10 @@ so `1rem` = 10 design px. Use rem for every size. Tokens are CSS variables in
   pills, segments, toggles and chips get a centered `::before` hit area from
   the shared rule at the top of `ui/ui.css`; add a class there rather than a
   per-feature `::after`. A control with `overflow: hidden` clips its own hit
-  area: size it to `--touch` instead.
+  area: size it to `--touch` instead. The growth must not reach over another
+  control (it would take that control's taps): a control flush against one
+  (the Meals `+` under its cell's list) stays out of the rule
+  (`tests/e2e/layout-fit.spec.ts` checks the edges).
 - **Text on a profile or category color** uses the color's ink,
   `color: lch(from var(--c) calc((50 - l) * infinity) 0 0)` (white on dark
   colors, black on light ones). The palette has both kinds. Write it as

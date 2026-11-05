@@ -184,7 +184,11 @@
   margin-top: 0.2rem;
   color: color-mix(in srgb, var(--on-tint) 55%, transparent);
 }
-/* Add another, in the bottom corner under the meals. */
+/*
+ * Add another, in the bottom corner under the meals. It is --touch wide, and
+ * the cell around it plans a meal too, so it gets no shared hit area: one
+ * would reach up over the last meal showing and take its taps.
+ */
 .mg-add {
   flex: none;
   align-self: flex-end;
