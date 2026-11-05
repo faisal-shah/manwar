@@ -76,17 +76,29 @@ test('deleting a profile sends the events only it had to the unassigned queue', 
   const badgeOf = (p: Page) => p.locator('.rail button', { hasText: 'Calendar' }).locator('.badge');
   // The demo has three unassigned events (once its seed has landed); Nap, Swim lesson and the birthday are Hashim's alone.
   await expect(badgeOf(page)).toHaveText('3', { timeout: 40_000 });
+  // Quran class is Asiyah's and Hashim's; Thursday's class alone is given to Hashim.
+  const quran = page.locator('[data-event="family@demo::quran_20261105"]');
+  await quran.click();
+  const detail = page.locator('.ev-detail');
+  await detail.getByRole('button', { name: 'Change' }).click();
+  await detail.locator('.picker button', { hasText: 'Asiyah' }).click();
+  await detail.getByRole('button', { name: 'Save' }).click();
+  await page.locator('.modal').getByRole('button', { name: 'This event', exact: true }).click();
+  await expect(detail.locator('.evd-people li')).toHaveText(['🐸Hashim!']);
+  await page.locator('.popover-scrim').click({ position: { x: 10, y: 10 } });
+  await expect(detail).toHaveCount(0);
   await openSettings(page, 'Profiles');
   await page.getByRole('button', { name: 'Edit Hashim' }).click();
   await page.getByRole('button', { name: 'Delete', exact: true }).click();
-  await expect(page.locator('.modal')).toContainText('3 events assigned only to Hashim! will wait in the unassigned queue');
+  await expect(page.locator('.modal')).toContainText('4 events assigned only to Hashim! will wait in the unassigned queue');
   await page.getByRole('button', { name: 'Delete profile' }).click();
-  await expect(badgeOf(page)).toHaveText('6');
+  // Thursday's class waits too, rather than going back to the series' Asiyah.
+  await expect(badgeOf(page)).toHaveText('7');
   // The server took the writes: another tablet on the household (its own memory cache) shows the same.
   const other = await page.context().newPage();
   await other.goto(page.url());
   await expect(other.locator('.shell')).toBeVisible({ timeout: 20_000 });
-  await expect(badgeOf(other)).toHaveText('6', { timeout: 30_000 });
+  await expect(badgeOf(other)).toHaveText('7', { timeout: 30_000 });
   await other.close();
 });
 
