@@ -3,8 +3,8 @@ import { AlarmClock, Delete, Timer as TimerIcon, X } from 'lucide-preact';
 import { sleeping, wake } from '../../core/display';
 import { playChime } from '../../core/sound';
 import { settings } from '../../data/store';
-import { nowMs } from '../../lib/clock';
-import { formatTime } from '../../lib/date';
+import { nowMs, today } from '../../lib/clock';
+import { formatTime, toISODate } from '../../lib/date';
 import { Button } from '../../ui/controls';
 import { Modal } from '../../ui/overlays';
 import { STAGE_COLORS, formatDuration, pressKey, splitRemaining, timerStage, validMinutes, type KeypadKey } from './logic';
@@ -132,7 +132,8 @@ export function TimerOverlay() {
             )}
           </div>
           <div class="timer-readout">
-            <div class="timer-clock" aria-label={`${mins} minutes ${secs} seconds left`}>
+            {/* Three-digit minutes take smaller numerals, so the readout stays clear of the pie. */}
+            <div class="timer-clock" data-digits={String(mins).length} aria-label={`${mins} minutes ${secs} seconds left`}>
               <div>
                 <span class="num">{mins}</span>
                 <small>mins</small>
@@ -144,7 +145,11 @@ export function TimerOverlay() {
             </div>
             <div class="timer-total">
               {formatDuration(t.minutes)}
-              <span class="muted"> · ends {formatTime(new Date(t.endAt), settings.value.timeFormat)}</span>
+              <span class="muted">
+                {' '}
+                · ends {toISODate(new Date(t.endAt)) === today.value ? '' : 'tomorrow '}
+                {formatTime(new Date(t.endAt), settings.value.timeFormat)}
+              </span>
             </div>
           </div>
         </>

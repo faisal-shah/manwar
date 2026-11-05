@@ -175,8 +175,11 @@
   align-items: center;
   gap: 0.6rem;
   min-width: 7rem;
+  max-width: 14rem;
   font-size: 1.35rem;
   color: var(--text-2);
+  text-align: center;
+  overflow-wrap: anywhere;
 }
 .picker button.on {
   color: var(--text);
