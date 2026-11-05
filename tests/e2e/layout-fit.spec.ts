@@ -131,6 +131,37 @@ test('the on-screen keyboard keeps the scale, and the sheet ends above it', asyn
   await expect.poll(() => rem(page)).toBeLessThan(full);
 });
 
+test('a PIN pad that opens while someone types closes the keyboard, so all its keys show', async ({ page }) => {
+  await page.clock.install();
+  await open(page);
+  await rail(page, 'Settings').click();
+  await page.locator('.set-menu button', { hasText: /^Parental lock$/ }).click();
+  await page.getByRole('button', { name: /Set a PIN/ }).click();
+  const key = (d: string) => page.locator('.pin-setup .pin-keys button', { hasText: new RegExp(`^${d}$`) });
+  for (const d of '1357') await key(d).click();
+  await expect(page.locator('.pin-setup')).toContainText('Enter the PIN again');
+  for (const d of '1357') await key(d).click();
+  await expect(page.getByText('The lock is on')).toBeVisible();
+  await page.getByRole('button', { name: 'Close' }).click();
+
+  // A parent starts an item, walks away past the relock, comes back and taps the keyboard's Done.
+  await rail(page, 'Lists').click();
+  const field = page.getByRole('textbox', { name: 'Add item to Grocery List' }).first();
+  await field.click();
+  await page.keyboard.type('milk');
+  await page.clock.fastForward('02:10');
+  await page.setViewportSize({ width: 1600, height: 520 });
+  await field.press('Enter');
+  const pad = page.locator('.modal', { hasText: 'Parent PIN' });
+  await expect(pad).toBeVisible();
+  // The field lets go (on the tablet the keyboard closes), and the wall is drawn for the whole screen again.
+  await expect(field).not.toBeFocused();
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  const zero = await box(pad.locator('.pin-keys button', { hasText: /^0$/ }));
+  expect(zero.y + zero.height).toBeLessThanOrEqual(1000);
+  expect(await rem(page)).toBe(10);
+});
+
 for (const tab of ['Home', 'Calendar', 'Lists', 'Tasks', 'Rewards', 'Recipes']) {
   test(`${tab}: a list under the + button scrolls its last row clear of it`, async ({ page }) => {
     await open(page);

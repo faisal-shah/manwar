@@ -351,6 +351,9 @@ function PinPadHost() {
   useEffect(() => {
     setPin('');
     setBad(false);
+    // A field still being typed in (Add item's check or the keyboard's Done, after the lock relocked) would keep
+    // the on-screen keyboard over the lower keys and take the digits typed on it: let go of it, so the keyboard closes.
+    if (req && document.activeElement instanceof HTMLElement) document.activeElement.blur();
   }, [req]);
   if (!req) return null;
   const pausedFor = Math.ceil((pinPausedUntil.value - nowMs.value) / 1000);
