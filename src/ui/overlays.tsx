@@ -16,9 +16,11 @@ const portal = (node: ComponentChildren) => createPortal(node, document.body);
  * The second tap of a double tap lands where the first one did, a moment
  * later. When the first opened an overlay, the second falls on its scrim
  * and would close it again at once; so a scrim ignores a tap that comes
- * soon after the overlay opened and close to the tap that opened it. A
- * centered dialog opens wherever that tap was, so the second tap can also
- * land on a control in it (a PIN key, OK): a dialog ignores it inside too.
+ * soon after the overlay opened and close to the tap that opened it. An
+ * overlay can also open under that tap (a centered dialog, and on the
+ * phone every sheet: the editor's X sits where the header's + was), so the
+ * second tap can land on a control in it (a PIN key, Close): an overlay
+ * ignores it inside too.
  */
 export const DOUBLE_TAP_MS = 450;
 const DOUBLE_TAP_REM = 6;
@@ -26,13 +28,37 @@ let lastDown = { x: -1e9, y: -1e9 };
 if (typeof window !== 'undefined')
   window.addEventListener('pointerdown', (e) => (lastDown = { x: e.clientX, y: e.clientY }), { capture: true, passive: true });
 
+/** When and where a tap went down: the latest one, now. */
+export interface TapMark {
+  at: number;
+  x: number;
+  y: number;
+}
+export const tapMark = (): TapMark => ({ at: performance.now(), ...lastDown });
+
+/** Whether a tap at (x, y) now (by default the latest one) is the second tap of the double tap begun at `m`. */
+export function secondTapOf(m: TapMark, x = lastDown.x, y = lastDown.y): boolean {
+  const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 10;
+  return performance.now() - m.at < DOUBLE_TAP_MS && Math.hypot(x - m.x, y - m.y) < DOUBLE_TAP_REM * rem;
+}
+
 /** Whether a tap is the rest of the double tap that opened the calling overlay. */
 function useOpeningTap(): (e: MouseEvent) => boolean {
-  const opened = useRef({ at: performance.now(), ...lastDown });
+  const opened = useRef(tapMark());
+  return (e) => secondTapOf(opened.current, e.clientX, e.clientY);
+}
+
+/**
+ * For a view that opens in place of what was tapped (a phone tab's inner
+ * view): put it on the view's root as onClickCapture, and the rest of the
+ * double tap that opened it presses nothing in it.
+ */
+export function useOpeningTapGuard(): (e: MouseEvent) => void {
+  const openingTap = useOpeningTap();
   return (e) => {
-    const o = opened.current;
-    const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 10;
-    return performance.now() - o.at < DOUBLE_TAP_MS && Math.hypot(e.clientX - o.x, e.clientY - o.y) < DOUBLE_TAP_REM * rem;
+    if (!openingTap(e)) return;
+    e.stopPropagation();
+    e.preventDefault();
   };
 }
 
@@ -42,8 +68,8 @@ const onScreen = new Set<{ current: () => void }>();
 /**
  * Every overlay (sheet, dialog, popover, menu) calls this. `scrim` closes it
  * on a tap outside, letting the rest of the opening double tap through;
- * `content`, for a centered dialog's box (onClickCapture), drops that tap
- * inside it. The overlay also closes on idle return (closeOverlays).
+ * `content`, for its box (onClickCapture), drops that tap inside it. The
+ * overlay also closes on idle return (closeOverlays).
  */
 export function useOverlay(onClose: () => void): { scrim: (e: MouseEvent) => void; content: (e: MouseEvent) => void } {
   const openingTap = useOpeningTap();
@@ -111,11 +137,11 @@ export function Sheet({
   wide?: boolean;
   children: ComponentChildren;
 }) {
-  const { scrim } = useOverlay(onClose);
+  const { scrim, content } = useOverlay(onClose);
   return portal(
     <>
       <div class="scrim" onClick={scrim} />
-      <section class={`sheet${wide ? ' sheet-wide' : ''}`} role="dialog" aria-label={title}>
+      <section class={`sheet${wide ? ' sheet-wide' : ''}`} role="dialog" aria-label={title} onClickCapture={content}>
         <header class="sheet-head">
           {onBack ? (
             <IconButton label="Back" onClick={onBack}>
@@ -177,7 +203,7 @@ export function Popover({
   children: ComponentChildren;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const { scrim } = useOverlay(onClose);
+  const { scrim, content } = useOverlay(onClose);
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
   // Place it again when the viewport changes (an on-screen keyboard that resizes the page), so it stays on screen.
   const [viewport, setViewport] = useState(0);
@@ -215,6 +241,7 @@ export function Popover({
         ref={ref}
         class="popover"
         role="dialog"
+        onClickCapture={content}
         style={{ width: `${width}rem`, left: pos?.left ?? -9999, top: pos?.top ?? 0, visibility: pos ? 'visible' : 'hidden' }}
       >
         {children}
