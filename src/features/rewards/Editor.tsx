@@ -41,9 +41,9 @@ function RewardEditor({ reward, onClose }: { reward: Reward | null; onClose: () 
     // The lock may have relocked while the editor stood open, so saving asks again.
     void asParent(() => {
       // The stored reward, not the copy the editor opened with: a redemption meanwhile is kept.
-      const base = (reward && data.rewards.value.find((r) => r.id === reward.id)) ?? reward;
-      // Deleted on another device while the PIN pad was up: nothing to save onto.
-      if (reward && !data.rewards.value.some((r) => r.id === reward.id)) return;
+      const base = reward && data.rewards.value.find((r) => r.id === reward.id);
+      // Deleted (archived) on another device while the PIN pad was up: nothing to save onto.
+      if (reward && (!base || base.archived)) return;
       const out: Reward = {
         id: reward?.id ?? newId(),
         title: title.trim(),

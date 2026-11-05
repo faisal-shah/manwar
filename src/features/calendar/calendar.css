@@ -430,11 +430,13 @@
   border-radius: 99rem;
   background: var(--c);
   color: #fff;
-  color: lch(from var(--c) calc((50 - l) * infinity) 0 0);
   font-size: 1.3rem;
   font-weight: 700;
   letter-spacing: 0.03em;
   text-transform: uppercase;
+  @supports (color: lch(from red l c h)) {
+    color: lch(from var(--c) calc((50 - l) * infinity) 0 0);
+  }
 }
 
 /* Full-width card (Day list, Week cells, day popup) */

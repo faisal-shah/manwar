@@ -8,9 +8,11 @@
   border-radius: 50%;
   background: var(--c);
   color: #fff;
-  color: lch(from var(--c) calc((50 - l) * infinity) 0 0);
   font-weight: 700;
   line-height: 1;
+  @supports (color: lch(from red l c h)) {
+    color: lch(from var(--c) calc((50 - l) * infinity) 0 0);
+  }
 }
 
 /* Grid */
@@ -182,7 +184,11 @@
   margin-top: 0.2rem;
   color: color-mix(in srgb, var(--on-tint) 55%, transparent);
 }
-/* Add another, in the bottom corner under the meals. */
+/*
+ * Add another, in the bottom corner under the meals. It is --touch wide, and
+ * the cell around it plans a meal too, so it gets no shared hit area: one
+ * would reach up over the last meal showing and take its taps.
+ */
 .mg-add {
   flex: none;
   align-self: flex-end;

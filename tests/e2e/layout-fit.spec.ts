@@ -131,6 +131,37 @@ test('the on-screen keyboard keeps the scale, and the sheet ends above it', asyn
   await expect.poll(() => rem(page)).toBeLessThan(full);
 });
 
+test('a PIN pad that opens while someone types closes the keyboard, so all its keys show', async ({ page }) => {
+  await page.clock.install();
+  await open(page);
+  await rail(page, 'Settings').click();
+  await page.locator('.set-menu button', { hasText: /^Parental lock$/ }).click();
+  await page.getByRole('button', { name: /Set a PIN/ }).click();
+  const key = (d: string) => page.locator('.pin-setup .pin-keys button', { hasText: new RegExp(`^${d}$`) });
+  for (const d of '1357') await key(d).click();
+  await expect(page.locator('.pin-setup')).toContainText('Enter the PIN again');
+  for (const d of '1357') await key(d).click();
+  await expect(page.getByText('The lock is on')).toBeVisible();
+  await page.getByRole('button', { name: 'Close' }).click();
+
+  // A parent starts an item, walks away past the relock, comes back and taps the keyboard's Done.
+  await rail(page, 'Lists').click();
+  const field = page.getByRole('textbox', { name: 'Add item to Grocery List' }).first();
+  await field.click();
+  await page.keyboard.type('milk');
+  await page.clock.fastForward('02:10');
+  await page.setViewportSize({ width: 1600, height: 520 });
+  await field.press('Enter');
+  const pad = page.locator('.modal', { hasText: 'Parent PIN' });
+  await expect(pad).toBeVisible();
+  // The field lets go (on the tablet the keyboard closes), and the wall is drawn for the whole screen again.
+  await expect(field).not.toBeFocused();
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  const zero = await box(pad.locator('.pin-keys button', { hasText: /^0$/ }));
+  expect(zero.y + zero.height).toBeLessThanOrEqual(1000);
+  expect(await rem(page)).toBe(10);
+});
+
 for (const tab of ['Home', 'Calendar', 'Lists', 'Tasks', 'Rewards', 'Recipes']) {
   test(`${tab}: a list under the + button scrolls its last row clear of it`, async ({ page }) => {
     await open(page);
@@ -329,6 +360,79 @@ test('controls take a 5.6rem finger, however small they draw', async ({ page }) 
   await rail(page, 'Settings').click();
   await page.locator('.set-menu button', { hasText: 'Display' }).click();
   expect(await smallTargets(page, '.sheet')).toEqual([]);
+});
+
+/**
+ * Points of a visible control in `selector` (every pixel of its edge rows, a 2px grid inside, within what
+ * its scrollers show) where a tap lands on a control in `thief` above it: a neighbour's grown hit area.
+ */
+function stolen(page: Page, selector: string, thief: string) {
+  return page.evaluate(
+    ([sel, by]) => {
+      const control = (el: Element | null) => el?.closest(by);
+      const out: string[] = [];
+      for (const el of document.querySelectorAll<HTMLElement>(sel)) {
+        let { left, top, right, bottom } = el.getBoundingClientRect();
+        for (let a = el.parentElement; a; a = a.parentElement) {
+          if (getComputedStyle(a).overflow === 'visible') continue;
+          const r = a.getBoundingClientRect();
+          [left, top, right, bottom] = [
+            Math.max(left, r.left),
+            Math.max(top, r.top),
+            Math.min(right, r.right),
+            Math.min(bottom, r.bottom),
+          ];
+        }
+        if (right - left < 2 || bottom - top < 2) continue;
+        const ys = new Set<number>();
+        // Pixel rows and columns whose centres (+0.5) fall inside: the first and last are the edges.
+        const [y0, y1, x0] = [Math.ceil(top - 0.5), Math.ceil(bottom - 0.5) - 1, Math.ceil(left - 0.5)];
+        for (let y = y0; y <= y1; y += 2) ys.add(y);
+        ys.add(y0).add(y1);
+        // Pixel centres, plus the top and left edges themselves: a touch can land exactly on a boundary.
+        const points: [number, number][] = [];
+        for (const y of ys) for (let x = x0; x + 0.5 < right; x += y === y0 || y === y1 ? 1 : 2) points.push([x + 0.5, y + 0.5]);
+        for (let x = x0; x + 0.5 < right; x++) points.push([x + 0.5, top]);
+        for (let y = y0; y + 0.5 < bottom; y++) points.push([left, y + 0.5]);
+        let n = 0;
+        let to = '';
+        for (const [x, y] of points) {
+          const hit = document.elementFromPoint(x, y);
+          if (!hit || el.contains(hit) || !control(hit)) continue;
+          // Under another control, not outside its own shape (a rounded corner).
+          if (!document.elementsFromPoint(x, y).includes(el)) continue;
+          n++;
+          to = control(hit)!.className;
+        }
+        if (n) out.push(`${el.getAttribute('aria-label') || el.textContent!.trim().slice(0, 30)}: ${n} points to ${to}`);
+      }
+      return out;
+    },
+    [selector, thief],
+  );
+}
+
+test("a tap on a control's edge is never a neighbour's", async ({ page }) => {
+  const name = await open(page);
+  // A crowded lunch: its list scrolls, and the + sits right under the last meal showing.
+  for (const [i, title] of ['Lentil soup', 'Pita wraps', 'Fried rice', 'Tomato salad'].entries())
+    await seedDoc(name, 'meals', { id: `crowd${i}`, date: '2026-11-04', category: 'lunch', title, order: 10 + i, createdAt: 1 });
+  await rail(page, 'Meals').click();
+  const cell = page.locator('[data-cell="2026-11-04|lunch"]');
+  await expect(cell.locator('.mg-entry', { hasText: 'Tomato salad' })).toBeAttached();
+  expect(await stolen(page, '[data-cell="2026-11-04|lunch"] .mg-entry', '.mg-add')).toEqual([]);
+
+  // Column heads: the star pill over the section buttons and over a scrolled column's cards.
+  await rail(page, 'Tasks').click();
+  await expect(page.locator('[data-column="asiyah"] .tk-sec').first()).toBeVisible();
+  expect(await stolen(page, '.pcol .tk-sec, .pcol .tk-card button', '.pill')).toEqual([]);
+  await rail(page, 'Rewards').click();
+  const body = page.locator('[data-column="asiyah"] .pcol-body');
+  await expect(body.locator('.rw-card').first()).toBeVisible();
+  for (const by of [7, 23, 41]) {
+    await body.evaluate((el, y) => (el.scrollTop = y), by);
+    expect(await stolen(page, '[data-column="asiyah"] .rw-card button', '.pill')).toEqual([]);
+  }
 });
 
 test('no text on the wall is under 1.3rem, and the glance text is bigger', async ({ page }) => {

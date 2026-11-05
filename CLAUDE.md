@@ -80,7 +80,9 @@ flowchart LR
   written back. Writes start from the store's current document, not the
   copy an editor opened with. An editor or popover whose document is
   deleted elsewhere closes itself through `useCloseWhenGone`
-  (`ui/overlays.tsx`), with a toast for an editor. The settings document
+  (`ui/overlays.tsx`), with a toast for an editor, and refuses the PIN
+  pad, confirmation or choice it had open (they asked about what is gone);
+  an editor's save also treats an archived document as gone. The settings document
   follows the same rule: `saveSettings` merges, so a change names only the
   fields it changes (`{ filter: { weather: false } }`, never the whole
   filter from this tablet's copy), and the change builders in
@@ -177,7 +179,8 @@ flowchart LR
 - **Parental lock** (`core/lock.ts`): with a PIN set, only checking off tasks
   is open; wrap every other mutation in `asParent(() => ...)` or
   `await requireParent()`; an editor asks again on Save, since the lock can
-  relock behind an open sheet. Repeated wrong PINs pause the pad
+  relock behind an open sheet. The pad blurs the focused field when it
+  opens, so the on-screen keyboard closes. Repeated wrong PINs pause the pad
   (`core/pin.ts`, in memory). The Calendar filter is a view preference and
   stays open.
 - **Display** (`core/display.ts`): night window switches to the dark theme
@@ -216,11 +219,18 @@ so `1rem` = 10 design px. Use rem for every size. Tokens are CSS variables in
   pills, segments, toggles and chips get a centered `::before` hit area from
   the shared rule at the top of `ui/ui.css`; add a class there rather than a
   per-feature `::after`. A control with `overflow: hidden` clips its own hit
-  area: size it to `--touch` instead.
+  area: size it to `--touch` instead. The growth must not reach over another
+  control (it would take that control's taps): a control flush against one
+  (the Meals `+` under its cell's list) stays out of the rule
+  (`tests/e2e/layout-fit.spec.ts` checks the edges).
 - **Text on a profile or category color** uses the color's ink,
   `color: lch(from var(--c) calc((50 - l) * infinity) 0 0)` (white on dark
-  colors, black on light ones), after a `color: #fff` fallback. The palette
-  has both kinds.
+  colors, black on light ones). The palette has both kinds. Write it as
+  `color: #fff` and, nested in the same rule, `@supports (color: lch(from
+  red l c h)) { color: <the ink>; }`: a WebView without relative colors
+  does not drop a declaration with `var()` in it but computes it to the
+  inherited color, and the minifier merges two `color` declarations into
+  the last (`tests/unit/css-ink.test.ts`).
 - **Sizes for the room**: no text under 1.3rem. The glance text is bigger:
   top bar date and time 4.2rem, progress pills 2rem, task titles 2rem,
   event titles 1.6rem (schedule blocks) to 1.8rem (cards).

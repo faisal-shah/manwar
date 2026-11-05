@@ -4,24 +4,14 @@
  * Touch targets: a control takes at least --touch (5.6rem) of the screen
  * for a finger even where it draws smaller (pills, segments, toggles,
  * chips). The ::before grows the hit area evenly around it; a control that
- * is already big enough gets none. Neighbours may share a sliver of it.
+ * is already big enough gets none. The growth may fill the gap to a
+ * neighbour but must not reach over another control's box: a hit area
+ * painted over a control (anything later in the page) takes its taps.
  */
-:where(.btn, .icon-btn, .ctl, .seg button, .chip, .toggle, .toast button, .swatches button, .pill, .cal-week-add, .mg-add) {
+:where(.btn, .icon-btn, .ctl, .seg button, .chip, .toggle, .toast button, .swatches button, .pill, .cal-week-add) {
   position: relative;
 }
-:where(
-  .btn,
-  .icon-btn,
-  .ctl,
-  .seg button,
-  .chip,
-  .toggle,
-  .toast button,
-  .swatches button,
-  .pill,
-  .cal-week-add,
-  .mg-add
-)::before {
+:where(.btn, .icon-btn, .ctl, .seg button, .chip, .toggle, .toast button, .swatches button, .pill, .cal-week-add)::before {
   content: '';
   position: absolute;
   top: min(0rem, calc(50% - var(--touch) / 2));
@@ -180,9 +170,11 @@
   border-radius: 50%;
   background: var(--c);
   color: #fff;
-  color: lch(from var(--c) calc((50 - l) * infinity) 0 0);
   font-weight: 700;
   line-height: 1;
+  @supports (color: lch(from red l c h)) {
+    color: lch(from var(--c) calc((50 - l) * infinity) 0 0);
+  }
 }
 .avatar.emoji {
   background: color-mix(in srgb, var(--c) 30%, var(--tint-base));

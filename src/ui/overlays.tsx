@@ -78,11 +78,13 @@ export function useScrimClose(onClose: () => void): (e: MouseEvent) => void {
 /**
  * Close an editor or popover once what it shows is gone from the store
  * (deleted on another device), so a save cannot bring it back or fail;
- * `message` says why it closed.
+ * `message` says why it closed. A PIN pad, confirmation or choice it opened
+ * (Save, Delete) asks about something that is gone, so it is refused too.
  */
 export function useCloseWhenGone(gone: boolean, onClose: () => void, message?: string): void {
   useEffect(() => {
     if (!gone) return;
+    refuseDialogs();
     onClose();
     if (message) toast(message);
   }, [gone]);
@@ -281,6 +283,15 @@ export function choose<T extends string>(title: string, options: { value: T; lab
   });
 }
 
+/** Answer every open confirmation, choice and PIN request as cancelled. */
+function refuseDialogs(): void {
+  confirmReq.peek()?.resolve(false);
+  confirmReq.value = null;
+  chooseReq.peek()?.resolve(null);
+  chooseReq.value = null;
+  pinRequest.peek()?.resolve(false);
+}
+
 export function DialogHost() {
   const c = confirmReq.value;
   const ch = chooseReq.value;
@@ -340,6 +351,9 @@ function PinPadHost() {
   useEffect(() => {
     setPin('');
     setBad(false);
+    // A field still being typed in (Add item's check or the keyboard's Done, after the lock relocked) would keep
+    // the on-screen keyboard over the lower keys and take the digits typed on it: let go of it, so the keyboard closes.
+    if (req && document.activeElement instanceof HTMLElement) document.activeElement.blur();
   }, [req]);
   if (!req) return null;
   const pausedFor = Math.ceil((pinPausedUntil.value - nowMs.value) / 1000);

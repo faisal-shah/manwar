@@ -81,6 +81,21 @@ describe('task write guard', () => {
     inSync();
   });
 
+  it('writes nothing for an occurrence another tablet took away (task deleted, assignee changed)', () => {
+    const [o] = occurrencesFor(today.value);
+    data.tasks.value = [{ ...task, archived: true }];
+    expect(completeTask(o, 'kid', today.value)).toBeNull();
+    data.tasks.value = [{ ...task, assignees: ['other'] }];
+    expect(completeTask(o, 'kid', today.value)).toBeNull();
+    expect(commits.n).toBe(0);
+  });
+
+  it('awards no stars to a profile deleted meanwhile (an Up for Grabs claim)', () => {
+    const [o] = occurrencesFor(today.value);
+    expect(completeTask(o, 'gone', today.value)).toBeNull();
+    expect(commits.n).toBe(0);
+  });
+
   it('holds only the keys of the write in flight', () => {
     data.tasks.value = [task, { ...task, id: 't2', title: 'Water plants' }];
     const [a, b] = occurrencesFor(today.value);

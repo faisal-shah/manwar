@@ -54,11 +54,11 @@ function TaskEditor({ task, onClose }: { task: Task | null; onClose: () => void 
     void asParent(() => {
       const order = task?.order ?? Math.max(0, ...data.tasks.value.map((t) => t.order)) + 1;
       // The stored task, not the copy the editor opened with: a check-off meanwhile may have moved lastDone.
-      const base = (task && data.tasks.value.find((t) => t.id === task.id)) ?? task;
-      // Deleted on another device while the PIN pad was up: nothing to save onto.
-      if (task && !data.tasks.value.some((t) => t.id === task.id)) return;
-      const out = taskFrom(draft, base ?? { id: newId(), order, createdAt: currentTime() });
-      void saveEdited('tasks', out, !task, savedFields(draft, base));
+      const live = task && data.tasks.value.find((t) => t.id === task.id);
+      // Deleted (archived) on another device while the PIN pad was up: nothing to save onto.
+      if (task && (!live || live.archived)) return;
+      const out = taskFrom(draft, live || { id: newId(), order, createdAt: currentTime() });
+      void saveEdited('tasks', out, !task, savedFields(draft, live || null));
       toast(task ? `Saved "${out.title}"` : `Added "${out.title}"`);
       onClose();
     }, 'Enter the PIN to save the task.');
