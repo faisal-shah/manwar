@@ -20,6 +20,11 @@ const expect = baseExpect.configure({ timeout: 15_000 });
 test.describe.configure({ timeout: 120_000 });
 const RUN = Date.now().toString(36);
 
+// Every wall and phone a test opened is its own browser context: close them, or a worker holds them all.
+test.afterEach(async ({ browser }) => {
+  await Promise.all(browser.contexts().map((c) => c.close()));
+});
+
 test('a phone pairs from the wall, opens its own layout, and stays paired after a reload', async ({ browser }) => {
   const household = `e2e-pair-${RUN}-ok`;
   const w = await wall(browser, household);
@@ -171,7 +176,9 @@ test('with a PIN set, each new code asks for it, even while the wall is unlocked
   expect(w.errors).toEqual([]);
 });
 
-test('a paired device switched to the wall layout is a wall: it asks for the PIN', async ({ browser }) => {
+test('a paired device switched to the wall layout is a wall: it asks for the PIN, and About switches it back', async ({
+  browser,
+}) => {
   const household = `e2e-pair-${RUN}-walllayout`;
   const w = await wall(browser, household);
   const p = await pairPhone(browser, w.page, household, 'Kids tablet');
@@ -179,9 +186,43 @@ test('a paired device switched to the wall layout is a wall: it asks for the PIN
   await p.page.getByRole('button', { name: 'More' }).click();
   await p.page.getByRole('button', { name: 'This phone' }).click();
   await p.page.waitForTimeout(500);
-  await p.page.getByRole('button', { name: 'Use the wall layout here' }).click();
+  // It asks first, saying what changes; Cancel keeps the phone.
+  const useWall = p.page.getByRole('button', { name: 'Use the wall layout here' });
+  await useWall.click();
+  const ask = p.page.getByRole('dialog', { name: 'Use the wall layout here?' });
+  await expect(ask).toContainText('It asks for the parent PIN before changes, as the wall does.');
+  await expect(ask).toContainText("Its screen dims and sleeps on the wall's night and sleep schedule.");
+  await ask.getByRole('button', { name: 'Cancel' }).click();
+  await expect(ask).toHaveCount(0);
+  await expect(p.page.locator('html')).toHaveAttribute('data-layout', 'phone');
+  await useWall.click();
+  await ask.getByRole('button', { name: 'Use the wall layout' }).click();
   await expect(p.page.locator('.shell')).toBeVisible({ timeout: 30_000 });
   await p.page.locator('.rail button', { hasText: 'Settings' }).click();
-  await expect(p.page.getByRole('dialog', { name: 'Parent PIN' })).toBeVisible();
+  await enterPin(p.page);
+  await p.page.getByRole('button', { name: 'About' }).click();
+  await p.page.getByRole('button', { name: 'Use the phone layout here' }).click();
+  await expect(p.page.locator('.ph-nav')).toBeVisible({ timeout: 30_000 });
+  expect(await p.page.evaluate(() => localStorage.getItem('manwar.layout.v1'))).toBe('phone');
   expect([...w.errors, ...p.errors]).toEqual([]);
+});
+
+test('the wall offers the phone layout only on a device that could be a phone', async ({ browser }) => {
+  const household = `e2e-pair-${RUN}-phonelayout`;
+  // A tablet's wall (not paired) does not offer it.
+  const w = await wall(browser, household);
+  await w.page.locator('.rail button', { hasText: 'Settings' }).click();
+  await w.page.getByRole('button', { name: 'About' }).click();
+  await expect(w.page.locator('.set-page')).toContainText('Household account');
+  await expect(w.page.getByRole('button', { name: 'Use the phone layout here' })).toHaveCount(0);
+  // A phone-sized screen in the wall layout does.
+  const page = await (await newContext(browser, { ...devices['Pixel 7'], timezoneId: 'America/Chicago' })).newPage();
+  await page.goto(`/?demo=${household}&layout=wall&${NOW}`);
+  await expect(page.locator('.shell')).toBeVisible({ timeout: 30_000 });
+  await page.locator('.rail button', { hasText: 'Settings' }).click();
+  await page.getByRole('button', { name: 'About' }).click();
+  await page.getByRole('button', { name: 'Use the phone layout here' }).click();
+  await expect(page.locator('.ph-nav')).toBeVisible({ timeout: 30_000 });
+  expect(new URL(page.url()).searchParams.get('layout')).toBeNull();
+  expect(w.errors).toEqual([]);
 });

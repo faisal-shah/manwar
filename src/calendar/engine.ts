@@ -426,19 +426,29 @@ export function passesHidden(ev: CalEvent, hidden: readonly string[]): boolean {
 /** Is the event shown under the household's calendar filter (the wall's)? */
 export const passesFilter = (ev: CalEvent): boolean => passesHidden(ev, settings.value.filter.hiddenProfiles);
 
-/** Events overlapping [from, to] (inclusive ISO dates), filtered. */
-export function eventsBetween(from: ISODate, to: ISODate): CalEvent[] {
+/**
+ * Events overlapping [from, to] (inclusive ISO dates) that pass the filter
+ * hiding `hidden` (passesHidden): the household's, unless a view has its own
+ * (the phone's people filter).
+ */
+export function eventsBetween(
+  from: ISODate,
+  to: ISODate,
+  hidden: readonly string[] = settings.value.filter.hiddenProfiles,
+): CalEvent[] {
   const a = dateAt(from).getTime();
   const b = dateAt(addDays(to, 1)).getTime();
-  return events.value.filter((e) => endMs(e) > a && e.start.getTime() < b && passesFilter(e));
+  return events.value.filter((e) => endMs(e) > a && e.start.getTime() < b && passesHidden(e, hidden));
 }
 
 /** End instant for overlap tests: a zero-length event counts as an instant long, so it lands on its start day. */
 const endMs = (e: CalEvent) => Math.max(e.end.getTime(), e.start.getTime() + 1);
 
-/** Events on one day, all-day first, then by start. */
-export function eventsOn(day: ISODate): CalEvent[] {
-  return eventsBetween(day, day).sort((x, y) => Number(y.allDay) - Number(x.allDay) || x.start.getTime() - y.start.getTime());
+/** Events on one day, all-day first, then by start, filtered as eventsBetween is. */
+export function eventsOn(day: ISODate, hidden?: readonly string[]): CalEvent[] {
+  return eventsBetween(day, day, hidden).sort(
+    (x, y) => Number(y.allDay) - Number(x.allDay) || x.start.getTime() - y.start.getTime(),
+  );
 }
 
 /** ISO dates an event covers (all-day end is exclusive; a zero-length event is on its start day). */
@@ -585,8 +595,13 @@ async function fetchFarCountdowns(answered: Set<string>): Promise<{ found: CalEv
   };
 }
 
-/** Countdown events within the configured window, soonest first, one per series. */
-export const countdowns = computed(() => {
+/**
+ * Countdown events within the configured window, soonest first, one per
+ * series, of the events that pass the filter hiding `hidden`
+ * (passesHidden). Read inside a render or computed, it follows the signals
+ * it reads.
+ */
+export function countdownsFor(hidden: readonly string[]): { ev: CalEvent; days: number }[] {
   void data.eventMeta.value;
   const t0 = today.value;
   const win = settings.value.countdownWindow;
@@ -595,14 +610,17 @@ export const countdowns = computed(() => {
   const out: { ev: CalEvent; days: number }[] = [];
   for (const ev of [...events.value, ...farCountdowns.value]) {
     const day = toISODate(ev.start);
-    if (day < t0 || day > horizon || !passesFilter(ev)) continue;
+    if (day < t0 || day > horizon || !passesHidden(ev, hidden)) continue;
     const series = eventKey(ev.calendarId, ev.seriesId ?? ev.id);
     if (seen.has(series) || !metaFor(ev)?.countdown) continue;
     seen.add(series);
     out.push({ ev, days: diffDays(t0, day) });
   }
   return out.sort((a, b) => a.days - b.days);
-});
+}
+
+/** The wall's countdowns: under the household's filter. */
+export const countdowns = computed(() => countdownsFor(settings.value.filter.hiddenProfiles));
 
 /* ---------- Writes ---------- */
 

@@ -141,6 +141,17 @@ html[data-layout='phone'] {
   font-weight: 400;
   font-size: 2.2rem;
 }
+/* Nothing there yet, and the button that adds it (Plan dinner). */
+.ph-none {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.8rem 1.2rem;
+}
+.ph-none p {
+  margin: 0;
+  flex: 1 1 16rem;
+}
 .ph-about {
   display: flex;
   flex-direction: column;

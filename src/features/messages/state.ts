@@ -1,6 +1,7 @@
 import { computed, signal } from '@preact/signals';
 import { asParent } from '../../core/lock';
-import { data, newId, patch, put } from '../../data/store';
+import { data, fieldChanges, newId, patch, put } from '../../data/store';
+import type { Message } from '../../data/types';
 import { currentTime } from '../../lib/clock';
 import { openMessages } from './logic';
 
@@ -23,6 +24,11 @@ export function postMessage(text: string, from: string | undefined, readAloud: b
 /** Anyone at the wall can dismiss a message. */
 export function dismissMessage(id: string): void {
   void patch('messages', id, { dismissedAt: currentTime() });
+}
+
+/** Put a dismissed message back (Undo): it shows again in its place by age. A message deleted meanwhile stays gone. */
+export function restoreMessage(id: string): void {
+  void patch('messages', id, fieldChanges({ dismissedAt: undefined }) as Partial<Message>);
 }
 
 export const canSpeak = () => typeof window !== 'undefined' && 'speechSynthesis' in window;

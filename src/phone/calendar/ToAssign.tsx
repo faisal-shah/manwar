@@ -63,7 +63,7 @@ export function ToAssign() {
     <div class="phc-assign" {...guard}>
       <p class="muted phc-assign-intro">
         {left
-          ? 'Tap who each event is for. A repeating event is assigned every time it repeats.'
+          ? 'Tap who each event is for. A repeating event says whether that is every time it repeats or this time only.'
           : rows.length
             ? 'All events are assigned.'
             : ''}

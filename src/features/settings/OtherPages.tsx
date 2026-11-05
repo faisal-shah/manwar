@@ -2,7 +2,9 @@ import type { ComponentChildren, FunctionComponent } from 'preact';
 import { demoMode } from '../../config';
 import { requireParent, unlocked } from '../../core/lock';
 import { settings } from '../../data/store';
-import { session } from '../../data/session';
+import { pairedDevice, session } from '../../data/session';
+import { chooseLayout, switchLayout } from '../../app/layout';
+import { Button } from '../../ui/controls';
 import { version } from '../../../package.json';
 import { buildId } from '../../config';
 import { Wordmark } from '../../ui/Logo';
@@ -75,6 +77,10 @@ export function TasksPage() {
   );
 }
 
+/** A paired phone switched to the wall layout, or a screen the size of a phone (layout.ts's rule). */
+const likelyPhone = () =>
+  !!pairedDevice() || chooseLayout(null, null, Math.min(window.screen.width, window.screen.height)) === 'phone';
+
 export function AboutPage() {
   return (
     <>
@@ -95,6 +101,15 @@ export function AboutPage() {
           <span class="set-value">{session.value.account ?? 'Not connected'}</span>
         </Row>
       </Group>
+      {likelyPhone() && (
+        <Group title="This device">
+          <Row label="Phone layout" hint="The phone companion, made for a phone's screen.">
+            <Button small onClick={() => switchLayout('phone')}>
+              Use the phone layout here
+            </Button>
+          </Row>
+        </Group>
+      )}
       {demoMode && (
         <Group title="Demo mode">
           <Row

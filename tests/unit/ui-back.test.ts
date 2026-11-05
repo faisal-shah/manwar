@@ -161,6 +161,21 @@ describe('back stack', () => {
     expect(f.depth).toBe(1);
   });
 
+  it('gives nothing back once the page is being replaced (a layout switch after its confirmation)', () => {
+    const { f, s } = setup();
+    s.open('tab', () => {});
+    const confirm = s.open('overlay', () => {});
+    f.settle();
+    expect(f.depth).toBe(2);
+    s.leave();
+    confirm();
+    s.open('overlay', () => {});
+    f.settle();
+    // No traversal (it would cancel the reload), and no push.
+    expect(f.depth).toBe(2);
+    expect(f.length).toBe(3);
+  });
+
   it('goes back over the entries a reload left behind', () => {
     const { f, s } = setup(0);
     f.h.push(1);

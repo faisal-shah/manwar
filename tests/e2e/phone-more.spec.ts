@@ -108,6 +108,56 @@ test('a note posted on the phone pops up on the wall; dismissed on either side, 
   expect([...w.errors, ...p.errors]).toEqual([]);
 });
 
+test('a note dismissed on the phone comes back with Undo, on the wall too', async ({ browser }) => {
+  const hh = name('noteundo');
+  const w = await wall(browser, hh);
+  const p = await phone(browser, hh);
+  await more(p.page, 'Note to the wall');
+  await p.page.getByLabel('Note', { exact: true }).fill('Shoes by the door');
+  await p.page.getByRole('button', { name: 'Post to the wall' }).click();
+  const note = w.page.locator('.message-layer');
+  await expect(note).toContainText('Shoes by the door');
+  const shown = p.page.locator('.pn-note', { hasText: 'Shoes by the door' });
+  await shown.getByRole('button', { name: /^Dismiss/ }).click();
+  await expect(note).toHaveCount(0);
+  const undo = p.page.locator('.toast', { hasText: 'Note dismissed.' }).getByRole('button', { name: 'Undo' });
+  await undo.click();
+  await expect(note).toContainText('Shoes by the door');
+  await expect(shown).toContainText('Showing');
+  // On the server it is undismissed, not a copy.
+  const docs = (await (await fetch(`${FS}/households/demo-${hh}/messages`, { headers: OWNER })).json()) as {
+    documents: { fields: Record<string, unknown> }[];
+  };
+  expect(docs.documents).toHaveLength(1);
+  expect(docs.documents[0].fields.dismissedAt).toBeUndefined();
+  expect([...w.errors, ...p.errors]).toEqual([]);
+});
+
+test('a phone signed in as the wall can sign out, only itself, and is told to pair instead', async ({ browser }) => {
+  const hh = name('signout');
+  const w = await wall(browser, hh);
+  const p = await phone(browser, hh);
+  await more(p.page, 'This phone');
+  await expect(p.page.locator('.ph-body')).toContainText('Signed in with demo@manwar.local, as the wall is.');
+  await expect(p.page.locator('.ph-body')).toContainText('To pair this one, sign out, then pair it from the wall');
+  await p.page.getByRole('button', { name: 'Sign out of this phone' }).click();
+  const ask = p.page.getByRole('dialog', { name: 'Sign out of this phone?' });
+  await expect(ask).toContainText('Only this phone signs out');
+  await ask.getByRole('button', { name: 'Cancel' }).click();
+  await expect(p.page.locator('.ph-head h1')).toHaveText('This phone');
+  // A demo page signs itself in again as the wall; a real one stays signed out. Refuse that sign-in here.
+  await p.page.route('**/accounts:signInWithCustomToken**', (r) => r.abort());
+  await p.page.getByRole('button', { name: 'Sign out of this phone' }).click();
+  await p.page.getByRole('dialog', { name: 'Sign out of this phone?' }).getByRole('button', { name: 'Sign out' }).click();
+  await expect(p.page.getByRole('heading', { name: 'Pair this phone' })).toBeVisible({ timeout: 20_000 });
+  // The wall is still signed in and syncing.
+  await w.page.locator('.rail button', { hasText: 'Lists' }).click();
+  await expect(w.page.locator('.shell')).toBeVisible();
+  await expect(w.page.locator('.sync-status')).toHaveCount(0);
+  expect(w.errors).toEqual([]);
+  expect(p.errors.filter((e) => !/auth\/network-request-failed|ERR_FAILED/.test(e))).toEqual([]);
+});
+
 test('a half-written note survives a reload (an update applied while the phone sat idle)', async ({ browser }) => {
   const hh = name('draft');
   await wall(browser, hh);
@@ -392,7 +442,8 @@ test('a double tap on This phone or Stars and rewards presses nothing in the vie
   const p = await pairPhone(browser, w.page, hh);
   await p.page.locator('.ph-nav').getByRole('button', { name: 'More' }).click();
   await doubleTapOnto(p.page, 'This phone', p.page.getByRole('button', { name: 'Use the wall layout here' }));
-  // Still the phone, and still on This phone: the second tap did not switch the layout.
+  // Still the phone, and still on This phone: the second tap neither asked to switch the layout nor switched it.
+  await expect(p.page.getByRole('dialog')).toHaveCount(0);
   await expect(p.page.locator('html')).toHaveAttribute('data-layout', 'phone');
   expect(await p.page.evaluate(() => localStorage.getItem('manwar.layout.v1'))).toBe('phone');
   await p.page.locator('.ph-back').click();

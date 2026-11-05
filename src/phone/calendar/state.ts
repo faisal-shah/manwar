@@ -1,6 +1,9 @@
-import { signal } from '@preact/signals';
+import { computed, signal } from '@preact/signals';
+import { loadedRange, sync } from '../../calendar/engine';
+import { profiles } from '../../data/store';
 import type { ISODate } from '../../data/types';
 import { stored } from '../../lib/stored';
+import { hiddenBy } from './filter';
 
 type CalView = 'agenda' | 'assign';
 
@@ -22,3 +25,19 @@ const isIds = (v: unknown): v is string[] => Array.isArray(v) && v.every((x) => 
 
 /** The people the agenda shows (filter.ts), kept on this phone. */
 export const shownPeople = stored<string[]>('manwar.phone.calPeople.v1', [], isIds);
+
+/** The profiles that filter hides, for the engine's `hidden` arguments: the Calendar tab and Today show the same events. */
+export const hiddenPeople = computed(() =>
+  hiddenBy(
+    shownPeople.value,
+    profiles.value.map((p) => p.id),
+  ),
+);
+
+/**
+ * What the agenda and Today say while no events are known yet (no fetch has
+ * answered and there is no offline snapshot); null once there are.
+ */
+export const notLoaded = computed(() =>
+  loadedRange.value ? null : sync.value.error ? 'The calendar could not be loaded yet.' : 'Loading the calendar…',
+);

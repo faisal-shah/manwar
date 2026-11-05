@@ -6,7 +6,7 @@ import { asParent } from '../../core/lock';
 import { profileById, profiles } from '../../data/store';
 import type { Message } from '../../data/types';
 import { MAX_MESSAGE_LENGTH, timeAgo } from '../../features/messages/logic';
-import { dismissMessage, pending, postMessage } from '../../features/messages/state';
+import { dismissMessage, pending, postMessage, restoreMessage } from '../../features/messages/state';
 import { nowMs } from '../../lib/clock';
 import { Button, Field, SettingRow, Toggle } from '../../ui/controls';
 import { stored } from '../../lib/stored';
@@ -134,12 +134,18 @@ function NoteRow({ m, waiting }: { m: Message; waiting: boolean }) {
           {timeAgo(m.createdAt, nowMs.value)}
         </span>
         {/* Anyone at the wall may dismiss a note; so may a phone. */}
-        <Button small onClick={() => dismissMessage(m.id)} aria-label={`Dismiss: ${m.text}`}>
+        <Button small onClick={() => dismiss(m)} aria-label={`Dismiss: ${m.text}`}>
           Dismiss
         </Button>
       </div>
     </li>
   );
+}
+
+/** Dismiss a note on the wall, with a moment to take it back. */
+function dismiss(m: Message): void {
+  dismissMessage(m.id);
+  toast('Note dismissed.', { label: 'Undo', run: () => restoreMessage(m.id) });
 }
 
 /**

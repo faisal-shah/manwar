@@ -313,6 +313,10 @@ test('one lesson of a series that has people waits alone and is assigned alone',
   await page.locator('.phc-waiting').click();
   const row = page.locator('[data-triage="family@demo::reading"]');
   await expect(row).toContainText('This time only');
+  // The intro does not promise every time for a row that says this time only.
+  await expect(page.locator('.phc-assign-intro')).toHaveText(
+    'Tap who each event is for. A repeating event says whether that is every time it repeats or this time only.',
+  );
   await expect(row).toContainText('Thursday, Nov 5');
   await row.getByRole('button', { name: 'Hashim!', exact: true }).click();
   await expect(row).toContainText('For Hashim!');
