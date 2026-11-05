@@ -65,7 +65,8 @@
   min-height: 0;
   /* Any column can be the one under the + button (they scroll sideways). */
   padding: 0 1.2rem var(--fab-clear);
-  overscroll-behavior: contain;
+  /* Vertical only: a sideways swipe on the cards must still reach .pcols and page the columns. */
+  overscroll-behavior-y: contain;
 }
 
 .pill {
