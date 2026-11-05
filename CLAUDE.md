@@ -582,6 +582,11 @@ generated from it: `node scripts/icons/render.mjs` after any brand change.
   - The `isDefaultGrocery` flag only ever passes to a grocery list (on
     delete, or to a new grocery list when none has it); with none, the
     next Add to grocery list makes a "Grocery List".
+  - A done item added again (Add item, the ingredients merge) is written
+    whole as a merge (`reopenedItem`, `upsert`), so one cleared meanwhile
+    on another device comes back rather than the write being refused
+    (the merge's whole batch with it). A refused item write says so in a
+    toast (`notSaved`).
   - `IngredientsHost` is mounted once in `app/tabs.tsx` `Overlays`, so
     `openIngredients` works from any tab (the planned-meal toast).
   - Editing one occurrence of a repeating meal goes through

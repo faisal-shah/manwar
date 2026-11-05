@@ -83,6 +83,28 @@ export function reorder(
   return out;
 }
 
+/**
+ * A checked-off item put back on its list ("add again"): open, at `order`,
+ * in `sectionId` (null: none), with `qty` when one was given. It names
+ * everything the item is, written as a merge, so an item deleted meanwhile
+ * on another device (Clear done there) comes back whole: an update of a
+ * missing item is refused, and the item would vanish here too. An undefined
+ * sectionId deletes the field.
+ */
+export function reopenedItem(prior: ListItem, order: number, sectionId: string | null, qty?: string): Partial<ListItem> {
+  const q = qty || prior.qty;
+  return {
+    id: prior.id,
+    listId: prior.listId,
+    text: prior.text,
+    createdAt: prior.createdAt,
+    done: false,
+    order,
+    sectionId: sectionId ?? undefined,
+    ...(q ? { qty: q } : {}),
+  };
+}
+
 export interface MergeItem {
   name: string;
   qty?: string;

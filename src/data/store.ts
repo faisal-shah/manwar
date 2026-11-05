@@ -409,6 +409,11 @@ export function batch() {
       b.update(docRef(name, id), partial as object);
       return api;
     },
+    /** Write only the fields in `partial`, creating the document when it does not exist (as upsert does). */
+    upsert<K extends CollectionName>(name: K, id: string, partial: Partial<Collections[K]>) {
+      b.set(docRef(name, id), fieldChanges(partial), { merge: true });
+      return api;
+    },
     remove(name: CollectionName, id: string) {
       b.delete(docRef(name, id));
       return api;

@@ -8,6 +8,7 @@ import {
   moveBy,
   nextDefaultGrocery,
   placeMerge,
+  reopenedItem,
   reorder,
   topOrder,
 } from '../../src/features/lists/logic';
@@ -205,5 +206,27 @@ describe('groceryItemId', () => {
   it('takes a fresh id when an item on the list already has it (renamed since)', () => {
     const id = groceryItemId('g', 'Milk', [], fresh);
     expect(groceryItemId('g', 'Milk', [{ id }], fresh)).toBe('fresh');
+  });
+});
+
+describe('reopenedItem', () => {
+  const milk = item('Milk', { sectionId: 'dairy', qty: '1 gal', done: true, doneAt: 5, createdAt: 3 });
+  it('is a whole item, so one deleted meanwhile on another device is written back complete', () => {
+    expect(reopenedItem(milk, -4, 'dairy')).toEqual({
+      id: milk.id,
+      listId: 'g',
+      text: 'Milk',
+      createdAt: 3,
+      done: false,
+      order: -4,
+      sectionId: 'dairy',
+      qty: '1 gal',
+    });
+  });
+  it('takes a quantity typed with it, and leaves its section (the field deleted) when added without one', () => {
+    const out = reopenedItem(milk, 0, null, '2');
+    expect(out.qty).toBe('2');
+    expect('sectionId' in out && out.sectionId === undefined).toBe(true);
+    expect('qty' in reopenedItem({ ...milk, qty: undefined }, 0, null)).toBe(false);
   });
 });

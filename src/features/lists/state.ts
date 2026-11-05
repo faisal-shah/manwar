@@ -1,14 +1,17 @@
 import { computed, signal } from '@preact/signals';
 import { arrayUnion, deleteField } from 'firebase/firestore';
-import { batch, data, fieldChanges, newId, patch, put } from '../../data/store';
+import { errorMessage } from '../../data/errors';
+import { batch, data, fieldChanges, newId, patch, put, upsert } from '../../data/store';
 import type { List, ListItem, ListKind, ListSection } from '../../data/types';
 import { currentTime } from '../../lib/clock';
+import { toast } from '../../ui/overlays';
 import {
   defaultGroceryList,
   groceryItemId,
   itemKey,
   nextDefaultGrocery,
   placeMerge,
+  reopenedItem,
   sectionOf,
   topOrder,
   type MergeItem,
@@ -59,6 +62,12 @@ export function toggleCollapsed(key: string): void {
 
 /* ---------- Items ---------- */
 
+/** Say why a write the server refused rolled back here, instead of the items vanishing silently. */
+const notSaved = (what: string) => (e: unknown) => {
+  console.warn('lists: write refused', e);
+  toast(`${what}: ${errorMessage(e)}`);
+};
+
 const settleTimers = new Map<string, number>();
 
 function unsettle(id: string): void {
@@ -99,14 +108,10 @@ export function addItem(list: List, text: string, sectionId: string | null, qty?
     if (open) return { kind: 'already', item: open };
     const done = items.filter((i) => i.done && itemKey(i.text) === key).sort((a, b) => (b.doneAt ?? 0) - (a.doneAt ?? 0))[0];
     if (done) {
-      const own = sectionOf(list, done);
-      const section = sectionId ?? own;
-      void patch('listItems', done.id, {
-        done: false,
-        order: topOrder(list, items, section),
-        ...(section === own ? {} : { sectionId: (section ?? deleteField()) as string }),
-        ...(qty ? { qty } : {}),
-      });
+      const section = sectionId ?? sectionOf(list, done);
+      void upsert('listItems', done.id, reopenedItem(done, topOrder(list, items, section), section, qty)).catch(
+        notSaved(`"${done.text}" was not added back`),
+      );
       return { kind: 'reopened', item: done };
     }
   }
@@ -120,7 +125,7 @@ export function addItem(list: List, text: string, sectionId: string | null, qty?
     order: topOrder(list, items, sectionId),
     createdAt: currentTime(),
   };
-  void put('listItems', item);
+  void put('listItems', item).catch(notSaved(`"${text}" was not added`));
   return { kind: 'added', item };
 }
 
@@ -163,9 +168,9 @@ export function mergeItems(list: List, rows: MergeItem[]): () => void {
   const taken = items.map((i) => ({ id: i.id }));
   for (const { row, prior, order } of placeMerge(list, items, rows)) {
     if (prior) {
-      const change: Partial<ListItem> = { done: false, order, ...(row.qty ? { qty: row.qty } : {}) };
-      reopened.push({ id: prior.id, was: Object.fromEntries(Object.keys(change).map((k) => [k, prior[k as keyof ListItem]])) });
-      b.patch('listItems', prior.id, change);
+      const changed: (keyof ListItem)[] = row.qty ? ['done', 'order', 'qty'] : ['done', 'order'];
+      reopened.push({ id: prior.id, was: Object.fromEntries(changed.map((k) => [k, prior[k]])) });
+      b.upsert('listItems', prior.id, reopenedItem(prior, order, sectionOf(list, prior), row.qty));
       continue;
     }
     const item: ListItem = {
@@ -181,7 +186,7 @@ export function mergeItems(list: List, rows: MergeItem[]): () => void {
     taken.push({ id: item.id });
     b.put('listItems', item);
   }
-  void b.commit();
+  void b.commit().catch(notSaved(`The items were not added to ${list.title}`));
   return () => {
     const u = batch();
     created.forEach((id) => u.remove('listItems', id));
