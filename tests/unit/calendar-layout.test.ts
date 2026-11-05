@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   countLabel,
   focusForView,
+  isLong,
   layoutLanes,
   layoutMonthWeek,
   miniMonthDays,
@@ -77,6 +78,19 @@ describe('layoutLanes', () => {
         { id: 'b', s: 60, e: 90 },
       ]),
     ).toEqual({ b: [0, 2], a: [1, 2] });
+  });
+});
+
+describe('isLong', () => {
+  const timed = (start: string, end: string) => ({ allDay: false, start: new Date(start), end: new Date(end) });
+  it('counts a day on the clock, across the DST change too', () => {
+    expect(isLong({ allDay: true, start: new Date('2026-11-04T00:00'), end: new Date('2026-11-05T00:00') })).toBe(true);
+    expect(isLong(timed('2026-11-04T00:00', '2026-11-05T00:00'))).toBe(true);
+    expect(isLong(timed('2026-11-04T09:00', '2026-11-05T08:59'))).toBe(false);
+    // Midnight to midnight on Mar 8, 2026 is 23 hours (clocks go forward), Nov 1 is 25.
+    expect(isLong(timed('2026-03-08T00:00', '2026-03-09T00:00'))).toBe(true);
+    expect(isLong(timed('2026-11-01T00:00', '2026-11-02T00:00'))).toBe(true);
+    expect(isLong(timed('2026-11-01T00:00', '2026-11-01T23:30'))).toBe(false);
   });
 });
 

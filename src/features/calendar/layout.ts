@@ -311,6 +311,19 @@ export function layoutMonthWeek(bars: WeekBar[], singles: string[][], maxLines =
 /* ---------- Mini month ---------- */
 
 /**
+ * All-day events and events of a day or longer go in the all-day row and
+ * month bars. A day is a day on the clock: midnight to midnight on the day
+ * clocks go forward is 23 hours and still a whole day (other calendars send
+ * all-day events that way).
+ */
+export function isLong(ev: { allDay: boolean; start: Date; end: Date }): boolean {
+  if (ev.allDay) return true;
+  const dayLater = new Date(ev.start);
+  dayLater.setDate(dayLater.getDate() + 1);
+  return ev.end >= dayLater;
+}
+
+/**
  * Minutes after midnight on `day` where a timed segment starts and ends
  * (clipped to the day), from the wall clock so the hours line up across
  * DST. On the night clocks go back, an event that starts in the first pass

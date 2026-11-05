@@ -7,6 +7,7 @@ import { EVERYONE, type ISODate, type MealCategory, type MealEntry, type Profile
 import { addDays, dayShort, formatHeaderDate, formatLongDate, formatTime, formatTimeRange, toISODate } from '../../lib/date';
 import { calendarMeals } from '../meals/state';
 import { everyoneProfile } from '../../ui/profile';
+import { isLong } from './layout';
 
 /** Reactive helpers shared by the views (they read signals, so components re-render on change). */
 
@@ -25,11 +26,6 @@ export interface DayItems {
   /** Timed events under 24 hours that touch this day. */
   timed: CalEvent[];
 }
-
-const DAY_MS = 86_400_000;
-
-/** All-day events and events of a day or longer go in the all-day row and month bars. */
-export const isLong = (ev: CalEvent) => ev.allDay || ev.end.getTime() - ev.start.getTime() >= DAY_MS;
 
 /** Planned meals on a day, for categories shown on the calendar (Filter > Meals). Repeats and per-day exceptions come from the Meals slice. */
 export function mealsOn(day: ISODate): MealItem[] {
