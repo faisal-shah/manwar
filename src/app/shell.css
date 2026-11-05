@@ -35,11 +35,9 @@
   color: var(--text);
   box-shadow: var(--shadow-soft);
 }
-.rail .brand {
-  font-family: var(--font-display);
-  font-size: 3.2rem;
-  line-height: 1;
-  font-weight: 500;
+.rail .logo-mark {
+  line-height: 1.1;
+  margin-top: -0.4rem;
 }
 .rail .badge {
   position: absolute;

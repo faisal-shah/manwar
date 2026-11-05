@@ -318,3 +318,9 @@
 .sleep-save {
   min-width: 14rem;
 }
+
+.about-mark {
+  display: flex;
+  justify-content: center;
+  padding: 1.6rem 0 2.8rem;
+}

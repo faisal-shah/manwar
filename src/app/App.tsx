@@ -10,6 +10,7 @@ import { formatHeaderDate, formatTime } from '../lib/date';
 import { Button } from '../ui/controls';
 import { DialogHost, ToastHost } from '../ui/overlays';
 import { WeatherIcon } from '../ui/WeatherIcon';
+import { LogoMark, Wordmark } from '../ui/Logo';
 import { activeTab, goTo, settingsOpen, sleepMenuOpen } from './nav';
 import { TABS, Overlays, RailBadges } from './tabs';
 import { SettingsSheet, SleepMenu } from '../features/settings';
@@ -25,7 +26,7 @@ function ConnectScreen() {
   const busy = s.state === 'loading' || s.state === 'connecting' || (s.state === 'signedIn' && !ready.value);
   return (
     <div class="connect">
-      <h1>Manwar</h1>
+      <Wordmark size={15} />
       {busy ? (
         <p>{s.state === 'connecting' ? 'Connecting your Google account…' : 'Loading…'}</p>
       ) : (
@@ -61,7 +62,7 @@ function Shell() {
             aria-current={t.id === tab.id ? 'page' : undefined}
             onClick={() => goTo(t.id)}
           >
-            {t.id === 'home' ? <span class="brand">M</span> : <t.icon size="2.8rem" strokeWidth={1.8} />}
+            {t.id === 'home' ? <LogoMark size={3} /> : <t.icon size="2.8rem" strokeWidth={1.8} />}
             {t.label}
             {badges[t.id] ? <span class="badge">{badges[t.id]}</span> : null}
           </button>

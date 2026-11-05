@@ -1,4 +1,9 @@
-# Manwar
+<p align="center"><img src="docs/logo.png" alt="مَنْوَر Manwar" width="360"></p>
+
+# مَنْوَر · Manwar
+
+*Manwar* (مَنْوَر), from نور (light), is Arabic for a skylight: a place where
+light comes in.
 
 A family wall calendar for a tablet, in the spirit of the Skylight Calendar 2
 with Plus: the household's Google calendars color-coded by person, chores and

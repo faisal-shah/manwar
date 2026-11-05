@@ -1,0 +1,32 @@
+/* Reem Kufi (Kufic) with full diacritics; line-height leaves room for the marks. */
+.logo-mark {
+  font-family: 'Reem Kufi', var(--font-display);
+  font-weight: 700;
+  line-height: 1.5;
+  white-space: nowrap;
+  unicode-bidi: isolate;
+}
+.wordmark {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  color: var(--text);
+}
+.wm-ar {
+  font-size: var(--wm);
+  line-height: 1.35;
+}
+.wm-en {
+  font-family: var(--font-display);
+  font-size: max(2.6rem, calc(var(--wm) * 0.27));
+  letter-spacing: 0.04em;
+  line-height: 1.1;
+}
+.wm-mean {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: max(1.7rem, calc(var(--wm) * 0.15));
+  color: var(--text-2);
+  margin-top: calc(var(--wm) * 0.04);
+}

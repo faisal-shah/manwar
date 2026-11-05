@@ -5,6 +5,8 @@ import { settings } from '../../data/store';
 import { session } from '../../data/session';
 import { version } from '../../../package.json';
 import { buildId } from '../../config';
+import { Wordmark } from '../../ui/Logo';
+import { NAME_EN } from '../../ui/brand';
 import { ChoiceRow, Group, PageTitle, Row, change } from './parts';
 
 /*
@@ -77,8 +79,11 @@ export function AboutPage() {
   return (
     <>
       <PageTitle>About</PageTitle>
+      <div class="about-mark">
+        <Wordmark size={10} />
+      </div>
       <Group>
-        <Row label="Manwar" hint="Family wall calendar">
+        <Row label={NAME_EN} hint="Family wall calendar">
           <span class="set-value">
             Version {version} ({buildId})
           </span>

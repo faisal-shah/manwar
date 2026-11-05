@@ -112,6 +112,15 @@ so `1rem` = 10 design px. Use rem for every size. Tokens are CSS variables in
 - `npm test` (unit, `TZ=America/Chicago`), `npx tsc --noEmit`,
   `npm run test:e2e` (needs the emulators), `cd functions && npm test`.
 
+## Brand
+
+`src/ui/brand.ts` is the one definition of the name: the Arabic مَنْوَر is
+the name and logo everywhere (nav rail, tab title, manifest, icons); the
+transliteration "Manwar" and the meaning accompany it on the sign-in screen
+and in Settings > About (`Wordmark`, `LogoMark` in `src/ui/Logo.tsx`, Reem
+Kufi 700 with full diacritics). The PNG icons and `docs/logo.png` are
+generated from it: `node scripts/icons/render.mjs` after any brand change.
+
 ## Gotchas
 
 - Preact 11: element attribute types are `import type { ButtonHTMLAttributes } from 'preact'`, not `JSX.HTMLAttributes`.
