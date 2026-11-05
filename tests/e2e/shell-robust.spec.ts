@@ -522,6 +522,47 @@ test('a task or reward editor left open past the relock asks for the PIN to save
   await expect(pad).toBeVisible();
 });
 
+test('a task deleted on another tablet while its editor waits for the PIN takes the PIN pad with it', async ({ page }) => {
+  await page.clock.install();
+  const name = await open(page);
+  const key = (d: string) => page.locator('.pin-setup .pin-keys button', { hasText: new RegExp(`^${d}$`) });
+  await openSettings(page, 'Parental lock');
+  await page.getByRole('button', { name: /Set a PIN/ }).click();
+  for (const d of '1357') await key(d).click();
+  await expect(page.locator('.pin-setup')).toContainText('Enter the PIN again');
+  for (const d of '1357') await key(d).click();
+  await expect(page.getByText('The lock is on')).toBeVisible();
+  await page.getByRole('button', { name: 'Close' }).click();
+
+  await rail(page, 'Tasks').click();
+  await page.locator('[data-column="asiyah"] .tk-card .tk-body').first().click();
+  await page.getByTestId('task-details').getByRole('button', { name: 'Edit task' }).click();
+  const editor = page.getByRole('dialog', { name: 'Edit task' });
+  const title = await editor.getByRole('textbox').first().inputValue();
+  await page.clock.fastForward('02:10');
+  await editor.getByRole('button', { name: 'Save' }).click();
+  const pad = page.locator('.modal', { hasText: 'Parent PIN' });
+  await expect(pad).toBeVisible();
+
+  // The other tablet deletes the task (archives it) while this one waits for the PIN.
+  const auth = { Authorization: 'Bearer owner' };
+  const list = (await (await fetch(`${FS}/households/demo-${name}/tasks?pageSize=300`, { headers: auth })).json()) as {
+    documents: { name: string; fields: { title: { stringValue: string } } }[];
+  };
+  const doc = list.documents.find((d) => d.fields.title.stringValue === title)!;
+  const res = await fetch(`http://127.0.0.1:8080/v1/${doc.name}?updateMask.fieldPaths=archived`, {
+    method: 'PATCH',
+    headers: { ...auth, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fields: { archived: { booleanValue: true } } }),
+  });
+  expect(res.ok).toBe(true);
+
+  await expect(page.getByText(`"${title}" was deleted on another device.`)).toBeVisible();
+  await expect(editor).toHaveCount(0);
+  // Nothing is left asking for a PIN to save a task that is gone.
+  await expect(pad).toHaveCount(0);
+});
+
 test("a failed place search shows only the failure, not the last query's places", async ({ page }) => {
   let up = true;
   await page.route('**/geocoding-api.open-meteo.com/**', (r) =>

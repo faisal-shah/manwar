@@ -78,11 +78,13 @@ export function useScrimClose(onClose: () => void): (e: MouseEvent) => void {
 /**
  * Close an editor or popover once what it shows is gone from the store
  * (deleted on another device), so a save cannot bring it back or fail;
- * `message` says why it closed.
+ * `message` says why it closed. A PIN pad, confirmation or choice it opened
+ * (Save, Delete) asks about something that is gone, so it is refused too.
  */
 export function useCloseWhenGone(gone: boolean, onClose: () => void, message?: string): void {
   useEffect(() => {
     if (!gone) return;
+    refuseDialogs();
     onClose();
     if (message) toast(message);
   }, [gone]);
@@ -279,6 +281,15 @@ export function choose<T extends string>(title: string, options: { value: T; lab
   return new Promise((resolve) => {
     chooseReq.value = { title, options, resolve: resolve as (v: string | null) => void };
   });
+}
+
+/** Answer every open confirmation, choice and PIN request as cancelled. */
+function refuseDialogs(): void {
+  confirmReq.peek()?.resolve(false);
+  confirmReq.value = null;
+  chooseReq.peek()?.resolve(null);
+  chooseReq.value = null;
+  pinRequest.peek()?.resolve(false);
 }
 
 export function DialogHost() {
