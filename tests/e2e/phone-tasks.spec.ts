@@ -196,8 +196,11 @@ test('a check-off made offline shows at once and reaches the wall once back onli
   await expect(page.locator('.toast', { hasText: 'Breakfast completed' })).toBeVisible();
   await page.waitForTimeout(1500);
   await expect(wallCard(w.page, 'asiyah', 'Breakfast')).not.toHaveClass(/done/);
+  // The phone keeps it in memory only: it says so until the server has it.
+  await expect(page.locator('.ph-status')).toContainText('1 change not sent yet');
   await page.context().setOffline(false);
   await expect(wallCard(w.page, 'asiyah', 'Breakfast')).toHaveClass(/done/, { timeout: 30_000 });
+  await expect(page.locator('.ph-status', { hasText: 'not sent yet' })).toHaveCount(0);
   await expect(wallStars(w.page, 'asiyah')).toHaveText('130');
   await expect.poll(() => serverField(household, 'profiles/asiyah', 'stars')).toBe(130);
   // Offline, the browser reports each request it could not make.

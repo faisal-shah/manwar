@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { STALE_SYNC_MS, STALE_WEATHER_MS, calendarStatus, currentWeather, householdStatus } from '../../src/app/status';
+import {
+  STALE_SYNC_MS,
+  STALE_WEATHER_MS,
+  UNSENT_QUIET_MS,
+  calendarStatus,
+  currentWeather,
+  householdStatus,
+  unsentStatus,
+} from '../../src/app/status';
 import { NETWORK_MESSAGE, errorMessage, isNetworkError, needsReconnect } from '../../src/data/errors';
 
 /** The shapes the Firebase SDKs throw (FirebaseError: code + message). */
@@ -53,6 +61,16 @@ describe('household status in the top bar', () => {
       text: 'Not syncing',
       detail: "The household's data is not coming in (Quota exceeded.). Trying again shortly.",
     });
+  });
+});
+
+describe('unsent changes on the phone', () => {
+  it('stays quiet while a write is on its way, then counts what waits', () => {
+    const t = 1_800_000_000_000;
+    expect(unsentStatus(0, null, t)).toBeNull();
+    expect(unsentStatus(1, t, t + UNSENT_QUIET_MS - 1)).toBeNull();
+    expect(unsentStatus(1, t, t + UNSENT_QUIET_MS)).toBe('1 change not sent yet: keep Manwar open until the phone is online');
+    expect(unsentStatus(3, t, t + 60_000)).toMatch(/^3 changes not sent yet/);
   });
 });
 

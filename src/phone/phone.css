@@ -405,3 +405,7 @@ html[data-layout='phone'] .toast {
     border-radius: 99rem;
   }
 }
+.ph-loading {
+  max-width: 40rem;
+  text-align: center;
+}

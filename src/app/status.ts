@@ -50,3 +50,16 @@ export function calendarStatus(
   if (now - at < STALE_SYNC_MS) return null;
   return { text: `${who} updated ${timeAgo(at, now)}`, reconnect: false };
 }
+
+/** Writes stay quiet this long (a write on its way to a live connection takes a moment). */
+export const UNSENT_QUIET_MS = 4000;
+
+/**
+ * What the phone says about changes it made that the server has not taken
+ * yet (`unsent`, queued since `since`), or null. It keeps them in memory
+ * only, so they are lost if the phone's browser closes the page first.
+ */
+export function unsentStatus(unsent: number, since: number | null, now: number): string | null {
+  if (!unsent || since === null || now - since < UNSENT_QUIET_MS) return null;
+  return `${unsent === 1 ? '1 change' : `${unsent} changes`} not sent yet: keep Manwar open until the phone is online`;
+}

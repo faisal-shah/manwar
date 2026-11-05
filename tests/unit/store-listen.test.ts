@@ -38,8 +38,17 @@ vi.mock('firebase/firestore', () => {
       inSync.push(cb);
       return () => {};
     },
-    onSnapshot: (q: { path: string; since?: string }, next: Sub['next'], error: Sub['error']) => {
-      const sub: Sub = { path: q.path, since: q.since, next, error, closed: false };
+    onSnapshot: (q: { path: string; since?: string }, _opts: object, next: Sub['next'], error: Sub['error']) => {
+      // docChanges(), as Firestore gives it: what differs from the last snapshot this listener saw.
+      let last: string | null = null;
+      const withChanges: Sub['next'] = (snap) => {
+        const s = snap as { docs?: { data: () => unknown }[] };
+        const now = JSON.stringify((s.docs ?? []).map((d) => d.data()));
+        const changes = now === last ? [] : (s.docs ?? []).length ? s.docs! : [{}];
+        last = now;
+        return next({ ...(snap as object), docChanges: () => changes } as never);
+      };
+      const sub: Sub = { path: q.path, since: q.since, next: withChanges, error, closed: false };
       subs.push(sub);
       return () => (sub.closed = true);
     },

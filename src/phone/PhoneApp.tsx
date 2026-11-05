@@ -1,9 +1,10 @@
-import { ArrowLeft, CloudOff, TriangleAlert } from 'lucide-preact';
+import { effect, signal } from '@preact/signals';
+import { ArrowLeft, CloudOff, CloudUpload, TriangleAlert } from 'lucide-preact';
 import { sync } from '../calendar/engine';
 import { googleProblem, session } from '../data/session';
-import { loadError, ready } from '../data/store';
-import { nowMs } from '../lib/clock';
-import { calendarStatus, householdStatus } from '../app/status';
+import { loadError, ready, unsentWrites } from '../data/store';
+import { currentTime, nowMs } from '../lib/clock';
+import { calendarStatus, householdStatus, unsentStatus } from '../app/status';
 import { IngredientsHost } from '../features/meals/IngredientsModal';
 import { useBack } from '../ui/back';
 import { IconButton } from '../ui/controls';
@@ -67,13 +68,27 @@ function PhoneShell() {
 }
 
 /** The household not syncing, or the calendar needing attention: a line under the header. */
+/** Since when changes made here have been waiting for the server (null while none are). */
+const unsentSince = signal<number | null>(null);
+effect(() => {
+  const waiting = unsentWrites.value > 0;
+  if (!waiting) unsentSince.value = null;
+  else if (unsentSince.peek() === null) unsentSince.value = currentTime();
+});
+
 function PhoneStatus() {
   const house = householdStatus(loadError.value);
-  void nowMs.value;
+  const now = nowMs.value;
   const cal = calendarStatus(sync.value, googleProblem.value, Date.now());
-  if (!house && !cal) return null;
+  const unsent = unsentStatus(unsentWrites.value, unsentSince.value, now);
+  if (!house && !cal && !unsent) return null;
   return (
     <div class="ph-status" role="status">
+      {unsent && (
+        <span>
+          <CloudUpload size="1.6rem" /> {unsent}
+        </span>
+      )}
       {house && (
         <span title={house.detail}>
           <CloudOff size="1.6rem" /> {house.text}

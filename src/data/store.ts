@@ -20,6 +20,7 @@ import {
   type Query,
   type Unsubscribe,
 } from 'firebase/firestore';
+import { isPhone } from '../app/layout';
 import { errorMessage } from './errors';
 import { db } from './firebase';
 import { addDays } from '../lib/date';
@@ -92,7 +93,13 @@ export const settings = signal<Settings>(DEFAULT_SETTINGS);
 /** Household id of the signed-in tablet, null until signed in. */
 export const householdId = signal<string | null>(null);
 
-/** True once every collection has delivered its first snapshot. */
+/**
+ * True once every collection has delivered its first snapshot. A phone keeps
+ * the household in memory only (data/firebase.ts), so a snapshot from its
+ * cache at first is no more than "nothing yet": on a phone a collection
+ * counts once the server has answered for it, and a phone that cannot reach
+ * the server keeps loading instead of showing an empty household as real.
+ */
 export const ready = signal(false);
 
 /**
@@ -226,13 +233,18 @@ export function openHousehold(id: string): void {
       const since = addDays(today.peek(), -(HISTORY_DAYS + 2));
       if (name === 'taskStates') q = query(q, where('date', '>=', since));
       if (name === 'ledger') q = query(q, orderBy('at', 'desc'), limit(LEDGER_LIVE));
+      let first = true;
       return onSnapshot(
         q,
+        // A phone needs to hear that the server answered even when its answer changes nothing (an empty collection).
+        { includeMetadataChanges: isPhone },
         (snap) => {
           if (!current()) return;
           noteSource(name, snap.metadata.fromCache);
-          data[name].value = snap.docs.map((d) => d.data()) as never;
-          arrived(name);
+          // A snapshot that only says where it came from leaves the data as it is.
+          if (first || snap.docChanges().length) data[name].value = snap.docs.map((d) => d.data()) as never;
+          first = false;
+          if (!(isPhone && snap.metadata.fromCache)) arrived(name);
         },
         onError,
       );
@@ -242,12 +254,14 @@ export function openHousehold(id: string): void {
   listen('settings', (current, onError) =>
     onSnapshot(
       settingsRef(),
+      { includeMetadataChanges: isPhone },
       (snap) => {
         if (!current()) return;
         noteSource('settings', snap.metadata.fromCache);
-        settings.value = mergeSettings(snap.exists() ? snap.data() : {});
+        const next = mergeSettings(snap.exists() ? snap.data() : {});
+        if (JSON.stringify(next) !== JSON.stringify(settings.peek())) settings.value = next;
         if (snap.exists() || !snap.metadata.fromCache) settingsLoaded.value = true;
-        arrived('settings');
+        if (!(isPhone && snap.metadata.fromCache)) arrived('settings');
       },
       onError,
     ),
@@ -270,6 +284,7 @@ export function closeHousehold(): void {
   listeners.clear();
   fromServer.clear();
   failed.value = new Map();
+  unsentWrites.value = 0;
   signalBatch(() => {
     for (const name of NAMES) data[name].value = [];
     settings.value = DEFAULT_SETTINGS;
@@ -308,14 +323,31 @@ export const newId = () => doc(collection(db, '_ids')).id;
 /*
  * Writes. They apply to the local cache at once (snapshots fire
  * immediately) and sync when online, so callers do not await them for UI.
+ * Each one's promise settles when the server has taken (or refused) it.
  */
 
+/**
+ * Writes made here that the server has not answered yet: queued while
+ * offline. A phone keeps them in memory only, so it says so while there
+ * are any (they are lost if the browser closes the page first).
+ */
+export const unsentWrites = signal(0);
+function sent(p: Promise<void>): Promise<void> {
+  const gen = generation;
+  unsentWrites.value++;
+  const done = () => {
+    if (generation === gen) unsentWrites.value--;
+  };
+  p.then(done, done);
+  return p;
+}
+
 export function put<K extends CollectionName>(name: K, value: Collections[K]): Promise<void> {
-  return setDoc(docRef(name, value.id), value as object);
+  return sent(setDoc(docRef(name, value.id), value as object));
 }
 
 export function patch<K extends CollectionName>(name: K, id: string, partial: Partial<Collections[K]>): Promise<void> {
-  return updateDoc(docRef(name, id), partial as object);
+  return sent(updateDoc(docRef(name, id), partial as object));
 }
 
 /** `partial` as a field-by-field change: an undefined value deletes the field (plain writes skip it). */
@@ -329,7 +361,7 @@ export function fieldChanges(partial: object): Record<string, unknown> {
  * change at once: fields this write does not name are kept.
  */
 export function upsert<K extends CollectionName>(name: K, id: string, partial: Partial<Collections[K]>): Promise<void> {
-  return setDoc(docRef(name, id), fieldChanges(partial), { merge: true });
+  return sent(setDoc(docRef(name, id), fieldChanges(partial), { merge: true }));
 }
 
 /**
@@ -345,11 +377,11 @@ export function saveEdited<K extends CollectionName>(
   fields: readonly (keyof Collections[K] & string)[],
 ): Promise<void> {
   if (isNew) return put(name, value);
-  return updateDoc(docRef(name, value.id), fieldChanges(Object.fromEntries(fields.map((f) => [f, value[f]]))));
+  return sent(updateDoc(docRef(name, value.id), fieldChanges(Object.fromEntries(fields.map((f) => [f, value[f]])))));
 }
 
 export function remove(name: CollectionName, id: string): Promise<void> {
-  return deleteDoc(docRef(name, id));
+  return sent(deleteDoc(docRef(name, id)));
 }
 
 /**
@@ -359,7 +391,7 @@ export function remove(name: CollectionName, id: string): Promise<void> {
  * one element goes in or out with listAdd / listRemove (data/settings.ts).
  */
 export function saveSettings(partial: SettingsPatch): Promise<void> {
-  return setDoc(settingsRef(), partial, { merge: true });
+  return sent(setDoc(settingsRef(), partial, { merge: true }));
 }
 
 /** The reads and writes of a transaction. */
@@ -428,7 +460,7 @@ export function batch() {
       b.update(docRef('profiles', profileId) as DocumentReference, { stars: increment(delta) });
       return api;
     },
-    commit: () => b.commit(),
+    commit: () => sent(b.commit()),
   };
   return api;
 }

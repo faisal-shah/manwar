@@ -1,4 +1,4 @@
-import { expect as baseExpect, test, type Page } from '@playwright/test';
+import { devices, expect as baseExpect, test, type Page } from '@playwright/test';
 import {
   chip,
   enterPin,
@@ -14,7 +14,7 @@ import {
   wallCard,
   wallStars,
 } from './phone-family';
-import { phone } from './phone-helpers';
+import { newContext, NOW, phone, wall } from './phone-helpers';
 
 /*
  * The phone's Today, Tasks and Stars under rough handling: double taps,
@@ -321,4 +321,27 @@ test('Back on the PIN pad cancels what it asked for', async ({ browser }) => {
   await enterPin(page);
   await expect(phoneCard(page, 'Feed the fish')).toHaveClass(/skipped/);
   expect(errors()).toEqual([]);
+});
+
+test('a phone that cannot reach the household keeps loading and says why, instead of showing an empty one', async ({
+  browser,
+}) => {
+  const household = `phrobust-${Date.now().toString(36)}-noserver`;
+  const w = await wall(browser, household);
+  const ctx = await newContext(browser, { ...devices['Pixel 7'], timezoneId: 'America/Chicago' });
+  const page = await ctx.newPage();
+  const firestore = /^https?:\/\/[^/]+:8080\//;
+  await page.route(firestore, (r) => r.abort('internetdisconnected'));
+  await page.goto(`/?demo=${household}&layout=phone&${NOW}`);
+  await expect(page.locator('.ph-loading')).toContainText("Can't reach the household yet", { timeout: 30_000 });
+  // Past Firestore's offline answer (10 s), still no empty household on screen.
+  await page.waitForTimeout(3000);
+  await expect(page.locator('.ph-nav')).toHaveCount(0);
+  // The network comes back as a phone's does: the browser says it is online, and Firestore tries at once.
+  await page.unroute(firestore);
+  await ctx.setOffline(true);
+  await ctx.setOffline(false);
+  await expect(page.locator('.ph-nav')).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator('.pt-person, .ph-body')).not.toContainText('No people yet');
+  expect(w.errors).toEqual([]);
 });
