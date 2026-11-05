@@ -59,24 +59,41 @@ interface Snapshot {
   at: number;
 }
 
+/**
+ * Keep the events for offline display. Notes take most of the room; when
+ * the whole snapshot does not fit in storage the events are kept without
+ * them, and when even that fails the last snapshot is removed: an old one
+ * left in place would come back on the next offline start as if current.
+ */
 function saveSnapshot(household: string) {
+  const stored = (withNotes: boolean): StoredEvent[] =>
+    events.value.map((e) => ({
+      ...e,
+      description: withNotes ? e.description : undefined,
+      start: e.start.getTime(),
+      end: e.end.getTime(),
+      originalStart: e.originalStart?.getTime(),
+    }));
+  const snapshot = (withNotes: boolean): Snapshot => ({
+    household,
+    calendars: calendars.value,
+    events: stored(withNotes),
+    from: loaded.from,
+    to: loaded.to,
+    at: Date.now(),
+  });
+  for (const withNotes of [true, false]) {
+    try {
+      localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(snapshot(withNotes)));
+      return;
+    } catch {
+      /* over the quota: try smaller */
+    }
+  }
   try {
-    const s: Snapshot = {
-      household,
-      calendars: calendars.value,
-      events: events.value.map((e) => ({
-        ...e,
-        start: e.start.getTime(),
-        end: e.end.getTime(),
-        originalStart: e.originalStart?.getTime(),
-      })),
-      from: loaded.from,
-      to: loaded.to,
-      at: Date.now(),
-    };
-    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(s));
+    localStorage.removeItem(SNAPSHOT_KEY);
   } catch {
-    /* quota or storage unavailable: the next sync repopulates */
+    /* storage unavailable: nothing was kept */
   }
 }
 

@@ -9,11 +9,16 @@ import type { EventMeta, Profile } from '../../src/data/types';
  */
 
 const storage = vi.hoisted(() => new Map<string, string>());
+/** Characters a value may have before setItem throws, as a full localStorage does. */
+const quota = vi.hoisted(() => ({ chars: Infinity }));
 vi.hoisted(() => {
   const g = globalThis as Record<string, unknown>;
   g.localStorage = {
     getItem: (k: string) => storage.get(k) ?? null,
-    setItem: (k: string, v: string) => void storage.set(k, v),
+    setItem: (k: string, v: string) => {
+      if (v.length > quota.chars) throw new Error('QuotaExceededError');
+      storage.set(k, v);
+    },
     removeItem: (k: string) => void storage.delete(k),
   };
   g.document = { addEventListener() {}, visibilityState: 'visible' };
@@ -160,5 +165,24 @@ describe('calendar sync across a change of account', () => {
     expect(ids()).toEqual(['swim_x']);
     expect(engine.events.value[0].originalStart).toEqual(new Date(at - 2 * 86_400_000));
     expect(engine.sync.value.error).toBe('Failed to fetch');
+  });
+
+  it('keeps a snapshot that fits: without notes when they are too big, none rather than an old one', async () => {
+    // A calendar with long invitations in its notes.
+    const notes = '<p>Join Zoom Meeting https://us02web.zoom.us/j/81234567890</p>'.repeat(60);
+    const many = Array.from({ length: 40 }, (_, i) => ev('ours@gmail.com', `e${i}`, { description: notes }));
+    source.listCalendars = async () => [cal('ours@gmail.com')];
+    source.listEvents = async () => many;
+    quota.chars = 40_000;
+    await engine.refresh();
+    const saved = JSON.parse(storage.get('manwar.events.v1')!);
+    expect(saved.events).toHaveLength(40);
+    expect(saved.events[0].description).toBeUndefined();
+    expect(engine.events.value[0].description).toBe(notes);
+    // Not even that fits: no snapshot, rather than the last one coming back offline as if current.
+    quota.chars = 1_000;
+    await engine.refresh();
+    expect(storage.has('manwar.events.v1')).toBe(false);
+    quota.chars = Infinity;
   });
 });
