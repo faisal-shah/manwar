@@ -7,11 +7,14 @@ import {
   phoneProgress,
   phoneStars,
   phoneTab,
+  serverDocs,
   serverField,
   setPin,
   wallAndPhone,
+  wallCard,
   wallStars,
 } from './phone-family';
+import { phone } from './phone-helpers';
 
 /*
  * The phone's Today, Tasks and Stars under rough handling: double taps,
@@ -20,6 +23,14 @@ import {
 
 const expect = baseExpect.configure({ timeout: 15_000 });
 test.describe.configure({ timeout: 120_000 });
+
+// Every wall and phone a test opened is its own browser context: close them, or a worker holds them all.
+test.afterEach(async ({ browser }) => {
+  await Promise.all(browser.contexts().map((c) => c.close()));
+});
+
+/** Offline, the browser reports each request it could not make. */
+const real = (errors: string[]) => errors.filter((e) => !/ERR_INTERNET_DISCONNECTED/.test(e));
 
 /** Sheets slide in and popovers pop in: let them land before measuring a spot in them, and past the opening tap. */
 const settle = (page: Page) => page.waitForTimeout(500);
@@ -233,6 +244,63 @@ test('stars given offline on the phone reach the wall once back online, once', a
   await expect.poll(() => serverField(household, 'profiles/asiyah', 'stars')).toBe(133);
   // Offline, the browser reports each request it could not make.
   expect(errors().filter((e) => !/ERR_INTERNET_DISCONNECTED/.test(e))).toEqual([]);
+});
+
+test('a task checked off at the wall while the phone was offline is not awarded again by the phone', async ({ browser }) => {
+  const { household, w, p, errors } = await wallAndPhone(browser, 'offline-twice', { tab: 'Tasks' });
+  const page = p.page;
+  await page.context().setOffline(true);
+  await wallCard(w.page, 'asiyah', 'Breakfast').locator('.tk-check').click();
+  await expect(wallStars(w.page, 'asiyah')).toHaveText('130');
+  await expect.poll(() => serverField(household, 'profiles/asiyah', 'stars')).toBe(130);
+  // The phone has not heard: it checks Breakfast off too.
+  await phoneCard(page, 'Breakfast').locator('.tk-check').click();
+  await expect(phoneStars(page)).toHaveText('130');
+  await page.context().setOffline(false);
+  // The server refuses the phone's whole batch; the phone says so and shows the wall's check-off.
+  await expect(
+    page.locator('.toast', { hasText: '"Breakfast" was not checked off: another device changed it first.' }),
+  ).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(phoneCard(page, 'Breakfast')).toHaveClass(/done/);
+  await expect(phoneStars(page)).toHaveText('130');
+  await w.page.waitForTimeout(1500);
+  expect(await serverField(household, 'profiles/asiyah', 'stars')).toBe(130);
+  await expect(wallStars(w.page, 'asiyah')).toHaveText('130');
+  const awards = (await serverDocs(household, 'ledger')).filter((e) => e.reason === 'task' && e.label === 'Breakfast');
+  expect(awards).toHaveLength(1);
+  expect(real(errors())).toEqual([]);
+});
+
+test('a reward redeemed on a phone offline is refused once another device spent the stars', async ({ browser }) => {
+  const { household, p, errors } = await wallAndPhone(browser, 'offline-redeem', { tab: 'Tasks' });
+  const other = await phone(browser, household);
+  const redeemPark = async (page: Page) => {
+    await phoneStars(page).click();
+    await settle(page);
+    await page.locator('.ps-reward[data-reward="Park playdate"] .ps-redeem').click();
+    await expect(page.getByRole('dialog', { name: 'Reward redeemed' })).toBeVisible();
+  };
+  // Asiyah has 128 stars: one Park playdate (75), not two.
+  await p.page.context().setOffline(true);
+  await redeemPark(p.page);
+  await phoneTab(other.page, 'Tasks');
+  await redeemPark(other.page);
+  await expect.poll(() => serverField(household, 'profiles/asiyah', 'stars')).toBe(53);
+  await p.page.context().setOffline(false);
+  await expect(
+    p.page.locator('.toast', { hasText: '"Park playdate" was not redeemed: another device changed it first.' }),
+  ).toBeVisible({
+    timeout: 30_000,
+  });
+  // Nothing to celebrate or undo on the refused phone.
+  await expect(p.page.getByRole('dialog', { name: 'Reward redeemed' })).toHaveCount(0);
+  await p.page.waitForTimeout(1500);
+  expect(await serverField(household, 'profiles/asiyah', 'stars')).toBe(53);
+  const spent = (await serverDocs(household, 'ledger')).filter((e) => e.reason === 'redeem' && e.profileId === 'asiyah');
+  expect(spent).toHaveLength(1);
+  expect(real([...errors(), ...other.errors])).toEqual([]);
 });
 
 test('Back on the PIN pad cancels what it asked for', async ({ browser }) => {

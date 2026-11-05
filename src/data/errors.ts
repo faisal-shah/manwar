@@ -28,6 +28,13 @@ export function isNetworkError(e: unknown): boolean {
 }
 
 /**
+ * The server refused a Firestore write decided from data another device had
+ * changed: the rules (a task checked off twice, stars spent twice), or a
+ * document deleted since.
+ */
+export const isWriteRefused = (e: unknown): boolean => coded(e) && (e.code === 'permission-denied' || e.code === 'not-found');
+
+/**
  * Auth refused the stored sign-in itself (revoked, disabled, deleted): only
  * connecting again helps. Anything else from a token refresh (a busy or
  * failing server, rate limits) passes, so it must not sign the wall out.

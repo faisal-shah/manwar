@@ -75,6 +75,22 @@ export async function serverField(household: string, path: string, field: string
   return v.integerValue !== undefined ? Number(v.integerValue) : (v.stringValue ?? v.booleanValue ?? v);
 }
 
+/** A collection's documents on the server, each as its plain string and number fields. */
+export async function serverDocs(household: string, collection: string): Promise<Record<string, string | number>[]> {
+  const res = await fetch(`${docUrl(household, collection)}?pageSize=1000`, { headers: OWNER });
+  const body = (await res.json()) as {
+    documents?: { fields: Record<string, { stringValue?: string; integerValue?: string }> }[];
+  };
+  return (body.documents ?? []).map((d) =>
+    Object.fromEntries(
+      Object.entries(d.fields).map(([k, v]) => [
+        k,
+        v.integerValue !== undefined ? Number(v.integerValue) : (v.stringValue ?? ''),
+      ]),
+    ),
+  );
+}
+
 export const PIN = '1234';
 
 /** Set the parent PIN the way core/lock.ts stores it, straight into the emulator. */

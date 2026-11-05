@@ -206,11 +206,18 @@ flowchart LR
   drops out in between. The ledger listener holds the household's
   newest `LEDGER_LIVE` entries; the star history sheet reads older pages on
   Show older (`rewards/history-state.ts`, shown without Undo). Balances never
-  depend on the window. Two devices completing the same occurrence in the
-  same instant can still both award (the balance is an increment); so can
-  a phone that checks off offline what another device checked off before
-  it reconnects. The star history then shows both entries, and Undo on
-  one takes its stars back.
+  depend on the window. What no guard on one device sees (two devices
+  checking off one occurrence at once, a phone offline checking off,
+  unchecking or redeeming against what another device did meanwhile)
+  `firestore.rules` refuse, the whole batch: a task state is only created
+  or deleted (never written over, never deleted when gone), so a change to
+  one is a delete and a create, never an update; a ledger entry is added,
+  and marked `undoneAt` once; a `redeem` entry may not leave the balance
+  below zero (`getAfter` on the profile); a one-time reward's `redeemedBy`
+  stamp is never written over. The device's own change rolls back,
+  `exclusive()` says so in a toast, and the write's promise resolves false
+  (the redeemed dialog closes on it). A check-off is written only where no
+  state is (a skip is undone first).
 - **Parental lock** (`core/lock.ts`): with a PIN set, only checking off tasks
   is open; wrap every other mutation in `asParent(() => ...)` or
   `await requireParent()`; an editor asks again on Save, since the lock can

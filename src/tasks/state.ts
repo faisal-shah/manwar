@@ -1,5 +1,6 @@
 import { computed } from '@preact/signals';
 import { deleteField } from 'firebase/firestore';
+import { errorMessage, isWriteRefused } from '../data/errors';
 import { batch, data, newId, profileById, profiles, whenShown } from '../data/store';
 import {
   UP_FOR_GRABS,
@@ -13,6 +14,7 @@ import {
 } from '../data/types';
 import { currentTime, today } from '../lib/clock';
 import { toISODate } from '../lib/date';
+import { toast } from '../ui/overlays';
 import { firstHistoryDay, forProfile, lastDoneBefore, madeAt, occurrencesOn, progress, type Occurrence } from './engine';
 
 /** Reactive views of the task engine over the live store. */
@@ -44,19 +46,34 @@ export const todayProgress = computed(() => {
  * collections below is down waiting to resubscribe; while one is, the top
  * bar says the wall is not syncing). Each write returns null when it did
  * nothing.
+ *
+ * Another device's copy can be stale in a way no guard here sees: a phone
+ * offline checks off a task the wall checked off meanwhile, and its batch
+ * reaches the server later. firestore.rules refuse such a batch whole (a
+ * task state is only created or deleted, a ledger entry undone once, a
+ * redemption may not overdraw the balance or redeem a one-time reward
+ * again); the device's own change then rolls back, and `refused` says so.
+ * The promise each write returns says whether the server took it.
  */
 const busy = new Set<string>();
 
 /** What these writes change and decide from. */
 const STAR_DATA = ['taskStates', 'ledger', 'profiles', 'tasks', 'rewards'] as const;
 
-function exclusive(keys: (string | undefined)[], write: () => Promise<void>): Promise<void> | null {
+function exclusive(keys: (string | undefined)[], refused: string, write: () => Promise<void>): Promise<boolean> | null {
   const held = keys.filter((k): k is string => !!k);
   if (held.some((k) => busy.has(k))) return null;
   held.forEach((k) => busy.add(k));
   const done = write();
   whenShown(STAR_DATA, () => held.forEach((k) => busy.delete(k)));
-  return done;
+  return done.then(
+    () => true,
+    (e: unknown) => {
+      console.warn('tasks: write refused', e);
+      toast(isWriteRefused(e) ? `${refused}: another device changed it first.` : `${refused}: ${errorMessage(e)}`);
+      return false;
+    },
+  );
 }
 
 const taskOf = (id: string, fallback: Task) => data.tasks.value.find((t) => t.id === id) ?? fallback;
@@ -91,14 +108,15 @@ function ledgerEntry(
 
 /**
  * Check off an occurrence while viewing `day`. `by` is who did it (the
- * claimer for Up for Grabs). Null when it is already done, is no longer on
- * the day, or `by` is no longer a profile.
+ * claimer for Up for Grabs). Null when it is already done or skipped (a
+ * skip is undone first; the "Who did it?" dialog can outlive a skip made
+ * elsewhere), is no longer on the day, or `by` is no longer a profile.
  */
-export function completeTask(o: Occurrence, by: string, day: ISODate): Promise<void> | null {
+export function completeTask(o: Occurrence, by: string, day: ISODate): Promise<boolean> | null {
   if (by === UP_FOR_GRABS) throw new Error('completeTask: an Up for Grabs chore needs a claimer');
-  if (statesById.value.get(o.id)?.status === 'done' || !canMark(o, day) || !profileById.value.has(by)) return null;
+  if (statesById.value.has(o.id) || !canMark(o, day) || !profileById.value.has(by)) return null;
   const task = taskOf(o.task.id, o.task);
-  return exclusive([o.id], () => {
+  return exclusive([o.id], `"${task.title}" was not checked off`, () => {
     const b = batch();
     const stars = task.stars;
     let ledgerId: string | undefined;
@@ -139,11 +157,11 @@ function revertLastDone(b: ReturnType<typeof batch>, task: Task, st: TaskState):
 }
 
 /** Un-check: removes the state and takes the stars back (a reversing ledger entry). Null when it is not done. */
-export function uncompleteTask(o: Occurrence): Promise<void> | null {
+export function uncompleteTask(o: Occurrence): Promise<boolean> | null {
   const st = statesById.value.get(o.id);
   if (st?.status !== 'done') return null;
   const task = taskOf(st.taskId, o.task);
-  return exclusive([st.id, st.ledgerId], () => {
+  return exclusive([st.id, st.ledgerId], `"${task.title}" was not unchecked`, () => {
     const b = batch().remove('taskStates', st.id);
     if (st.stars > 0) b.put('ledger', ledgerEntry(st.by, -st.stars, 'untask', task.title, task.id)).stars(st.by, -st.stars);
     if (st.ledgerId) b.patch('ledger', st.ledgerId, { undoneAt: currentTime() });
@@ -157,10 +175,10 @@ export function uncompleteTask(o: Occurrence): Promise<void> | null {
  * the skip like a completion (without stars), so it comes round again.
  * Null when it is already done or skipped, or is no longer on the day.
  */
-export function skipTask(o: Occurrence, day: ISODate): Promise<void> | null {
+export function skipTask(o: Occurrence, day: ISODate): Promise<boolean> | null {
   if (statesById.value.has(o.id) || !canMark(o, day)) return null;
   const task = taskOf(o.task.id, o.task);
-  return exclusive([o.id], () => {
+  return exclusive([o.id], `"${task.title}" was not skipped`, () => {
     const at = madeAt(day, currentTime());
     const state: TaskState = {
       id: o.id,
@@ -181,11 +199,11 @@ export function skipTask(o: Occurrence, day: ISODate): Promise<void> | null {
 }
 
 /** Null when the occurrence is not skipped. */
-export function unskipTask(o: Occurrence): Promise<void> | null {
+export function unskipTask(o: Occurrence): Promise<boolean> | null {
   const st = statesById.value.get(o.id);
   if (st?.status !== 'skipped') return null;
   const task = taskOf(st.taskId, o.task);
-  return exclusive([st.id], () => {
+  return exclusive([st.id], `"${task.title}" was not unskipped`, () => {
     const b = batch().remove('taskStates', st.id);
     revertLastDone(b, task, st);
     return b.commit();
@@ -204,18 +222,19 @@ export function adjustStars(profileId: string, delta: number, note?: string): Pr
 /**
  * Spend a profile's stars on a reward at its cost. Null when the balance does
  * not cover it (or another redemption for the profile is still landing);
- * otherwise the ledger entry written, for an undo.
+ * otherwise the ledger entry written (for an undo) and whether the server
+ * took it.
  */
-export function redeemReward(reward: Reward, profileId: string): LedgerEntry | null {
+export function redeemReward(reward: Reward, profileId: string): { entry: LedgerEntry; saved: Promise<boolean> } | null {
   const p = profileById.value.get(profileId);
   if (!p || p.stars < reward.cost) return null;
-  const e = ledgerEntry(profileId, -reward.cost, 'redeem', reward.title, reward.id);
-  const write = exclusive([`stars:${profileId}`], () => {
-    const b = batch().put('ledger', e).stars(profileId, -reward.cost);
-    if (!reward.renews) b.patch('rewards', reward.id, { [`redeemedBy.${profileId}`]: e.at } as never);
+  const entry = ledgerEntry(profileId, -reward.cost, 'redeem', reward.title, reward.id);
+  const saved = exclusive([`stars:${profileId}`], `"${reward.title}" was not redeemed`, () => {
+    const b = batch().put('ledger', entry).stars(profileId, -reward.cost);
+    if (!reward.renews) b.patch('rewards', reward.id, { [`redeemedBy.${profileId}`]: entry.at } as never);
     return b.commit();
   });
-  return write ? e : null;
+  return saved && { entry, saved };
 }
 
 /**
@@ -224,11 +243,12 @@ export function redeemReward(reward: Reward, profileId: string): LedgerEntry | n
  * else gets a reversing 'undo' entry. The original is marked undone. Null
  * when it already was.
  */
-export function undoLedgerEntry(entry: LedgerEntry): Promise<void> | null {
+export function undoLedgerEntry(entry: LedgerEntry): Promise<boolean> | null {
   const e = data.ledger.value.find((x) => x.id === entry.id) ?? entry;
   if (e.undoneAt) return null;
   const st = e.reason === 'task' ? data.taskStates.value.find((s) => s.ledgerId === e.id) : undefined;
-  return exclusive([e.id, st?.id, e.reason === 'redeem' ? `stars:${e.profileId}` : undefined], () => {
+  const keys = [e.id, st?.id, e.reason === 'redeem' ? `stars:${e.profileId}` : undefined];
+  return exclusive(keys, `"${e.label}" was not undone`, () => {
     const b = batch();
     const now = currentTime();
     b.patch('ledger', e.id, { undoneAt: now });

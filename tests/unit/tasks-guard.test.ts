@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Profile, Task } from '../../src/data/types';
+import type { Profile, Task, TaskState } from '../../src/data/types';
 
 /**
  * The task write guard: a second write for the same occurrence before the
@@ -13,7 +13,11 @@ import type { Profile, Task } from '../../src/data/types';
 const sync = vi.hoisted(() => ({ waiting: [] as (() => void)[] }));
 vi.mock('firebase/firestore', () => ({ deleteField: () => 'DELETE' }));
 
-const commits = vi.hoisted(() => ({ n: 0 }));
+const toasts = vi.hoisted(() => [] as string[]);
+vi.mock('../../src/ui/overlays', () => ({ toast: (text: string) => void toasts.push(text) }));
+
+/** Commits made, and the error the next one is refused with (the server's rules), if any. */
+const commits = vi.hoisted(() => ({ n: 0, refuse: null as null | { code: string; message: string } }));
 vi.mock('../../src/data/store', async () => {
   const { computed, signal } = await import('@preact/signals');
   const data = {
@@ -31,7 +35,12 @@ vi.mock('../../src/data/store', async () => {
       patch: () => api,
       remove: () => api,
       stars: () => api,
-      commit: async () => void commits.n++,
+      commit: async () => {
+        commits.n++;
+        const e = commits.refuse;
+        commits.refuse = null;
+        if (e) throw Object.assign(new Error(e.message), e);
+      },
     };
     return api;
   };
@@ -102,6 +111,36 @@ describe('task write guard', () => {
     expect(completeTask(a, 'kid', today.value)).not.toBeNull();
     expect(completeTask(b, 'kid', today.value)).not.toBeNull();
     expect(commits.n).toBe(2);
+    inSync();
+  });
+
+  it('writes no check-off over a skip made on another device (the claim dialog outliving it)', () => {
+    const [o] = occurrencesFor(today.value);
+    const skipped: TaskState = {
+      id: o.id,
+      taskId: task.id,
+      date: o.date,
+      part: o.part,
+      profileId: 'kid',
+      by: 'kid',
+      status: 'skipped',
+      at: 0,
+      stars: 0,
+    };
+    data.taskStates.value = [skipped];
+    expect(completeTask(o, 'kid', today.value)).toBeNull();
+    expect(commits.n).toBe(0);
+  });
+
+  it('says so when the server refuses the batch (another device checked it off first)', async () => {
+    toasts.length = 0;
+    const [o] = occurrencesFor(today.value);
+    commits.refuse = { code: 'permission-denied', message: 'Missing or insufficient permissions.' };
+    expect(await completeTask(o, 'kid', today.value)).toBe(false);
+    expect(toasts).toEqual(['"Feed the cat" was not checked off: another device changed it first.']);
+    inSync();
+    expect(await completeTask(o, 'kid', today.value)).toBe(true);
+    expect(toasts).toHaveLength(1);
     inSync();
   });
 });
