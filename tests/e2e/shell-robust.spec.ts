@@ -326,6 +326,33 @@ test('a second profile with the same name is refused; renaming one to its own na
   await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeEnabled();
 });
 
+test('the screen wake lock is taken again when the system drops it', async ({ page }) => {
+  // A stand-in wake lock whose sentinel the test can release, as battery saver would.
+  await page.addInitScript(() => {
+    const w = window as unknown as { __locks: EventTarget[] };
+    w.__locks = [];
+    Object.defineProperty(navigator, 'wakeLock', {
+      value: {
+        request: () => {
+          const s = new EventTarget();
+          w.__locks.push(s);
+          return Promise.resolve(s);
+        },
+      },
+    });
+  });
+  await page.clock.install();
+  await open(page);
+  const locks = () => page.evaluate(() => (window as unknown as { __locks: EventTarget[] }).__locks.length);
+  expect(await locks()).toBe(1);
+  await page.evaluate(() => {
+    const w = window as unknown as { __locks: EventTarget[] };
+    w.__locks[0].dispatchEvent(new Event('release'));
+  });
+  await page.clock.runFor('00:06');
+  await expect.poll(locks).toBe(2);
+});
+
 test('five wrong PINs pause the pad; the right PIN works after the pause', async ({ page }) => {
   await page.clock.install();
   await open(page);

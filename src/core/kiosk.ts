@@ -28,11 +28,28 @@ export function wakeScreen(): void {
   window.fully?.turnScreenOn();
 }
 
-/** Keeps the display on in plain Chrome; re-acquired whenever the page becomes visible. */
+const REACQUIRE_MS = 5000;
+
+/**
+ * Keeps the display on in plain Chrome. The browser drops the lock when the
+ * page is hidden, and the system may drop it while the page stays visible
+ * (battery saver); either way it is taken again.
+ */
 export function holdWakeLock(): void {
   if (!('wakeLock' in navigator)) return;
+  let held: WakeLockSentinel | null = null;
   const acquire = () => {
-    if (document.visibilityState === 'visible') navigator.wakeLock.request('screen').catch(() => {});
+    if (held || document.visibilityState !== 'visible') return;
+    navigator.wakeLock
+      .request('screen')
+      .then((s) => {
+        held = s;
+        s.addEventListener('release', () => {
+          held = null;
+          setTimeout(acquire, REACQUIRE_MS);
+        });
+      })
+      .catch(() => setTimeout(acquire, REACQUIRE_MS * 12));
   };
   acquire();
   document.addEventListener('visibilitychange', acquire);
