@@ -13,9 +13,11 @@ import {
   writeBatch,
   limit,
   type DocumentReference,
+  type FirestoreError,
   type Query,
   type Unsubscribe,
 } from 'firebase/firestore';
+import { errorMessage } from './errors';
 import { db } from './firebase';
 import { addDays } from '../lib/date';
 import { currentTime } from '../lib/clock';
@@ -82,10 +84,24 @@ export const ready = signal(false);
 export const profiles = computed(() => [...data.profiles.value].sort((a, b) => a.order - b.order || a.createdAt - b.createdAt));
 export const profileById = computed(() => new Map(profiles.value.map((p) => [p.id, p])));
 
-let unsubs: Unsubscribe[] = [];
+/** Live listeners by collection ('settings' for the settings document). */
+const listeners = new Map<string, Unsubscribe>();
 /** Collections whose latest snapshot came from the server, not only the local cache. */
 const fromServer = new Set<CollectionName>();
 export const confirmedByServer = (name: CollectionName) => fromServer.has(name);
+
+/** Listeners that failed (and wait to resubscribe), with the reason. */
+const failed = signal<ReadonlyMap<string, string>>(new Map());
+/** Why the household's data is not coming in, while a listener waits to retry; null when all are live. */
+export const loadError = computed(() => failed.value.values().next().value ?? null);
+const setFailed = (key: string, reason: string | null) => {
+  if (reason === null && !failed.value.has(key)) return;
+  const next = new Map(failed.value);
+  if (reason === null) next.delete(key);
+  else next.set(key, reason);
+  failed.value = next;
+};
+const LISTEN_RETRY_MS = 30_000;
 
 function hid(): string {
   const h = householdId.value;
@@ -97,42 +113,74 @@ export const colRef = (name: CollectionName) => collection(db, 'households', hid
 export const docRef = (name: CollectionName, id: string) => doc(db, 'households', hid(), name, id);
 const settingsRef = () => doc(db, 'households', hid(), 'settings', 'main');
 
+/**
+ * Keep one listener alive. Firestore ends a listener for good on an error
+ * (permission denied, quota), which would leave the wall loading forever or
+ * silently stale; it is reported and opened again after LISTEN_RETRY_MS.
+ */
+function listen(key: string, open: (onError: (e: FirestoreError) => void) => Unsubscribe): void {
+  const household = householdId.value;
+  const start = () => {
+    listeners.set(
+      key,
+      open((e) => {
+        console.warn(`store: ${key} listener failed`, e);
+        setFailed(key, errorMessage(e));
+        setTimeout(() => {
+          if (householdId.value === household && listeners.has(key)) start();
+        }, LISTEN_RETRY_MS);
+      }),
+    );
+  };
+  start();
+}
+
 /** Start listening to a household. Called by the session once signed in. */
 export function openHousehold(id: string): void {
   closeHousehold();
   householdId.value = id;
   const pending = new Set<string>([...NAMES, 'settings']);
   const arrived = (name: string) => {
+    setFailed(name, null);
     pending.delete(name);
     if (pending.size === 0) ready.value = true;
   };
-  const since = toISODate(new Date(currentTime() - 62 * 86_400_000));
   for (const name of NAMES) {
-    let q: Query = colRef(name);
-    // Bounded history for the two collections that grow without limit.
-    if (name === 'taskStates') q = query(q, where('date', '>=', since));
-    if (name === 'ledger') q = query(q, orderBy('at', 'desc'), limit(1000));
-    unsubs.push(
-      onSnapshot(q, (snap) => {
-        if (snap.metadata.fromCache) fromServer.delete(name);
-        else fromServer.add(name);
-        data[name].value = snap.docs.map((d) => d.data()) as never;
-        arrived(name);
-      }),
-    );
+    listen(name, (onError) => {
+      let q: Query = colRef(name);
+      // Bounded history for the two collections that grow without limit (the window moves on each listen).
+      const since = toISODate(new Date(currentTime() - 62 * 86_400_000));
+      if (name === 'taskStates') q = query(q, where('date', '>=', since));
+      if (name === 'ledger') q = query(q, orderBy('at', 'desc'), limit(1000));
+      return onSnapshot(
+        q,
+        (snap) => {
+          if (snap.metadata.fromCache) fromServer.delete(name);
+          else fromServer.add(name);
+          data[name].value = snap.docs.map((d) => d.data()) as never;
+          arrived(name);
+        },
+        onError,
+      );
+    });
   }
-  unsubs.push(
-    onSnapshot(settingsRef(), (snap) => {
-      settings.value = mergeSettings(snap.exists() ? snap.data() : {});
-      arrived('settings');
-    }),
+  listen('settings', (onError) =>
+    onSnapshot(
+      settingsRef(),
+      (snap) => {
+        settings.value = mergeSettings(snap.exists() ? snap.data() : {});
+        arrived('settings');
+      },
+      onError,
+    ),
   );
 }
 
 export function closeHousehold(): void {
-  unsubs.forEach((u) => u());
-  unsubs = [];
+  listeners.forEach((u) => u());
+  listeners.clear();
   fromServer.clear();
+  failed.value = new Map();
   signalBatch(() => {
     for (const name of NAMES) data[name].value = [];
     settings.value = DEFAULT_SETTINGS;

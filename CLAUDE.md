@@ -68,7 +68,9 @@ flowchart LR
   to types). `data.<collection>` signals hold live snapshots; writes
   (`put`/`patch`/`remove`/`batch()`) apply locally at once, so UI code does
   not await them. `settings/main` is one document merged over
-  `DEFAULT_SETTINGS` (`data/settings.ts`).
+  `DEFAULT_SETTINGS` (`data/settings.ts`). Firestore ends a listener for
+  good on an error, so `listen()` in the store reports it (`loadError`,
+  shown on the loading screen) and subscribes again after 30 seconds.
 - **Calendar events** live in the household's Google calendars. `calendar/engine.ts`
   fetches the loaded window (`ensureRange` widens it), caches a snapshot in
   localStorage for offline display, polls every 3 minutes, and joins each

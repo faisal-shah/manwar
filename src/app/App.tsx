@@ -4,7 +4,7 @@ import { sync } from '../calendar/engine';
 import { demoMode } from '../config';
 import { sleeping, wake } from '../core/display';
 import { weather, toUnit } from '../core/weather';
-import { ready, settings } from '../data/store';
+import { loadError, ready, settings } from '../data/store';
 import { googleProblem, session, startGoogleConnect } from '../data/session';
 import { now, nowMs, today } from '../lib/clock';
 import { formatHeaderDate, formatTime } from '../lib/date';
@@ -31,13 +31,18 @@ function ConnectScreen() {
     <div class="connect">
       <Wordmark size={15} />
       {busy ? (
-        <p>
-          {s.state === 'connecting'
-            ? 'Connecting your Google account…'
-            : s.state === 'waiting'
-              ? 'Waiting for the network to open the household…'
-              : 'Loading…'}
-        </p>
+        <>
+          <p>
+            {s.state === 'connecting'
+              ? 'Connecting your Google account…'
+              : s.state === 'waiting'
+                ? 'Waiting for the network to open the household…'
+                : 'Loading…'}
+          </p>
+          {s.state === 'signedIn' && loadError.value && (
+            <p class="error">The household's data did not load ({loadError.value}). Trying again shortly.</p>
+          )}
+        </>
       ) : (
         <>
           <p>
