@@ -103,7 +103,17 @@
   font-size: 1.45rem;
   font-weight: 600;
   white-space: nowrap;
+  /* A failing calendar is named; a long name ends in an ellipsis instead of pushing the controls off. */
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 40rem;
+}
+.sync-status > svg {
   flex: none;
+}
+.sync-status > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .sync-status.bad {
   color: var(--danger);

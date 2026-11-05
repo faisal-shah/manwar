@@ -94,7 +94,9 @@ flowchart LR
   document they mean to change. `refresh()` called during a fetch gets one
   more fetch after it (each Google request gives up after 30 seconds, so a
   dead connection cannot stall the queue or a save awaiting it), and a
-  calendar that fails keeps its last events.
+  calendar that fails keeps its last events. The fetched window counts as
+  loaded even when a calendar failed in it (the next poll asks that one
+  again), so page turns inside it do not refetch everything.
   Events with no meta are **unassigned** and listed in `unassigned` (the
   triage queue, badge on the Calendar rail item). `[EVERYONE]` means the
   whole family. Countdowns past the window (setting Always) come from
@@ -263,7 +265,10 @@ generated from it: `node scripts/icons/render.mjs` after any brand change.
   Functions SDK appends " [403]" and reports a failed request as
   "internal [0]". A token refusal only a reconnect fixes sets
   `googleProblem`; the top bar then offers the reconnect, and a calendar
-  whose sync keeps failing says how old its events are (`app/status.ts`).
+  whose sync keeps failing says how old its events are (`app/status.ts`):
+  the engine keeps each calendar's last good fetch (`syncedAt`, also in the
+  snapshot), so one failing calendar is named with its own age while the
+  others stay current.
 - Registered-or-not check without signing in: request
   `accounts.google.com/o/oauth2/v2/auth?client_id=...&redirect_uri=...` and
   look at the redirect; `signin/identifier` means registered, `authError`

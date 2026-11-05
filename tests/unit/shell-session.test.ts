@@ -48,22 +48,44 @@ describe('error messages', () => {
 
 describe('calendar status in the top bar', () => {
   const now = 1_800_000_000_000;
+  const HOUR = 3_600_000;
+  type Sync = Parameters<typeof calendarStatus>[0];
+  const s = (over: Partial<Sync>): Sync => ({ lastSync: null, error: null, failing: [], partial: false, ...over });
   it('is quiet while syncing works, or a failure is still recent', () => {
-    expect(calendarStatus({ lastSync: now - 60_000, error: null }, null, now)).toBeNull();
-    expect(calendarStatus({ lastSync: now - STALE_SYNC_MS + 1000, error: 'Failed to fetch' }, null, now)).toBeNull();
+    expect(calendarStatus(s({ lastSync: now - 60_000 }), null, now)).toBeNull();
+    expect(calendarStatus(s({ lastSync: now - STALE_SYNC_MS + 1000, error: 'Failed to fetch' }), null, now)).toBeNull();
   });
   it('shows how old the events are once a failing sync goes stale', () => {
-    expect(calendarStatus({ lastSync: now - 2 * 3_600_000, error: 'Failed to fetch' }, null, now)).toEqual({
+    const failing = [
+      { name: 'Family', at: now - HOUR },
+      { name: 'School', at: now - 2 * HOUR },
+    ];
+    expect(calendarStatus(s({ lastSync: now - 2 * HOUR, error: 'Failed to fetch', failing }), null, now)).toEqual({
       text: 'Calendar updated 2 hr ago',
       reconnect: false,
     });
-    expect(calendarStatus({ lastSync: null, error: 'Failed to fetch' }, null, now)).toEqual({
+    expect(calendarStatus(s({ error: 'Failed to fetch' }), null, now)).toEqual({
       text: 'Calendar not loaded',
       reconnect: false,
     });
   });
+  it('names the one calendar that keeps failing, with its own age', () => {
+    // The family calendar synced a minute ago; School has failed for two hours.
+    const school = { lastSync: now - 2 * HOUR, error: 'School: Google Calendar 404: Not Found', partial: true };
+    expect(calendarStatus(s({ ...school, failing: [{ name: 'School', at: now - 2 * HOUR }] }), null, now)).toEqual({
+      text: 'School updated 2 hr ago',
+      reconnect: false,
+    });
+    expect(calendarStatus(s({ ...school, failing: [{ name: 'School', at: now - 60_000 }] }), null, now)).toBeNull();
+    expect(calendarStatus(s({ ...school, failing: [{ name: 'School', at: null }] }), null, now)?.text).toBe('School not loaded');
+    const two = [
+      { name: 'School', at: now - 3 * HOUR },
+      { name: 'Soccer', at: now - HOUR },
+    ];
+    expect(calendarStatus(s({ ...school, failing: two }), null, now)?.text).toBe('2 calendars updated 3 hr ago');
+  });
   it('asks for a reconnect whenever Google refused the household', () => {
-    expect(calendarStatus({ lastSync: now, error: null }, 'Google access was revoked.', now)).toEqual({
+    expect(calendarStatus(s({ lastSync: now }), 'Google access was revoked.', now)).toEqual({
       text: 'Reconnect Google Calendar',
       reconnect: true,
     });

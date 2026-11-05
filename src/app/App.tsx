@@ -166,7 +166,7 @@ function SyncStatus({ now: at }: { now: number }) {
   return (
     <button type="button" class={`sync-status${st.reconnect ? ' bad' : ''}`} onClick={() => openSettings('google')}>
       {st.reconnect ? <TriangleAlert size="2rem" strokeWidth={2.2} /> : <CloudOff size="2rem" strokeWidth={2.2} />}
-      {st.text}
+      <span>{st.text}</span>
     </button>
   );
 }

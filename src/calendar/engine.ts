@@ -27,11 +27,21 @@ export const source: CalendarSource = demoMode ? fakeSource : googleSource;
 
 export const calendars = signal<CalendarInfo[]>([]);
 export const events = signal<CalEvent[]>([]);
-export const sync = signal<{ loading: boolean; lastSync: number | null; error: string | null }>({
-  loading: false,
-  lastSync: null,
-  error: null,
-});
+export interface SyncState {
+  loading: boolean;
+  /** When every shown calendar last answered in one fetch. */
+  lastSync: number | null;
+  error: string | null;
+  /** After a failed fetch: the shown calendars that did not answer, and when each last did (null: never). */
+  failing: { name: string; at: number | null }[];
+  /** Some shown calendars answered and only `failing` did not (rather than the whole sync failing). */
+  partial: boolean;
+}
+
+export const sync = signal<SyncState>({ loading: false, lastSync: null, error: null, failing: [], partial: false });
+
+/** When each calendar's events were last fetched. */
+const syncedAt = new Map<string, number>();
 
 /**
  * The fetched window [from, to): six weeks back and four months ahead of
@@ -50,7 +60,11 @@ function fetchWindow(): { from: ISODate; to: ISODate } {
   return { from, to };
 }
 
-/** The window of the last successful fetch. */
+/**
+ * The window of the last fetch. A calendar that failed in it is asked again
+ * by the next poll, so a page turn inside the window does not refetch every
+ * calendar for it.
+ */
 let loaded = fetchWindow();
 
 const SNAPSHOT_KEY = demoMode ? 'manwar.demoEvents.v1' : 'manwar.events.v1';
@@ -65,6 +79,8 @@ interface Snapshot {
   from: ISODate;
   to: ISODate;
   at: number;
+  /** When each calendar's events were fetched (a snapshot from before this was kept has only `at`). */
+  syncedAt?: Record<string, number>;
 }
 
 /**
@@ -89,6 +105,7 @@ function saveSnapshot(household: string) {
     from: loaded.from,
     to: loaded.to,
     at: Date.now(),
+    syncedAt: Object.fromEntries(syncedAt),
   });
   for (const withNotes of [true, false]) {
     try {
@@ -122,6 +139,7 @@ function loadSnapshot(household: string) {
       end: new Date(e.end),
       originalStart: e.originalStart === undefined ? undefined : new Date(e.originalStart),
     }));
+    for (const c of s.calendars) syncedAt.set(c.id, s.syncedAt?.[c.id] ?? s.at);
     sync.value = { ...sync.value, lastSync: s.at };
   } catch {
     /* corrupt snapshot: ignore */
@@ -180,7 +198,9 @@ async function fetchAll(): Promise<void> {
     const fresh = results.flatMap((r) => (r.status === 'fulfilled' ? r.value : []));
     events.value = [...kept, ...fresh].sort((a, b) => a.start.getTime() - b.start.getTime());
     const errors = results.flatMap((r) => (r.status === 'rejected' ? [r.reason] : []));
-    if (!failed.length) loaded = w;
+    const at = Date.now();
+    shown.forEach((c, i) => results[i].status === 'fulfilled' && syncedAt.set(c.id, at));
+    loaded = w;
     const far = await fetchFarCountdowns();
     if (stale()) return;
     farCountdowns.value = far.found;
@@ -188,15 +208,23 @@ async function fetchAll(): Promise<void> {
     if (limit) pauseSync(limit);
     else pause.step = 0;
     sync.value = errors.length
-      ? { loading: false, lastSync: sync.value.lastSync, error: `${failed[0].name}: ${message(errors[0])}` }
-      : { loading: false, lastSync: Date.now(), error: null };
+      ? {
+          loading: false,
+          lastSync: sync.value.lastSync,
+          error: `${failed[0].name}: ${message(errors[0])}`,
+          failing: failingNow(failed),
+          partial: failed.length < shown.length,
+        }
+      : { loading: false, lastSync: at, error: null, failing: [], partial: false };
     saveSnapshot(household);
   } catch (e) {
     if (stale()) return;
     if (e instanceof RateLimited) pauseSync(e);
-    sync.value = { ...sync.value, loading: false, error: message(e) };
+    sync.value = { ...sync.value, loading: false, error: message(e), failing: failingNow(visibleCalendars()), partial: false };
   }
 }
+
+const failingNow = (cals: CalendarInfo[]) => cals.map((c) => ({ name: c.name, at: syncedAt.get(c.id) ?? null }));
 
 /** Forget everything shown for the last household, so the next one starts from its own. */
 function resetForHousehold(household: string | null): void {
@@ -204,9 +232,10 @@ function resetForHousehold(household: string | null): void {
     calendars.value = [];
     events.value = [];
     farCountdowns.value = [];
-    sync.value = { loading: false, lastSync: null, error: null };
+    sync.value = { loading: false, lastSync: null, error: null, failing: [], partial: false };
   });
   farCache.clear();
+  syncedAt.clear();
   // Rate limits are per Google account.
   endPause();
   pause.step = 0;

@@ -339,6 +339,27 @@ describe('refresh', () => {
     expect(engine.events.value.map((e) => e.id).sort()).toEqual(['fresh', 'kept']);
     expect(engine.sync.value.error).toContain('404');
   });
+
+  it('a calendar that keeps failing neither refetches on every page turn nor ages the others', async () => {
+    const soccer: CalendarInfo = { ...CAL, id: 'soccer', name: 'Soccer', primary: false, accessRole: 'reader' };
+    const asked: string[] = [];
+    source.listCalendars = async () => [CAL, soccer];
+    source.listEvents = async (id) => {
+      asked.push(id);
+      if (id === 'soccer') throw new Error('Google Calendar 404: Not Found');
+      return [];
+    };
+    const idle = () => new Promise((r) => setTimeout(r, 0));
+    // Paging back to March 2020 fetches a wider window; one calendar fails in it.
+    engine.ensureRange('2020-03-01', '2020-03-07');
+    await idle();
+    expect(asked.sort()).toEqual(['fam', 'soccer']);
+    // The next page back is inside that window: no fetch for it (the poll asks the failing calendar again).
+    engine.ensureRange('2020-03-08', '2020-03-14');
+    await idle();
+    expect(asked).toHaveLength(2);
+    expect(engine.sync.value).toMatchObject({ failing: [{ name: 'Soccer', at: null }], partial: true });
+  });
 });
 
 describe('countdowns past the fetched window', () => {

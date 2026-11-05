@@ -1,3 +1,4 @@
+import type { SyncState } from '../calendar/engine';
 import { timeAgo } from '../features/messages/logic';
 
 /** A failing calendar sync shows on the wall once the events are this old (a short Wi-Fi drop stays quiet). */
@@ -18,16 +19,22 @@ export interface CalendarStatus {
 /**
  * What the top bar says about the calendar connection, or null when all is
  * well. `problem` is a Google problem only a reconnect fixes; otherwise a
- * failing sync is shown once the last good one is STALE_SYNC_MS old.
+ * failing sync is shown once the events it leaves on the wall are
+ * STALE_SYNC_MS old. When only some calendars fail, it names them (one by
+ * name) and their age, not the others'.
  */
 export function calendarStatus(
-  sync: { lastSync: number | null; error: string | null },
+  sync: Pick<SyncState, 'lastSync' | 'error' | 'failing' | 'partial'>,
   problem: string | null,
   now: number,
 ): CalendarStatus | null {
   if (problem) return { text: 'Reconnect Google Calendar', reconnect: true };
   if (!sync.error) return null;
-  if (sync.lastSync === null) return { text: 'Calendar not loaded', reconnect: false };
-  if (now - sync.lastSync < STALE_SYNC_MS) return null;
-  return { text: `Calendar updated ${timeAgo(sync.lastSync, now)}`, reconnect: false };
+  const ages = sync.failing.map((f) => f.at);
+  const at = !ages.length ? sync.lastSync : ages.includes(null) ? null : Math.min(...(ages as number[]));
+  const n = sync.failing.length;
+  const who = !sync.partial ? 'Calendar' : n === 1 ? sync.failing[0].name : `${n} calendars`;
+  if (at === null) return { text: `${who} not loaded`, reconnect: false };
+  if (now - at < STALE_SYNC_MS) return null;
+  return { text: `${who} updated ${timeAgo(at, now)}`, reconnect: false };
 }
