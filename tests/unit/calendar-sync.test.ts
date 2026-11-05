@@ -205,4 +205,26 @@ describe('calendar sync across a change of account', () => {
     expect(asked.sort()).toEqual(['ours@gmail.com', 'school@group.calendar.google.com']);
     expect(ids().sort()).toEqual(['ours-event', 'school-event']);
   });
+
+  it('takes the countdowns past the window of a calendar hidden elsewhere off at once', async () => {
+    const school = 'school@group.calendar.google.com';
+    const camp = ev(school, 'camp', {
+      allDay: true,
+      start: new Date(Date.now() + 200 * 86_400_000),
+      end: new Date(Date.now() + 201 * 86_400_000),
+    });
+    source.listCalendars = async () => [cal('ours@gmail.com'), cal(school)];
+    source.listEvents = async () => [];
+    source.nextOccurrence = async (c, id) => (c === school && id === 'camp' ? camp : null);
+    store.data.eventMeta.value = [{ id: engine.metaKey(school, 'camp'), profiles: [], countdown: true, updatedAt: 0 }];
+    store.settings.value = { ...store.settings.value, countdownWindow: 'always' };
+    await engine.refresh();
+    await settle();
+    expect(engine.countdowns.value.map((c) => c.ev.id)).toEqual(['camp']);
+    store.settings.value = { ...store.settings.value, hiddenCalendars: [school] };
+    expect(engine.countdowns.value).toEqual([]);
+    store.settings.value = { ...store.settings.value, hiddenCalendars: [], countdownWindow: '3m' };
+    store.data.eventMeta.value = [];
+    await settle();
+  });
 });
