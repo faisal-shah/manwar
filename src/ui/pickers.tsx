@@ -51,21 +51,45 @@ export function ColorSwatches({
   );
 }
 
-const EMOJI_GROUPS: Record<string, string> = {
+type EmojiGroups = Record<string, string>;
+
+const FOOD = '🍳🥞🥯🥐🍞🥪🌮🌯🍕🍝🍜🍲🍛🍚🥗🍗🍖🐟🍤🥘🍔🍟🌭🥚🧀🥦🥕🌽🍎🍌🍇🍓🍊🍉🥝🍐🥑🍪🍰🧁🍦🍫🍿🥤☕🍵🥛🧃';
+const EVENTS = '🎂🎉🎈🎁🏥🦷🩺💉✈️🚌🚆🏕️🏖️🎬🎟️🏫🏢🛍️💇📞💻🧑‍🏫👪❤️';
+
+/** Routine and chore icons first: tasks, rewards and lists. */
+export const TASK_EMOJI: EmojiGroups = {
   Routines: '☀️🌤️🌙⭐🛏️🪥🦷🧼🚿🛁🧴💧🧻🚽👕👖🧦👟🎒📚📖✏️📝🧮🔬🎨🎹🎻🎸⚽🏀🏊🚴🧘🤲🕌📿🙏',
   Chores: '🧹🧺🧽🗑️♻️🍽️🥣🧸🛒🐶🐱🐟🌱🪴🚗🧾📦🪣🧯🔧',
-  Food: '🍳🥞🥯🥐🍞🥪🌮🌯🍕🍝🍜🍲🍛🍚🥗🍗🍖🐟🍤🥘🍔🍟🌭🥚🧀🥦🥕🌽🍎🍌🍇🍓🍊🍉🥝🍐🥑🍪🍰🧁🍦🍫🍿🥤☕🍵🥛🧃',
-  Events: '🎂🎉🎈🎁🏥🦷🩺💉✈️🚌🚆🏕️🏖️🎬🎟️🏫🏢🛍️💇📞💻🧑‍🏫👪❤️',
+  Food: FOOD,
+  Events: EVENTS,
 };
 
-/** Curated emoji grid (with a field for anything else). */
-export function EmojiPicker({ value, onChange }: { value?: string; onChange: (e: string | undefined) => void }) {
-  const [group, setGroup] = useState(Object.keys(EMOJI_GROUPS)[0]);
-  const list = [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(EMOJI_GROUPS[group])].map((s) => s.segment);
+/** Food first: recipes. */
+export const RECIPE_EMOJI: EmojiGroups = { Food: FOOD, Events: EVENTS };
+
+/** Faces, people and animals: a profile's avatar. */
+export const PROFILE_EMOJI: EmojiGroups = {
+  Faces: '😀😃😄😁😆😊🙂😉😍🥰😋😛😜🤪😎🤓🥳🤩😇🤗🤠🥸😴🤖👽👻🎃😺😸',
+  People: '👶🧒👦👧🧑👱🧑‍🦱👩👨🧔👩‍🦱👨‍🦱🧕👳👵👴👸🤴🦸🦹🧙🧚🧜🧝🥷🧑‍🚀🧑‍🎨🧑‍🍳🧑‍🎓🧑‍⚕️🧑‍🔬🧑‍🚒👮🕵️💂',
+  Animals: '🐶🐱🐭🐹🐰🦊🐻🐼🐨🐯🦁🐮🐷🐸🐵🐔🐧🐦🐤🦆🦉🐺🐴🦄🐝🐞🦋🐢🐍🦖🦕🐙🦀🐠🐬🐳🦈🐊🦒🐘🦔🐿️🦜🦩🐑🐪🦓',
+};
+
+/** Curated emoji grid in `groups` (task icons unless given), with a field for anything else. */
+export function EmojiPicker({
+  value,
+  onChange,
+  groups = TASK_EMOJI,
+}: {
+  value?: string;
+  onChange: (e: string | undefined) => void;
+  groups?: EmojiGroups;
+}) {
+  const [group, setGroup] = useState(Object.keys(groups)[0]);
+  const list = [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(groups[group])].map((s) => s.segment);
   return (
     <div>
       <div class="row" style={{ marginBottom: '1rem', flexWrap: 'wrap' }}>
-        <Segmented value={group} options={Object.keys(EMOJI_GROUPS).map((g) => ({ value: g, label: g }))} onChange={setGroup} />
+        <Segmented value={group} options={Object.keys(groups).map((g) => ({ value: g, label: g }))} onChange={setGroup} />
         <input
           class="input"
           style={{ width: '9rem', textAlign: 'center', fontSize: '2.6rem' }}

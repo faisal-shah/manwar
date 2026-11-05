@@ -6,7 +6,7 @@ import { data } from '../../data/store';
 import type { MealCategoryId, Recipe } from '../../data/types';
 import { Button, Field, Stepper } from '../../ui/controls';
 import { Sheet, useCloseWhenGone } from '../../ui/overlays';
-import { EmojiPicker } from '../../ui/pickers';
+import { EmojiPicker, RECIPE_EMOJI } from '../../ui/pickers';
 import { categories } from '../meals/state';
 import { CategoryPicker } from '../meals/ui';
 import { askDeleteRecipe } from './RecipeView';
@@ -90,6 +90,7 @@ export function RecipeEditor({ recipe, onClose }: { recipe?: Recipe; onClose: ()
         {pickEmoji && (
           <div class="field">
             <EmojiPicker
+              groups={RECIPE_EMOJI}
               value={emoji}
               onChange={(e) => {
                 setEmoji(e);

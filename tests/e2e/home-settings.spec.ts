@@ -70,6 +70,26 @@ test('adds, edits, reorders and deletes a profile', async ({ page }) => {
   await expect(page.locator('.profile-row', { hasText: 'Zaid' })).toHaveCount(0);
 });
 
+test('a profile avatar is picked from faces, people and animals; tasks keep their chore icons', async ({ page }) => {
+  await open(page);
+  await openSettings(page, 'Profiles');
+  await page.getByRole('button', { name: 'Add a profile' }).click();
+  const tabs = page.locator('.set-page .emoji-grid').locator('xpath=..').getByRole('tab');
+  await expect(tabs).toHaveText(['Faces', 'People', 'Animals']);
+  await expect(page.locator('.emoji-grid button', { hasText: '🧹' })).toHaveCount(0);
+  await page.getByRole('tab', { name: 'Animals' }).click();
+  await page.locator('.emoji-grid button', { hasText: '🦁' }).click();
+  await page.getByRole('textbox', { name: 'Name' }).fill('Zaid');
+  await page.getByRole('button', { name: 'Create profile' }).click();
+  await expect(page.locator('.profile-row', { hasText: 'Zaid' }).locator('.avatar')).toHaveText('🦁');
+  await page.getByRole('button', { name: 'Close' }).click();
+
+  await rail(page, 'Tasks').click();
+  await page.locator('.fab').click();
+  await page.getByRole('button', { name: 'Add an emoji' }).click();
+  await expect(page.locator('.sheet .tk-ed-picker').getByRole('tab').first()).toHaveText('Routines');
+});
+
 test('deleting a profile sends the events only it had to the unassigned queue', async ({ page }) => {
   test.setTimeout(90_000);
   await open(page);
