@@ -86,7 +86,22 @@ flowchart LR
   whole family. Countdowns past the window (setting Always) come from
   `CalendarSource.nextOccurrence`. New events get their id from
   `newEventId()` once per editor, so a retried save updates instead of
-  duplicating.
+  duplicating. The snapshot names its household; a change of household
+  clears everything and drops another household's snapshot, and a fetch
+  that outlives its household is discarded.
+- **Google mapping** (`calendar/google.ts`, the API boundary): working
+  locations, focus time, cancelled stubs and invitations the household
+  declined are not on the wall; birthdays, Gmail events and locked copies
+  are read-only (the API refuses their times and text); hidden details read
+  Busy. Writes keep what the editor does not show: reminders are written
+  only when the reminder was changed (`keepReminders`), every timed write names
+  the event's own zones (the tablet's for new or formerly all-day events),
+  All events leaves the series times out when they were not changed, a
+  changed repeat replaces only the RRULE line (EXDATEs stay), and This and
+  following copies guests, color and reminders to the new series and cuts
+  the old one at the occurrence's `originalStart` (where the series had it,
+  not where it was moved to). A 401 drops the cached token and retries once;
+  requests give up after 30 seconds.
 - **Tasks**: `tasks/engine.ts` is pure (occurrences from schedules; late
   chores; Up for Grabs; repeat-after-done via `Task.lastDone`), unit-tested.
   `tasks/state.ts` has the reactive views and the writes. Stars use an
