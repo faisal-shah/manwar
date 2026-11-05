@@ -14,6 +14,8 @@ interface Sub {
   closed: boolean;
 }
 const subs: Sub[] = [];
+/** Snapshots-in-sync callbacks waiting for Firestore to report every live listener has the latest writes. */
+const inSync = vi.hoisted(() => [] as (() => void)[]);
 
 vi.mock('../../src/data/firebase', () => ({ db: {} }));
 vi.mock('firebase/firestore', () => {
@@ -30,6 +32,10 @@ vi.mock('firebase/firestore', () => {
     updateDoc: vi.fn(),
     deleteDoc: vi.fn(),
     writeBatch: vi.fn(),
+    onSnapshotsInSync: (_db: unknown, cb: () => void) => {
+      inSync.push(cb);
+      return () => {};
+    },
     onSnapshot: (q: { path: string }, next: Sub['next'], error: Sub['error']) => {
       const sub: Sub = { path: q.path, next, error, closed: false };
       subs.push(sub);
@@ -38,7 +44,7 @@ vi.mock('firebase/firestore', () => {
   };
 });
 
-const { closeHousehold, loadError, openHousehold, ready, settings } = await import('../../src/data/store');
+const { closeHousehold, loadError, openHousehold, ready, settings, whenShown } = await import('../../src/data/store');
 
 const live = () => subs.filter((s) => !s.closed);
 const empty = { docs: [], metadata: { fromCache: false } };
@@ -90,6 +96,31 @@ describe('store listeners', () => {
     closeHousehold();
     vi.advanceTimersByTime(30_000);
     expect(live()).toHaveLength(0);
+  });
+
+  it('says a write is shown only once no listener is down', () => {
+    openHousehold('h1');
+    live().forEach(deliver);
+    const shown = vi.fn();
+    whenShown(shown);
+    inSync.splice(0).forEach((cb) => cb());
+    expect(shown).toHaveBeenCalledOnce();
+
+    // The task states listener fails and waits to listen again. A check-off made now is not in the store,
+    // though Firestore reports every live listener in sync.
+    const states = live().find((s) => s.path.endsWith('/taskStates'))!;
+    states.error(Object.assign(new Error('Quota exceeded.'), { code: 'resource-exhausted' }));
+    const later = vi.fn();
+    whenShown(later);
+    inSync.splice(0).forEach((cb) => cb());
+    expect(later).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(30_000);
+    expect(later).not.toHaveBeenCalled();
+    // Back, with a first snapshot that has the write.
+    deliver(live().find((s) => s.path.endsWith('/taskStates'))!);
+    expect(later).toHaveBeenCalledOnce();
+    deliver(live().find((s) => s.path.endsWith('/taskStates'))!);
+    expect(later).toHaveBeenCalledOnce();
   });
 
   it('drops a pending retry when the same household is opened again (signed out and back in)', () => {

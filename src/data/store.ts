@@ -6,6 +6,7 @@ import {
   doc,
   increment,
   onSnapshot,
+  onSnapshotsInSync,
   orderBy,
   query,
   setDoc,
@@ -211,6 +212,27 @@ export function closeHousehold(): void {
     settingsLoaded.value = false;
     ready.value = false;
     householdId.value = null;
+  });
+}
+
+/**
+ * Call `done` once the store shows every write made so far: each listener
+ * has seen it (snapshots in sync) and none is down. A listener that failed
+ * sees no writes until it is opened again, and Firestore's in-sync event
+ * does not wait for it; a write guard released then would let the next
+ * tap decide from data that never showed the first.
+ */
+export function whenShown(done: () => void): void {
+  const stop = onSnapshotsInSync(db, () => {
+    stop();
+    if (!failed.peek().size) return done();
+    let finished = false;
+    const off = failed.subscribe((f) => {
+      if (f.size || finished) return;
+      finished = true;
+      off();
+      done();
+    });
   });
 }
 

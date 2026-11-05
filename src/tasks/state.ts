@@ -1,7 +1,6 @@
 import { computed } from '@preact/signals';
-import { deleteField, onSnapshotsInSync } from 'firebase/firestore';
-import { db } from '../data/firebase';
-import { batch, data, newId, profileById, profiles } from '../data/store';
+import { deleteField } from 'firebase/firestore';
+import { batch, data, newId, profileById, profiles, whenShown } from '../data/store';
 import {
   UP_FOR_GRABS,
   lastDoneKey,
@@ -40,8 +39,9 @@ export const todayProgress = computed(() => {
  * the store shows the result. Firestore applies a write to its cache and
  * raises the snapshot a few milliseconds later (more with IndexedDB), so a
  * second tap in that gap would otherwise see the old state and award,
- * refund or charge the stars twice. Snapshots-in-sync fires once every
- * listener has seen the write. Each write returns null when it did nothing.
+ * refund or charge the stars twice. The keys are freed once the store
+ * shows the write (whenShown: every listener has it, and none is down
+ * waiting to resubscribe). Each write returns null when it did nothing.
  */
 const busy = new Set<string>();
 
@@ -50,10 +50,7 @@ function exclusive(keys: (string | undefined)[], write: () => Promise<void>): Pr
   if (held.some((k) => busy.has(k))) return null;
   held.forEach((k) => busy.add(k));
   const done = write();
-  const stop = onSnapshotsInSync(db, () => {
-    stop();
-    held.forEach((k) => busy.delete(k));
-  });
+  whenShown(() => held.forEach((k) => busy.delete(k)));
   return done;
 }
 

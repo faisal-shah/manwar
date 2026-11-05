@@ -3,22 +3,15 @@ import type { Profile, Task } from '../../src/data/types';
 
 /**
  * The task write guard: a second write for the same occurrence before the
- * store shows the first is refused, and the keys are free again once
- * Firestore reports snapshots in sync. A circle tap never gets here twice
- * (tapCheck drops the rest of a double tap), so this drives the writes
- * directly against an in-memory store whose snapshot lags, as Firestore's
- * does.
+ * store shows the first is refused, and the keys are free again once the
+ * store says it shows the write (whenShown, tested with the store). A
+ * circle tap never gets here twice (tapCheck drops the rest of a double
+ * tap), so this drives the writes directly against an in-memory store
+ * whose snapshot lags, as Firestore's does.
  */
 
 const sync = vi.hoisted(() => ({ waiting: [] as (() => void)[] }));
-vi.mock('../../src/data/firebase', () => ({ db: {} }));
-vi.mock('firebase/firestore', () => ({
-  deleteField: () => 'DELETE',
-  onSnapshotsInSync: (_db: unknown, cb: () => void) => {
-    sync.waiting.push(cb);
-    return () => {};
-  },
-}));
+vi.mock('firebase/firestore', () => ({ deleteField: () => 'DELETE' }));
 
 const commits = vi.hoisted(() => ({ n: 0 }));
 vi.mock('../../src/data/store', async () => {
@@ -43,7 +36,8 @@ vi.mock('../../src/data/store', async () => {
     return api;
   };
   let id = 0;
-  return { data, profiles, profileById, batch, newId: () => `id${++id}` };
+  const whenShown = (done: () => void) => void sync.waiting.push(done);
+  return { data, profiles, profileById, batch, whenShown, newId: () => `id${++id}` };
 });
 
 const { completeTask, occurrencesFor } = await import('../../src/tasks/state');
@@ -62,7 +56,7 @@ const task: Task = {
   createdAt: 0,
 };
 
-/** Firestore raises snapshots-in-sync once every listener has the write. */
+/** The store shows the write. */
 const inSync = () => sync.waiting.splice(0).forEach((cb) => cb());
 
 describe('task write guard', () => {
@@ -80,7 +74,7 @@ describe('task write guard', () => {
     expect(completeTask(o, 'kid', today.value)).toBeNull();
     expect(commits.n).toBe(1);
 
-    // In sync, but the write did not stick (rejected and rolled back): the occurrence can be checked off again.
+    // Shown, but the write did not stick (rejected and rolled back): the occurrence can be checked off again.
     inSync();
     expect(completeTask(o, 'kid', today.value)).not.toBeNull();
     expect(commits.n).toBe(2);

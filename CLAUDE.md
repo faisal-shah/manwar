@@ -136,9 +136,12 @@ flowchart LR
   to the sum by `batch().stars()` in the same batch. Undo writes a reversing
   entry and marks the original `undoneAt`. Every write there reads the
   current state from the store (never the caller's copy) and holds its keys
-  through `exclusive()` until `onSnapshotsInSync` fires, since the local
-  snapshot lags the write by milliseconds and a second tap in between would
-  award or charge twice; writes return null when they did nothing.
+  through `exclusive()` until the store shows the write (`whenShown` in the
+  store: snapshots in sync and no listener down waiting to resubscribe,
+  since a dead listener never shows it and Firestore's in-sync event does
+  not wait for it), as the local snapshot lags the write by milliseconds
+  and a second tap in between would award or charge twice; writes return
+  null when they did nothing.
   Check-offs on another day are stamped on that day (`madeAt`), and are
   written only for an occurrence still on that day (`stillOn`: not for a
   task deleted or reassigned on another tablet while its popover was open).
