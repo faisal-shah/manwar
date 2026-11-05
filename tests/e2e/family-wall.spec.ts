@@ -13,6 +13,20 @@ test.describe.configure({ timeout: 90_000 });
 
 const rail = (page: Page, label: string) => page.locator('.rail button', { hasText: label });
 
+const FIRESTORE = 'http://127.0.0.1:8080/v1/projects/demo-manwar/databases/(default)/documents';
+type Plain = string | number | boolean;
+const enc = (v: Plain) =>
+  typeof v === 'string' ? { stringValue: v } : typeof v === 'boolean' ? { booleanValue: v } : { integerValue: String(v) };
+/** A document written straight into the emulator (the owner token bypasses the rules). */
+async function seedDoc(name: string, collection: string, doc: { id: string } & Record<string, Plain>) {
+  const res = await fetch(`${FIRESTORE}/households/demo-${name}/${collection}/${doc.id}`, {
+    method: 'PATCH',
+    headers: { Authorization: 'Bearer owner', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fields: Object.fromEntries(Object.entries(doc).map(([k, x]) => [k, enc(x)])) }),
+  });
+  expect(res.ok).toBe(true);
+}
+
 /** A touch tablet (landscape, as Fully Kiosk shows it) on a fresh demo household. */
 async function tablet(browser: Browser, extra = '') {
   const ctx = await browser.newContext({
@@ -75,5 +89,18 @@ test('Tasks: a sideways swipe on the cards brings the next columns in', async ({
   const card = (await page.locator('.pcol .tk-card').nth(2).boundingBox())!;
   await swipe(card.x + card.width / 2, card.y + card.height / 2, -500, 0);
   await expect.poll(() => cols.evaluate((el) => el.scrollLeft)).toBeGreaterThan(100);
+  await ctx.close();
+});
+
+test('Tasks and Home: a household with people but no tasks yet is told how to add one', async ({ browser }) => {
+  const { ctx, page, name } = await tablet(browser, '&seed=none');
+  await seedDoc(name, 'profiles', { id: 'p1', name: 'Yusuf', color: '#FEB306', order: 0, stars: 0, createdAt: 1 });
+  await rail(page, 'Tasks').click();
+  await expect(page.locator('.pcol[aria-label="Yusuf"] .empty')).toContainText('No tasks yet. Tap + to add a routine or chore.');
+  await rail(page, 'Home').click();
+  await expect(page.locator('.tp-card[aria-label="Yusuf"] .tp-empty')).toContainText(
+    'No tasks yet. Tap + to add a routine or chore.',
+  );
+  await page.screenshot({ path: test.info().outputPath('home.png') });
   await ctx.close();
 });

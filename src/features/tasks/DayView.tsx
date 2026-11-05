@@ -1,6 +1,6 @@
 import { Check, House } from 'lucide-preact';
 import { useLayoutEffect, useRef } from 'preact/hooks';
-import { profiles, settings } from '../../data/store';
+import { data, profiles, settings } from '../../data/store';
 import { today } from '../../lib/clock';
 import { progress } from '../../tasks/engine';
 import { occurrencesFor, todayOccurrences } from '../../tasks/state';
@@ -44,6 +44,12 @@ export function useStartInView(first: string | undefined) {
     atStart.current = (e.currentTarget as HTMLElement).scrollLeft < 1;
   };
   return { ref, onScroll };
+}
+
+/** An empty column's line; in a household with no tasks yet, how to add the first. */
+export function nothingToDo(isToday: boolean): string {
+  if (!data.tasks.value.some((t) => !t.archived)) return 'No tasks yet. Tap + to add a routine or chore.';
+  return isToday ? 'Nothing to do today.' : 'Nothing to do this day.';
 }
 
 /** No column to show: a new household with no profiles yet (with a button to Settings > Profiles), or every column filtered out. */
@@ -140,7 +146,7 @@ function DayColumn({ col, day }: { col: Col; day: string }) {
             All done!
           </div>
         )}
-        {col.all.length === 0 && <Empty emoji="🙌">{isToday ? 'Nothing to do today.' : 'Nothing to do this day.'}</Empty>}
+        {col.all.length === 0 && <Empty emoji="🙌">{nothingToDo(isToday)}</Empty>}
         {sections.filter(isOpen).map((s) => {
           const items = col.occ.filter((o) => o.section === s);
           if (!items.length) return null;
