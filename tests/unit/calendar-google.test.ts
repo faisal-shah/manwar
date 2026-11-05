@@ -412,6 +412,11 @@ describe('google calendar: reading events', () => {
     });
   });
 
+  it('refuses a success response it cannot read', async () => {
+    vi.stubGlobal('fetch', async () => new Response('<html>captive portal</html>', { status: 200 }));
+    await expect(googleSource.listCalendars()).rejects.toThrow('Google Calendar sent a response that could not be read.');
+  });
+
   describe('next occurrence (countdowns past the window)', () => {
     const after = new Date('2026-11-04T00:00');
     it('returns a one-off event until it has ended', async () => {

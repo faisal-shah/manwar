@@ -84,13 +84,17 @@ flowchart LR
 - **Calendar events** live in the household's Google calendars. `calendar/engine.ts`
   fetches a window around today (six weeks back, four months ahead, widened
   to the days the latest view asked for with `ensureRange`), caches a snapshot
-  in localStorage for offline display, polls every 3 minutes, and joins each
+  in localStorage for offline display (marked with its household: another
+  household opening drops the calendars and ignores it), polls every 3
+  minutes, and joins each
   event with `EventMeta` (Firestore `eventMeta`, keyed by
   `metaKey(calendarId, seriesId ?? id)`). An occurrence's own document
   overrides its series' document field by field (empty `profiles` = inherit);
   write through `assign`/`setCountdown`/`updateEvent`, which touch only the
   document they mean to change. `refresh()` called during a fetch gets one
-  more fetch after it, and a calendar that fails keeps its last events.
+  more fetch after it (each Google request gives up after 30 seconds, so a
+  dead connection cannot stall the queue or a save awaiting it), and a
+  calendar that fails keeps its last events.
   Events with no meta are **unassigned** and listed in `unassigned` (the
   triage queue, badge on the Calendar rail item). `[EVERYONE]` means the
   whole family. Countdowns past the window (setting Always) come from
@@ -134,13 +138,15 @@ flowchart LR
   same instant can still both award (the balance is an increment).
 - **Parental lock** (`core/lock.ts`): with a PIN set, only checking off tasks
   is open; wrap every other mutation in `asParent(() => ...)` or
-  `await requireParent()`. Repeated wrong PINs pause the pad
+  `await requireParent()`; an editor asks again on Save, since the lock can
+  relock behind an open sheet. Repeated wrong PINs pause the pad
   (`core/pin.ts`, in memory). The Calendar filter is a view preference and
   stays open.
 - **Display** (`core/display.ts`): night window switches to the dark theme
   and dims (Fully Kiosk), sleep window blanks the screen, a tap wakes it and
   it stays awake until 3 minutes pass without a touch. "Sleep now" is kept in
-  localStorage so a reload at night does not light the screen.
+  localStorage and the backlight is not touched until the settings load, so
+  a reload at night does not light the screen.
 - **Activity** (`core/activity.ts`): the one source of "someone is using the
   wall" (pointer, key and input events; the on-screen keyboard sends no
   pointer events). Idle return, relock, sleep and the update check read it.
@@ -195,7 +201,7 @@ so `1rem` = 10 design px. Use rem for every size. Tokens are CSS variables in
   once in its life: the seed sets `settings.seededAt`, and a household
   with people or lists gets it set too. Seeding runs only after a server
   read confirms the household was never seeded and is empty (an offline
-  start with a cold cache must not seed; it asks again every 20 seconds
+  start with a cold cache must not seed; it asks again every 3 seconds
   until the server answers), and the real seed uses the fixed list id
   `grocery` so two tablets on their first run do not make two lists.
 - Screenshots: `node tests/visual/shoot.mjs out.png "now=2026-11-04T11:44" [steps.json]`
@@ -217,10 +223,15 @@ generated from it: `node scripts/icons/render.mjs` after any brand change.
 
 - Preact 11: element attribute types are `import type { ButtonHTMLAttributes } from 'preact'`, not `JSX.HTMLAttributes`.
 - Firestore field paths cannot contain `*`; `lastDoneKey()` maps Up for Grabs to `any`.
-- Overlays (`Sheet`, `Modal`, `Popover`) portal to `document.body`. Their
-  scrims close through `useScrimClose`, which lets the second tap of the
-  double tap that opened them through; use it for any custom scrim. In
-  e2e tests, close by tapping away from the control that opened it.
+- Overlays (`Sheet`, `Modal`, `Popover`, the calendar `Menu`) portal to
+  `document.body` and register through `useOverlay(onClose)`: its `scrim`
+  handler lets the second tap of the double tap that opened the overlay
+  through, and a centered dialog puts `content` on its box (onClickCapture)
+  so that tap presses nothing in it (a PIN key, OK). Use it for any custom
+  overlay. Idle return closes every registered overlay (`closeOverlays()`).
+  The sleep screen uses `useScrimClose` (the same rule) and, after a waking
+  tap, stays a moment (fading) to take the rest of that double tap. In e2e
+  tests, close by tapping away from the control that opened it.
 - The Google connection uses the Google Identity Services popup code flow
   (`redirect_uri` 'postmessage'), so only the page origin must be registered.
   Google returns a refresh token on the first consent only; `connectGoogle`
@@ -230,6 +241,9 @@ generated from it: `node scripts/icons/render.mjs` after any brand change.
   claim. Reading claims refreshes an expired token, which fails offline, so
   the last household is remembered per user (`manwar.claims.v1`) and
   opened from it; with nothing remembered the screen waits for the network.
+  Only a refused sign-in (`isSignInRefused`: revoked, disabled, deleted)
+  signs the wall out; any other refresh failure (a failing token service,
+  rate limits) is treated like being offline.
   Show Firebase errors with `errorMessage()` (`data/errors.ts`): the
   Functions SDK appends " [403]" and reports a failed request as
   "internal [0]". A token refusal only a reconnect fixes sets

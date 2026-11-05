@@ -83,6 +83,13 @@ export const householdId = signal<string | null>(null);
 /** True once every collection has delivered its first snapshot. */
 export const ready = signal(false);
 
+/**
+ * True once the settings document has been read: from the cache, or the
+ * server's answer that there is none. A cache without it (a cold start, the
+ * demo's memory cache) says nothing yet, and `settings` are only the defaults.
+ */
+export const settingsLoaded = signal(false);
+
 export const profiles = computed(() => [...data.profiles.value].sort((a, b) => a.order - b.order || a.createdAt - b.createdAt));
 export const profileById = computed(() => new Map(profiles.value.map((p) => [p.id, p])));
 
@@ -114,6 +121,8 @@ const setFailed = (key: string, reason: string | null) => {
   failed.value = next;
 };
 const LISTEN_RETRY_MS = 30_000;
+/** Counts closed households, so a retry scheduled for one that closed (even if reopened since) does nothing. */
+let generation = 0;
 
 function hid(): string {
   const h = householdId.value;
@@ -131,7 +140,7 @@ export const settingsRef = () => doc(db, 'households', hid(), 'settings', 'main'
  * silently stale; it is reported and opened again after LISTEN_RETRY_MS.
  */
 function listen(key: string, open: (onError: (e: FirestoreError) => void) => Unsubscribe): void {
-  const household = householdId.value;
+  const gen = generation;
   const start = () => {
     listeners.set(
       key,
@@ -139,7 +148,7 @@ function listen(key: string, open: (onError: (e: FirestoreError) => void) => Uns
         console.warn(`store: ${key} listener failed`, e);
         setFailed(key, errorMessage(e));
         setTimeout(() => {
-          if (householdId.value === household && listeners.has(key)) start();
+          if (generation === gen) start();
         }, LISTEN_RETRY_MS);
       }),
     );
@@ -182,6 +191,7 @@ export function openHousehold(id: string): void {
       (snap) => {
         noteSource('settings', snap.metadata.fromCache);
         settings.value = mergeSettings(snap.exists() ? snap.data() : {});
+        if (snap.exists() || !snap.metadata.fromCache) settingsLoaded.value = true;
         arrived('settings');
       },
       onError,
@@ -190,6 +200,7 @@ export function openHousehold(id: string): void {
 }
 
 export function closeHousehold(): void {
+  generation++;
   listeners.forEach((u) => u());
   listeners.clear();
   fromServer.clear();
@@ -197,6 +208,7 @@ export function closeHousehold(): void {
   signalBatch(() => {
     for (const name of NAMES) data[name].value = [];
     settings.value = DEFAULT_SETTINGS;
+    settingsLoaded.value = false;
     ready.value = false;
     householdId.value = null;
   });

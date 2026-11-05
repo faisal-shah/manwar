@@ -1,6 +1,7 @@
 import type { ComponentChildren } from 'preact';
 import { createPortal } from 'preact/compat';
 import { useLayoutEffect, useRef, useState } from 'preact/hooks';
+import { useOverlay } from '../../ui/overlays';
 import { remPx } from './gestures';
 
 /**
@@ -22,6 +23,7 @@ export function Menu({
   children: ComponentChildren;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const { scrim } = useOverlay(onClose);
   const [pos, setPos] = useState<{ left: number; top: number; maxHeight: number } | null>(null);
   useLayoutEffect(() => {
     const rem = remPx();
@@ -35,7 +37,7 @@ export function Menu({
   }, [anchor, width]);
   return createPortal(
     <>
-      <div class="popover-scrim" onClick={onClose} />
+      <div class="popover-scrim" onClick={scrim} />
       <div
         ref={ref}
         class="popover cal-menu"

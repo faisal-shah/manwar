@@ -1,5 +1,5 @@
 import { computed, effect, signal } from '@preact/signals';
-import { settings } from '../data/store';
+import { settings, settingsLoaded } from '../data/store';
 import type { TimeWindow } from '../data/types';
 import { currentTime, now } from '../lib/clock';
 import { hhmmToMinutes, minutesOfDay } from '../lib/date';
@@ -99,6 +99,9 @@ export function startDisplay(): void {
     document.documentElement.dataset.text = settings.value.textScale;
   });
   effect(() => {
+    // The windows come with the household's settings. Until they load, the backlight stays as the last
+    // page left it, so a reload at night (an update, the kiosk browser restarting) does not light the room.
+    if (!settingsLoaded.value) return;
     setBrightness(sleeping.value ? 0 : theme.value === 'dark' ? 30 : 100);
   });
 }

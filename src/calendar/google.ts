@@ -60,7 +60,10 @@ async function call<T>(path: string, init: RequestInit & { query?: Record<string
       continue;
     }
     if (!res.ok) throw new GoogleError(res.status, `Google Calendar ${res.status}: ${body?.error?.message ?? res.statusText}`);
-    return (res.status === 204 ? undefined : body) as T;
+    if (res.status === 204) return undefined as T;
+    // A success that is not JSON (a captive portal's page) is not data.
+    if (body === null) throw new GoogleError(res.status, 'Google Calendar sent a response that could not be read.');
+    return body as T;
   }
 }
 

@@ -5,7 +5,7 @@ import { data, profileById, profiles } from '../../data/store';
 import type { Profile } from '../../data/types';
 import { monthShort } from '../../lib/date';
 import { Button } from '../../ui/controls';
-import { useScrimClose } from '../../ui/overlays';
+import { useOverlay } from '../../ui/overlays';
 import { Avatar } from '../../ui/profile';
 import { NoColumns } from '../tasks/DayView';
 import { editReward, redeem, redeemed, unredeem, type Redeemed } from './actions';
@@ -104,17 +104,17 @@ export function RedeemedHost() {
 function RedeemedDialog({ r }: { r: Redeemed }) {
   const p = profileById.value.get(r.profileId);
   const close = () => (redeemed.value = null);
-  const scrimClose = useScrimClose(close);
+  const taps = useOverlay(close);
   return createPortal(
     <div class="rw-celebrate" style={{ '--c': p?.color ?? 'var(--accent)' }}>
-      <div class="scrim top" onClick={scrimClose} />
+      <div class="scrim top" onClick={taps.scrim} />
       <div class="rw-glow" aria-hidden="true" />
       <div class="rw-burst" aria-hidden="true">
         {BURST.map((b) => (
           <span style={{ '--a': `${b.a}deg`, '--d': `${b.d}rem`, fontSize: `${b.s}rem`, animationDelay: `${b.delay}ms` }}>★</span>
         ))}
       </div>
-      <div class="rw-dialog" role="dialog" aria-label="Reward redeemed">
+      <div class="rw-dialog" role="dialog" aria-label="Reward redeemed" onClickCapture={taps.content}>
         <span class="rw-dialog-emoji" aria-hidden="true">
           {r.reward.emoji ?? '🎁'}
         </span>

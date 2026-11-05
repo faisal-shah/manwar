@@ -13,23 +13,65 @@ const portal = (node: ComponentChildren) => createPortal(node, document.body);
  * The second tap of a double tap lands where the first one did, a moment
  * later. When the first opened an overlay, the second falls on its scrim
  * and would close it again at once; so a scrim ignores a tap that comes
- * soon after it opened and close to the tap that opened it.
+ * soon after the overlay opened and close to the tap that opened it. A
+ * centered dialog opens wherever that tap was, so the second tap can also
+ * land on a control in it (a PIN key, OK): a dialog ignores it inside too.
  */
-const DOUBLE_TAP_MS = 450;
+export const DOUBLE_TAP_MS = 450;
 const DOUBLE_TAP_REM = 6;
 let lastDown = { x: -1e9, y: -1e9 };
 if (typeof window !== 'undefined')
   window.addEventListener('pointerdown', (e) => (lastDown = { x: e.clientX, y: e.clientY }), { capture: true, passive: true });
 
-/** Close handler for a scrim (tap outside) that lets the rest of a double tap through. */
-export function useScrimClose(onClose: () => void): (e: MouseEvent) => void {
+/** Whether a tap is the rest of the double tap that opened the calling overlay. */
+function useOpeningTap(): (e: MouseEvent) => boolean {
   const opened = useRef({ at: performance.now(), ...lastDown });
   return (e) => {
     const o = opened.current;
     const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 10;
-    const near = Math.hypot(e.clientX - o.x, e.clientY - o.y) < DOUBLE_TAP_REM * rem;
-    if (near && performance.now() - o.at < DOUBLE_TAP_MS) return;
-    onClose();
+    return performance.now() - o.at < DOUBLE_TAP_MS && Math.hypot(e.clientX - o.x, e.clientY - o.y) < DOUBLE_TAP_REM * rem;
+  };
+}
+
+/** The onClose of every overlay on screen, for closeOverlays(). */
+const onScreen = new Set<{ current: () => void }>();
+
+/**
+ * Every overlay (sheet, dialog, popover, menu) calls this. `scrim` closes it
+ * on a tap outside, letting the rest of the opening double tap through;
+ * `content`, for a centered dialog's box (onClickCapture), drops that tap
+ * inside it. The overlay also closes on idle return (closeOverlays).
+ */
+export function useOverlay(onClose: () => void): { scrim: (e: MouseEvent) => void; content: (e: MouseEvent) => void } {
+  const openingTap = useOpeningTap();
+  const close = useRef(onClose);
+  close.current = onClose;
+  useEffect(() => {
+    onScreen.add(close);
+    return () => void onScreen.delete(close);
+  }, []);
+  return {
+    scrim: (e) => {
+      if (!openingTap(e)) onClose();
+    },
+    content: (e) => {
+      if (!openingTap(e)) return;
+      e.stopPropagation();
+      e.preventDefault();
+    },
+  };
+}
+
+/** Close every overlay on screen, as if tapped away (idle return): a PIN request among them is refused. */
+export function closeOverlays(): void {
+  for (const c of [...onScreen]) c.current();
+}
+
+/** Tap handler for a full-screen layer that is not an overlay to close (the sleep screen), with the same double-tap rule. */
+export function useScrimClose(onClose: () => void): (e: MouseEvent) => void {
+  const openingTap = useOpeningTap();
+  return (e) => {
+    if (!openingTap(e)) onClose();
   };
 }
 
@@ -62,10 +104,10 @@ export function Sheet({
   wide?: boolean;
   children: ComponentChildren;
 }) {
-  const scrimClose = useScrimClose(onClose);
+  const { scrim } = useOverlay(onClose);
   return portal(
     <>
-      <div class="scrim" onClick={scrimClose} />
+      <div class="scrim" onClick={scrim} />
       <section class={`sheet${wide ? ' sheet-wide' : ''}`} role="dialog" aria-label={title}>
         <header class="sheet-head">
           {onBack ? (
@@ -97,11 +139,11 @@ export function Modal({
   children: ComponentChildren;
   actions?: ComponentChildren;
 }) {
-  const scrimClose = useScrimClose(onClose);
+  const taps = useOverlay(onClose);
   return portal(
     <>
-      <div class="scrim top" onClick={scrimClose} />
-      <div class="modal" role="dialog" aria-label={title}>
+      <div class="scrim top" onClick={taps.scrim} />
+      <div class="modal" role="dialog" aria-label={title} onClickCapture={taps.content}>
         {title && <h2>{title}</h2>}
         <div class="scroll" style={{ minHeight: 0 }}>
           {children}
@@ -128,7 +170,7 @@ export function Popover({
   children: ComponentChildren;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const scrimClose = useScrimClose(onClose);
+  const { scrim } = useOverlay(onClose);
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
   // Place it again when the viewport changes (an on-screen keyboard that resizes the page), so it stays on screen.
   const [viewport, setViewport] = useState(0);
@@ -161,7 +203,7 @@ export function Popover({
   }, [anchor, width, viewport]);
   return portal(
     <>
-      <div class="popover-scrim" onClick={scrimClose} />
+      <div class="popover-scrim" onClick={scrim} />
       <div
         ref={ref}
         class="popover"

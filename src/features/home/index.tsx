@@ -7,7 +7,7 @@ import { goTo } from '../../app/nav';
 import { asParent } from '../../core/lock';
 import { saveSettings, settings } from '../../data/store';
 import type { CalendarView, HomePane, TabId } from '../../data/types';
-import { choose } from '../../ui/overlays';
+import { choose, useOverlay } from '../../ui/overlays';
 import { CalendarPane } from '../calendar/CalendarPane';
 import { calendarTab } from '../calendar';
 import { ListsPane } from '../lists/ListsPane';
@@ -84,6 +84,19 @@ const PANES: { id: HomePane; label: string; icon: IconType }[] = [
 /** Customize: turn the Tasks and Lists panes on or off (the calendar pane always shows). */
 function Customize() {
   const [open, setOpen] = useState(false);
+  return (
+    <div class="customize">
+      <button type="button" class={`ctl home-ctl${open ? ' on' : ''}`} aria-expanded={open} onClick={() => setOpen(!open)}>
+        <LayoutGrid size="2.2rem" strokeWidth={2} />
+        Customize
+      </button>
+      {open && <CustomizeMenu onClose={() => setOpen(false)} />}
+    </div>
+  );
+}
+
+function CustomizeMenu({ onClose }: { onClose: () => void }) {
+  const { scrim } = useOverlay(onClose);
   const hidden = settings.value.homeHiddenPanes;
   const toggle = (id: HomePane) =>
     asParent(() => {
@@ -91,29 +104,21 @@ function Customize() {
       void saveSettings({ homeHiddenPanes: now.includes(id) ? now.filter((p) => p !== id) : [...now, id] });
     }, 'Enter the PIN to customize Home.');
   return (
-    <div class="customize">
-      <button type="button" class={`ctl home-ctl${open ? ' on' : ''}`} aria-expanded={open} onClick={() => setOpen(!open)}>
-        <LayoutGrid size="2.2rem" strokeWidth={2} />
-        Customize
-      </button>
-      {open && (
-        <>
-          <div class="popover-scrim" onClick={() => setOpen(false)} />
-          <div class="customize-menu" role="dialog" aria-label="Customize Home">
-            {PANES.map((p) => {
-              const on = !hidden.includes(p.id);
-              return (
-                <button type="button" role="switch" aria-checked={on} class="customize-row" onClick={() => toggle(p.id)}>
-                  <p.icon size="2.4rem" strokeWidth={2} />
-                  <span>{p.label}</span>
-                  <span class={`toggle${on ? ' on' : ''}`} aria-hidden="true" />
-                </button>
-              );
-            })}
-          </div>
-        </>
-      )}
-    </div>
+    <>
+      <div class="popover-scrim" onClick={scrim} />
+      <div class="customize-menu" role="dialog" aria-label="Customize Home">
+        {PANES.map((p) => {
+          const on = !hidden.includes(p.id);
+          return (
+            <button type="button" role="switch" aria-checked={on} class="customize-row" onClick={() => toggle(p.id)}>
+              <p.icon size="2.4rem" strokeWidth={2} />
+              <span>{p.label}</span>
+              <span class={`toggle${on ? ' on' : ''}`} aria-hidden="true" />
+            </button>
+          );
+        })}
+      </div>
+    </>
   );
 }
 

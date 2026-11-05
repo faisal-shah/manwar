@@ -1,3 +1,4 @@
+import { signal } from '@preact/signals';
 import type { FunctionComponent } from 'preact';
 import { CloudOff, Moon, Plus, Settings as SettingsIcon, TriangleAlert } from 'lucide-preact';
 import { sync } from '../calendar/engine';
@@ -9,7 +10,7 @@ import { googleProblem, session, startGoogleConnect } from '../data/session';
 import { now, nowMs, today } from '../lib/clock';
 import { formatHeaderDate, formatTime } from '../lib/date';
 import { Button } from '../ui/controls';
-import { DialogHost, ToastHost } from '../ui/overlays';
+import { DOUBLE_TAP_MS, DialogHost, ToastHost, useScrimClose } from '../ui/overlays';
 import { WeatherIcon } from '../ui/WeatherIcon';
 import { LogoMark, Wordmark } from '../ui/Logo';
 import { activeTab, goTo, openSettings, settingsOpen, sleepMenuOpen } from './nav';
@@ -107,11 +108,29 @@ function Shell() {
       <Overlays />
       <ToastHost />
       <DialogHost />
-      {sleeping.value && (
-        <div class="sleep-screen" onClick={wake} role="button" aria-label="Wake">
-          {formatTime(now.value, settings.value.timeFormat)}
-        </div>
-      )}
+      {(sleeping.value || wakeShield.value) && <SleepScreen asleep={sleeping.value} />}
+    </div>
+  );
+}
+
+/** True for a moment after a tap woke the wall: the sleep screen stays (fading) to take the rest of a double tap. */
+const wakeShield = signal(false);
+
+/**
+ * Black screen with the clock; a tap wakes the wall. The second tap of the
+ * double tap that chose "Sleep now" lands here and does not wake it, and the
+ * second tap of a double tap that wakes it lands here too, not on whatever
+ * is under it (a check circle).
+ */
+function SleepScreen({ asleep }: { asleep: boolean }) {
+  const wakeTap = useScrimClose(() => {
+    wake();
+    wakeShield.value = true;
+    setTimeout(() => (wakeShield.value = false), DOUBLE_TAP_MS);
+  });
+  return (
+    <div class={`sleep-screen${asleep ? '' : ' waking'}`} onClick={asleep ? wakeTap : undefined} role="button" aria-label="Wake">
+      {formatTime(now.value, settings.value.timeFormat)}
     </div>
   );
 }

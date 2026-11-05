@@ -47,7 +47,14 @@ export async function seedIfEmpty(): Promise<void> {
   await batch().put('lists', grocery('grocery', [])).settings({ seededAt: currentTime() }).commit();
 }
 
-const RETRY_MS = 20_000;
+/**
+ * How soon to ask again. An attempt fails at once only while Firestore counts
+ * itself offline (no network, or a first connection slower than its 10 s
+ * allowance), and the server's later answer raises no snapshot when the
+ * empty result is unchanged, so the wait is short: a first run on a slow
+ * connection gets its Grocery List seconds after the server answers.
+ */
+const RETRY_MS = 3_000;
 
 /**
  * The local cache can be empty while the household is not (an offline start

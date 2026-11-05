@@ -82,4 +82,23 @@ describe('session start', () => {
     expect(opened).toEqual([]);
     expect(session.value).toEqual({ state: 'error', error: 'The sign-in expired. Connect the Google account again.' });
   });
+
+  it('keeps the sign-in through a server error on the token refresh', async () => {
+    // Auth names a JSON server error after its message (a 503 "The service is currently unavailable.").
+    const busy = ['auth/too-many-requests', 'auth/internal-error', 'auth/the-service-is-currently-unavailable.'];
+    await auth.listener!(user('u1', { hid: 'g123' }));
+    for (const code of busy) {
+      opened.length = 0;
+      await auth.listener!(user('u1', Object.assign(new Error(`Firebase: Error (${code}).`), { code })));
+      expect(opened, code).toEqual(['g123']);
+      expect(session.value.state, code).toBe('signedIn');
+    }
+    // With nothing remembered for the user, it waits and asks again rather than signing out.
+    opened.length = 0;
+    await auth.listener!(
+      user('u3', Object.assign(new Error('Firebase: Error (auth/internal-error).'), { code: 'auth/internal-error' })),
+    );
+    expect(opened).toEqual([]);
+    expect(session.value.state).toBe('waiting');
+  });
 });

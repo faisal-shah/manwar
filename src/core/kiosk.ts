@@ -33,23 +33,33 @@ const REACQUIRE_MS = 5000;
 /**
  * Keeps the display on in plain Chrome. The browser drops the lock when the
  * page is hidden, and the system may drop it while the page stays visible
- * (battery saver); either way it is taken again.
+ * (battery saver); either way it is taken again. One request at a time and
+ * one retry waiting, however often the page shows: a browser that keeps
+ * refusing is asked once a minute.
  */
 export function holdWakeLock(): void {
   if (!('wakeLock' in navigator)) return;
   let held: WakeLockSentinel | null = null;
+  let asking = false;
+  let retry: ReturnType<typeof setTimeout> | undefined;
+  const later = (ms: number) => {
+    clearTimeout(retry);
+    retry = setTimeout(acquire, ms);
+  };
   const acquire = () => {
-    if (held || document.visibilityState !== 'visible') return;
+    if (held || asking || document.visibilityState !== 'visible') return;
+    asking = true;
     navigator.wakeLock
       .request('screen')
       .then((s) => {
         held = s;
         s.addEventListener('release', () => {
           held = null;
-          setTimeout(acquire, REACQUIRE_MS);
+          later(REACQUIRE_MS);
         });
       })
-      .catch(() => setTimeout(acquire, REACQUIRE_MS * 12));
+      .catch(() => later(REACQUIRE_MS * 12))
+      .finally(() => (asking = false));
   };
   acquire();
   document.addEventListener('visibilitychange', acquire);

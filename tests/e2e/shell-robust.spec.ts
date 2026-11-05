@@ -6,6 +6,7 @@ import { expect, test, type Page } from '@playwright/test';
  */
 
 const NOW = 'now=2026-11-04T11:44';
+const FS = 'http://127.0.0.1:8080/v1/projects/demo-manwar/databases/(default)/documents';
 const RUN = Date.now().toString(36);
 let seq = 0;
 const household = () => `e2e-shell-${RUN}-${++seq}`;
@@ -179,6 +180,38 @@ test('idle return closes a Settings sheet left open', async ({ page }) => {
   await expect(rail(page, 'Home')).toHaveClass(/on/);
 });
 
+test('idle return closes whatever was left open: an editor, and a PIN pad without running what it guarded', async ({ page }) => {
+  await page.clock.install();
+  await open(page);
+  await setIdleReturn(page);
+  await page.getByRole('button', { name: 'Close' }).click();
+
+  // A chore editor left open on the Tasks tab (Home shows tasks too, so it would come along).
+  await rail(page, 'Tasks').click();
+  await page.locator('.fab').click();
+  await expect(page.locator('.sheet')).toBeVisible();
+  await page.clock.runFor('01:20');
+  await expect(rail(page, 'Home')).toHaveClass(/on/);
+  await expect(page.locator('.sheet')).toHaveCount(0);
+
+  // A kid asked for the PIN and walked away.
+  const key = (d: string) => page.locator('.pin-setup .pin-keys button', { hasText: new RegExp(`^${d}$`) });
+  await openSettings(page, 'Parental lock');
+  await page.getByRole('button', { name: /Set a PIN/ }).click();
+  for (const d of '1357') await key(d).click();
+  await expect(page.locator('.pin-setup')).toContainText('Enter the PIN again');
+  for (const d of '1357') await key(d).click();
+  await page.getByRole('button', { name: 'Lock now' }).click();
+  await rail(page, 'Tasks').click();
+  await page.locator('.fab').click();
+  const pad = page.locator('.modal', { hasText: 'Parent PIN' });
+  await expect(pad).toBeVisible();
+  await page.clock.runFor('01:20');
+  await expect(pad).toHaveCount(0);
+  await expect(rail(page, 'Home')).toHaveClass(/on/);
+  await expect(page.locator('.sheet')).toHaveCount(0);
+});
+
 test('someone using the wall keeps scheduled sleep off until they stop', async ({ page }) => {
   await page.clock.install();
   await open(page);
@@ -221,6 +254,148 @@ test('Sleep now survives a reload of the page', async ({ page }) => {
   await page.reload();
   await expect(page.locator('.shell')).toBeVisible({ timeout: 20_000 });
   await expect(page.locator('.sleep-screen')).toHaveCount(0);
+});
+
+/** Two taps on one spot, as a finger does it (about 150 ms apart). */
+async function doubleTapAt(page: Page, x: number, y: number) {
+  await page.mouse.click(x, y);
+  await page.waitForTimeout(150);
+  await page.mouse.click(x, y);
+}
+
+test('a double tap on Sleep now sleeps, and a double tap that wakes the wall acts on nothing under it', async ({ page }) => {
+  await open(page);
+  await rail(page, 'Home').click();
+  const circle = page.locator('[data-column="asiyah"] .tk-card').first();
+  await expect(circle).toBeVisible({ timeout: 15_000 });
+  await rail(page, 'Sleep').click();
+  const sleepNowBox = (await page.getByRole('button', { name: 'Enter sleep mode now' }).boundingBox())!;
+  await doubleTapAt(page, sleepNowBox.x + sleepNowBox.width / 2, sleepNowBox.y + sleepNowBox.height / 2);
+  const sleepScreen = page.locator('.sleep-screen');
+  await page.waitForTimeout(300);
+  await expect(sleepScreen).toBeVisible();
+
+  // Wake it with a double tap right over a task's check circle.
+  const check = (await circle.locator('.tk-check').boundingBox())!;
+  await doubleTapAt(page, check.x + check.width / 2, check.y + check.height / 2);
+  await expect(sleepScreen).toHaveCount(0);
+  await page.waitForTimeout(300);
+  await expect(circle).not.toHaveClass(/done/);
+  // Once awake, a tap works as usual.
+  await circle.locator('.tk-check').click();
+  await expect(circle).toHaveClass(/done/);
+});
+
+test('a double tap opens the calendar menus and Customize Home, and they stay open', async ({ page }) => {
+  await open(page);
+  const tapTwice = async (target: ReturnType<Page['locator']>) => {
+    const box = (await target.boundingBox())!;
+    await doubleTapAt(page, box.x + box.width / 2, box.y + box.height / 2);
+    await page.waitForTimeout(300);
+  };
+  await rail(page, 'Calendar').click();
+  await tapTwice(page.locator('.cal-view-btn'));
+  await expect(page.getByRole('dialog', { name: 'Calendar view' })).toBeVisible();
+  await page.mouse.click(800, 900);
+  await expect(page.getByRole('dialog', { name: 'Calendar view' })).toHaveCount(0);
+
+  await page.waitForTimeout(500);
+  await tapTwice(page.locator('.topbar').getByRole('button', { name: /Filter/ }));
+  await expect(page.getByRole('dialog', { name: 'Filter' })).toBeVisible();
+  await page.mouse.click(800, 900);
+
+  await rail(page, 'Home').click();
+  await tapTwice(page.getByRole('button', { name: 'Customize' }));
+  await expect(page.getByRole('dialog', { name: 'Customize Home' })).toBeVisible();
+});
+
+test('the rest of a double tap that opens the PIN pad presses no key on it', async ({ page }) => {
+  await open(page);
+  const key = (scope: ReturnType<Page['locator']>, d: string) =>
+    scope.locator('.pin-keys button', { hasText: new RegExp(`^${d}$`) });
+  await openSettings(page, 'Parental lock');
+  await page.getByRole('button', { name: /Set a PIN/ }).click();
+  const setup = page.locator('.pin-setup');
+  for (const d of '2468') await key(setup, d).click();
+  await expect(setup).toContainText('Enter the PIN again');
+  for (const d of '2468') await key(setup, d).click();
+  await page.getByRole('button', { name: 'Lock now' }).click();
+  await expect(page.locator('.sheet')).toHaveCount(0);
+
+  // A missed day in the week grid asks for the PIN; find one that the pad's keys cover.
+  await rail(page, 'Tasks').click();
+  await page.getByRole('tab', { name: 'Week' }).click();
+  await page.getByRole('tab', { name: 'Asiyah' }).click();
+  const missed = page.locator('.wk-dot.missed');
+  await missed.first().click();
+  const pad = page.locator('.modal', { hasText: 'Parent PIN' });
+  const keys = await pad.locator('.pin-keys button').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON()));
+  await pad.getByRole('button', { name: 'Cancel' }).click();
+  await expect(pad).toHaveCount(0);
+  const centers = await missed.evaluateAll((els) =>
+    els.map((e) => {
+      const r = e.getBoundingClientRect();
+      return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+    }),
+  );
+  // Keys are round: the dot must sit well inside one.
+  const inKey = (c: { x: number; y: number }) =>
+    keys.some((k) => Math.hypot(c.x - (k.left + k.right) / 2, c.y - (k.top + k.bottom) / 2) < k.width * 0.35);
+  const under = centers.find(inKey)!;
+  expect(under).toBeTruthy();
+
+  await page.waitForTimeout(600);
+  await doubleTapAt(page, under.x, under.y);
+  await expect(pad).toBeVisible();
+  await page.waitForTimeout(300);
+  await expect(pad.locator('.pin-dots span.on')).toHaveCount(0);
+  // The parent's PIN goes in as typed.
+  for (const d of '2468') await key(pad, d).click();
+  await expect(pad).toHaveCount(0);
+});
+
+test('a reload inside the sleep window (an update at night) keeps the backlight off', async ({ page }) => {
+  // Fully Kiosk's brightness call, recorded.
+  await page.addInitScript(() => {
+    const w = window as unknown as { __brightness: number[]; fully: object };
+    w.__brightness = [];
+    w.fully = { setScreenBrightness: (v: number) => w.__brightness.push(v), turnScreenOn: () => {} };
+  });
+  const name = await open(page);
+  await rail(page, 'Sleep').click();
+  await page.locator('.modal .set-switch').click();
+  await page.getByRole('textbox', { name: 'From' }).fill('11:00');
+  await page.getByRole('textbox', { name: 'To' }).fill('13:00');
+  await page.getByRole('button', { name: 'Save' }).click();
+  // The demo cache is in memory: the reload reads the window from the emulator.
+  await expect
+    .poll(async () => {
+      const res = await fetch(`${FS}/households/demo-${name}/settings/main`, { headers: { Authorization: 'Bearer owner' } });
+      const body = (await res.json()) as {
+        fields?: { sleep?: { mapValue: { fields: { enabled?: { booleanValue: boolean } } } } };
+      };
+      return body.fields?.sleep?.mapValue.fields.enabled?.booleanValue ?? false;
+    })
+    .toBe(true);
+
+  await page.reload();
+  await expect(page.locator('.shell')).toBeVisible({ timeout: 20_000 });
+  // The emulator can be slow to send the settings; the wall waits for them in the dark.
+  await expect(page.locator('.sleep-screen')).toBeVisible({ timeout: 30_000 });
+  const levels = () => page.evaluate(() => (window as unknown as { __brightness: number[] }).__brightness);
+  expect(await levels()).toEqual([0]);
+
+  // The same with the database out of reach at first: the wall opens on an empty cache, whose
+  // settings are only the defaults (no sleep window), and must not light up on them.
+  const firestore = /^https?:\/\/[^/]+:8080\//;
+  await page.route(firestore, (r) => r.abort('internetdisconnected'));
+  await page.reload();
+  await expect(page.locator('.shell')).toBeVisible({ timeout: 20_000 });
+  await page.waitForTimeout(500);
+  expect(await levels()).toEqual([]);
+  await page.unroute(firestore);
+  await expect(page.locator('.sleep-screen')).toBeVisible({ timeout: 30_000 });
+  expect(await levels()).toEqual([0]);
 });
 
 test('a Google connection that needs a reconnect shows on the wall and leads to Settings', async ({ page }) => {
@@ -310,6 +485,43 @@ test('Reconnect asks for the PIN once the lock has relocked behind an open Setti
   await expect(page.locator('.modal', { hasText: 'Parent PIN' })).toContainText('Enter the PIN to reconnect Google.');
 });
 
+test('a task or reward editor left open past the relock asks for the PIN to save', async ({ page }) => {
+  await page.clock.install();
+  await open(page);
+  const key = (d: string) => page.locator('.pin-setup .pin-keys button', { hasText: new RegExp(`^${d}$`) });
+  await openSettings(page, 'Parental lock');
+  await page.getByRole('button', { name: /Set a PIN/ }).click();
+  for (const d of '1357') await key(d).click();
+  await expect(page.locator('.pin-setup')).toContainText('Enter the PIN again');
+  for (const d of '1357') await key(d).click();
+  await expect(page.getByText('The lock is on')).toBeVisible();
+  await page.getByRole('button', { name: 'Close' }).click();
+  const pad = page.locator('.modal', { hasText: 'Parent PIN' });
+
+  // Still unlocked: a parent opens a chore, then walks away; the lock relocks behind the open editor.
+  await rail(page, 'Tasks').click();
+  await page.locator('[data-column="asiyah"] .tk-card .tk-body').first().click();
+  await page.getByTestId('task-details').getByRole('button', { name: 'Edit task' }).click();
+  const editor = page.getByRole('dialog', { name: 'Edit task' });
+  await expect(editor).toBeVisible();
+  await page.clock.fastForward('02:10');
+  await editor.getByRole('button', { name: 'Save' }).click();
+  await expect(pad).toBeVisible();
+  await pad.getByRole('button', { name: 'Cancel' }).click();
+  await expect(editor).toBeVisible();
+  await editor.getByRole('button', { name: 'Cancel' }).click();
+
+  await rail(page, 'Rewards').click();
+  await page.locator('.rw-card .rw-body').first().click();
+  await expect(pad).toBeVisible();
+  for (const d of '1357') await pad.locator('.pin-keys button', { hasText: new RegExp(`^${d}$`) }).click();
+  const rewardEditor = page.getByRole('dialog', { name: 'Edit reward' });
+  await expect(rewardEditor).toBeVisible();
+  await page.clock.fastForward('02:10');
+  await rewardEditor.getByRole('button', { name: 'Save' }).click();
+  await expect(pad).toBeVisible();
+});
+
 test("a failed place search shows only the failure, not the last query's places", async ({ page }) => {
   let up = true;
   await page.route('**/geocoding-api.open-meteo.com/**', (r) =>
@@ -373,6 +585,33 @@ test('the screen wake lock is taken again when the system drops it', async ({ pa
   });
   await page.clock.runFor('00:06');
   await expect.poll(locks).toBe(2);
+});
+
+test('a wake lock the browser keeps refusing is asked for once a minute, however often the page shows', async ({ page }) => {
+  // A browser that refuses the lock (a WebView without the permission).
+  await page.addInitScript(() => {
+    const w = window as unknown as { __asks: number };
+    w.__asks = 0;
+    Object.defineProperty(navigator, 'wakeLock', {
+      value: {
+        request: () => {
+          w.__asks++;
+          return Promise.reject(new DOMException('refused', 'NotAllowedError'));
+        },
+      },
+    });
+  });
+  await page.clock.install();
+  await open(page);
+  const asks = () => page.evaluate(() => (window as unknown as { __asks: number }).__asks);
+  expect(await asks()).toBe(1);
+  // The screen goes off and on again and again over the weeks (each time the page shows).
+  for (let i = 0; i < 5; i++) await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  await page.clock.runFor('01:00');
+  const afterAMinute = await asks();
+  await page.clock.runFor('05:00');
+  // Five more minutes: five more asks, not five per retry chain.
+  expect((await asks()) - afterAMinute).toBeLessThanOrEqual(5);
 });
 
 test('five wrong PINs pause the pad; the right PIN works after the pause', async ({ page }) => {
