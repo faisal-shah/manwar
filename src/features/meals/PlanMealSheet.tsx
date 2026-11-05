@@ -12,7 +12,7 @@ import { ingredientLines, searchRecipes } from '../recipes/text';
 import { openIngredients } from './IngredientsModal';
 import type { Scope } from './plan';
 import { categoryById, changeOccurrence, liveMeal, planMeal, visibleCategories } from './state';
-import { CategoryBadge, CategoryPicker, DayPicker, RepeatRow } from './ui';
+import { CategoryPicker, DayPicker, RecipeRowContent, RepeatRow } from './ui';
 
 export const SCOPES: { value: Scope; label: string }[] = [
   { value: 'one', label: 'Just this day' },
@@ -113,9 +113,7 @@ export function PlanMealSheet({
     const rc = categoryById.value.get(r.category);
     return (
       <button type="button" class={`pick-row${r.id === recipeId ? ' on' : ''}`} key={r.id} onClick={() => pick(r)}>
-        <span class="pick-emoji">{r.emoji ?? (rc && <CategoryBadge category={rc} size={3.2} />)}</span>
-        <bdi class="grow">{r.name}</bdi>
-        {rc && <CategoryBadge category={rc} size={2.8} />}
+        <RecipeRowContent recipe={r} category={rc} leadClass="pick-emoji" />
       </button>
     );
   };
