@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { expect as baseExpect, test, devices, type Browser, type Page } from '@playwright/test';
+import { expect as baseExpect, test, devices, type Browser, type BrowserContextOptions, type Page } from '@playwright/test';
 import { NOW, pairPhone, wall, type Opened } from './phone-helpers';
 
 /*
@@ -68,9 +68,18 @@ async function wallAt(browser: Browser, household: string, now: string): Promise
   return { page, errors };
 }
 
-/** A phone (Pixel 7, not paired: signed in as the wall) on the Calendar tab. `init` runs before the app. */
-async function phoneCal(browser: Browser, household: string, opts: { now?: string; init?: string; device?: string } = {}) {
-  const ctx = await browser.newContext({ ...devices[opts.device ?? 'Pixel 7'], timezoneId: 'America/Chicago' });
+/** The smallest phone screen it is made for, with touch. */
+const SMALL = { viewport: { width: 360, height: 780 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true };
+/** The phone's text size set larger (rem is a share of it). */
+const LARGER_TEXT = `addEventListener('DOMContentLoaded', () => (document.documentElement.style.fontSize = '75%'))`;
+
+/** A phone (Pixel 7 unless `screen` says, not paired: signed in as the wall) on the Calendar tab. `init` runs before the app. */
+async function phoneCal(
+  browser: Browser,
+  household: string,
+  opts: { now?: string; init?: string; screen?: BrowserContextOptions } = {},
+) {
+  const ctx = await browser.newContext({ ...(opts.screen ?? devices['Pixel 7']), timezoneId: 'America/Chicago' });
   if (opts.init) await ctx.addInitScript(opts.init);
   const page = await ctx.newPage();
   const errors = track(page);
@@ -393,6 +402,21 @@ test('an unpaired phone asks for the PIN; a paired one never does', async ({ bro
   for (const d of '2468') await pad.getByRole('button', { name: d, exact: true }).click();
   await expect(pad).toHaveCount(0);
   await expect(page.locator(`[data-triage="${PT}"]`)).toContainText('For Hashim!');
+
+  // On a 360 px phone with its text set larger, every key is inside the pad, labels whole.
+  const small = await phoneCal(browser, household, { screen: SMALL, init: LARGER_TEXT });
+  await small.page.getByRole('button', { name: 'Add event' }).click();
+  const smallPad = small.page.locator('.pin-keys');
+  await expect(smallPad).toBeVisible();
+  const modal = (await small.page.locator('.modal').boundingBox())!;
+  for (const b of await smallPad.locator('button').all()) {
+    const box = (await b.boundingBox())!;
+    expect(box.x).toBeGreaterThanOrEqual(modal.x);
+    expect(box.x + box.width).toBeLessThanOrEqual(modal.x + modal.width);
+    expect(box.width).toBeGreaterThanOrEqual(48);
+    expect(await b.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+  }
+  expect(small.errors).toEqual([]);
 
   await calTab(paired.page).click();
   await paired.page.locator('.phc-waiting').click();

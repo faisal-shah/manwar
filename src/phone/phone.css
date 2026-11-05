@@ -245,6 +245,16 @@ html[data-layout='phone'] .modal {
 html[data-layout='phone'] .modal h2 {
   font-size: 2.4rem;
 }
+/* The PIN keys shrink to the dialog on a narrow phone with large text, staying round. */
+html[data-layout='phone'] .pin-keys {
+  grid-template-columns: repeat(3, minmax(0, 8rem));
+  gap: 1.2rem;
+}
+html[data-layout='phone'] .pin-keys button {
+  height: auto;
+  aspect-ratio: 1;
+  min-width: 0;
+}
 html[data-layout='phone'] .popover {
   left: 0 !important;
   right: 0;
