@@ -404,7 +404,7 @@ sequenceDiagram
   closes with a toast; one deleted here (`deletedOnThisDevice`) or one
   whose editor said so already does not repeat it.
 - **More rows**: Meals (`phone/meals/`: tonight's dinner with its
-  ingredients, the week by day and category from `weekByDay`, planning
+  ingredients, the week by day and category from `weekByDay`, this week's days before today folded into one row, planning
   through `PlanMealSheet` on `planTarget`, a meal's `MealPopover`, which
   has no Open recipe on a phone), Note to the wall (`phone/notes/`: from
   whom, remembered per phone, read aloud, the notes the wall shows or

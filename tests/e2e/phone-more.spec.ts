@@ -474,3 +474,28 @@ test('an empty household: a typed dinner, a note from no one, and the timer', as
   await expect(p.page.locator('.phl-row')).toContainText('Nothing on it yet');
   expect([...w.errors, ...p.errors]).toEqual([]);
 });
+
+test("this week's days before today fold into one row, so today shows first; another week shows whole", async ({
+  browser,
+}) => {
+  const hh = name('mealsfold');
+  await wall(browser, hh);
+  const p = await phone(browser, hh);
+  await more(p.page, 'Meals');
+  // Wednesday: Sunday to Tuesday are one row, and today's card comes first.
+  const earlier = p.page.locator('.pm-earlier');
+  await expect(earlier).toContainText('Earlier this week');
+  await expect(earlier).toContainText('Sun to Tue');
+  await expect(p.page.locator('.pm-day', { hasText: 'Sunday, Nov 1' })).toHaveCount(0);
+  await expect(p.page.locator('.pm-day').first()).toHaveClass(/today/);
+  await earlier.click();
+  await expect(earlier).toHaveCount(0);
+  await expect(p.page.locator('.pm-day').first()).toContainText('Sunday, Nov 1');
+  // Next week has no past days to fold; back on this week, they fold again.
+  await p.page.getByRole('button', { name: 'Next week' }).click();
+  await expect(p.page.locator('.pm-day')).toHaveCount(7);
+  await expect(earlier).toHaveCount(0);
+  await p.page.getByRole('button', { name: /back to this week/ }).click();
+  await expect(earlier).toBeVisible();
+  expect(p.errors).toEqual([]);
+});

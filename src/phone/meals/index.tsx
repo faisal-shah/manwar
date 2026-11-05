@@ -1,7 +1,8 @@
 import '../../features/meals/meals.css';
 import './meals.css';
 import { signal } from '@preact/signals';
-import { ChevronLeft, ChevronRight, Plus, Repeat as RepeatIcon, ShoppingCart, Utensils } from 'lucide-preact';
+import { ChevronDown, ChevronLeft, ChevronRight, Plus, Repeat as RepeatIcon, ShoppingCart, Utensils } from 'lucide-preact';
+import { useState } from 'preact/hooks';
 import { asParent } from '../../core/lock';
 import { data } from '../../data/store';
 import type { ISODate, MealCategoryId, MealEntry } from '../../data/types';
@@ -12,7 +13,7 @@ import { formatWeekRange } from '../../features/meals/plan';
 import { mealEmoji, planTarget, recipeOf, visibleCategories, weekOffset, weekStartDate } from '../../features/meals/state';
 import { CategoryBadge } from '../../features/meals/ui';
 import { today } from '../../lib/clock';
-import { formatLongDate, fromISODate } from '../../lib/date';
+import { dayShort, formatLongDate, fromISODate, weekdayOf } from '../../lib/date';
 import { Button, Empty, IconButton } from '../../ui/controls';
 import { useOpeningTapGuard } from '../../ui/overlays';
 import type { MoreItem } from '../more/items';
@@ -87,37 +88,62 @@ function Tonight() {
   );
 }
 
-/** More > Meals: tonight's dinner and the week by day, with planning and ingredients. */
+/**
+ * More > Meals: tonight's dinner and the week by day, with planning and
+ * ingredients. In this week, the days before today fold into one row (a
+ * phone shows only a few days at once, and today should be one of them).
+ */
 function MealsView() {
   const guard = useOpeningTapGuard();
+  const [earlierOpen, setEarlierOpen] = useState(false);
   const cats = visibleCategories.value;
   const days = weekByDay(data.meals.value, weekStartDate.value, cats);
   const target = planTarget.value;
   const pop = popover.value;
   const thisYear = fromISODate(today.value).getFullYear();
+  const earlier = weekOffset.value === 0 ? days.filter((d) => d.date < today.value) : [];
+  const shown = earlierOpen ? days : days.slice(earlier.length);
+  const changeWeek = (offset: number) => {
+    weekOffset.value = offset;
+    setEarlierOpen(false);
+  };
   return (
     <div class="ph-stack" {...guard}>
       <Tonight />
       <div class="pm-weeknav">
-        <IconButton label="Previous week" onClick={() => weekOffset.value--}>
+        <IconButton label="Previous week" onClick={() => changeWeek(weekOffset.value - 1)}>
           <ChevronLeft size="2.6rem" />
         </IconButton>
         <button
           type="button"
           class={`pm-week${weekOffset.value === 0 ? ' on' : ''}`}
-          onClick={() => (weekOffset.value = 0)}
+          onClick={() => changeWeek(0)}
           aria-label={
             weekOffset.value === 0 ? 'This week' : `${formatWeekRange(weekStartDate.value, thisYear)}, back to this week`
           }
         >
           {weekOffset.value === 0 ? 'This week' : formatWeekRange(weekStartDate.value, thisYear)}
         </button>
-        <IconButton label="Next week" onClick={() => weekOffset.value++}>
+        <IconButton label="Next week" onClick={() => changeWeek(weekOffset.value + 1)}>
           <ChevronRight size="2.6rem" />
         </IconButton>
       </div>
+      {cats.length > 0 && earlier.length > 0 && !earlierOpen && (
+        <button type="button" class="pm-earlier" onClick={() => setEarlierOpen(true)}>
+          <span>
+            Earlier this week
+            <small class="muted">
+              {earlier.length === 1
+                ? dayShort(weekdayOf(earlier[0].date))
+                : `${dayShort(weekdayOf(earlier[0].date))} to ${dayShort(weekdayOf(earlier[earlier.length - 1].date))}`}
+              {`, ${countMeals(earlier)}`}
+            </small>
+          </span>
+          <ChevronDown size="2.2rem" aria-hidden="true" />
+        </button>
+      )}
       {cats.length ? (
-        days.map((d) => {
+        shown.map((d) => {
           const isToday = d.date === today.value;
           const first = planCategory(d, cats);
           return (
@@ -166,6 +192,11 @@ function MealsView() {
     </div>
   );
 }
+
+const countMeals = (days: { meals: unknown[] }[]) => {
+  const n = days.reduce((sum, d) => sum + d.meals.length, 0);
+  return n === 0 ? 'nothing planned' : n === 1 ? '1 meal' : `${n} meals`;
+};
 
 export const mealsItem: MoreItem = {
   id: 'meals',

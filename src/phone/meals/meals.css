@@ -172,3 +172,23 @@ html[data-layout='phone'] .im-tag {
 html[data-layout='phone'] .im-lead {
   font-size: 1.7rem;
 }
+/* This week's days before today, folded into one row. */
+.pm-earlier {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.2rem;
+  min-height: var(--touch);
+  padding: 0.8rem 1.6rem;
+  border-radius: 1.8rem;
+  background: var(--surface-strong);
+  color: var(--text);
+  font-size: 1.6rem;
+  font-weight: 600;
+  text-align: start;
+}
+.pm-earlier small {
+  display: block;
+  font-size: 1.4rem;
+  font-weight: 400;
+}
