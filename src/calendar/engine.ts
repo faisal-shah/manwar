@@ -369,13 +369,15 @@ export function defaultCalendarId(): string {
   return (w.find((c) => c.id === chosen) ?? w.find((c) => c.primary) ?? w[0])?.id ?? '';
 }
 
+/** Add an event; `id` comes from newEventId() once per editor, so retrying a failed save is safe. */
 export async function createEvent(
   calendarId: string,
+  id: string,
   draft: EventDraft,
   profileIds: string[],
   opts: { countdown?: boolean } = {},
 ): Promise<void> {
-  const { id } = await source.insert(calendarId, draft);
+  await source.insert(calendarId, id, draft);
   // Firestore writes apply to the local cache at once; awaiting the server ack would hang offline.
   void put('eventMeta', {
     id: metaKey(calendarId, id),

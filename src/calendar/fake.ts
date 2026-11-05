@@ -243,12 +243,10 @@ export const fakeSource: CalendarSource = {
     return ms?.repeat ? [toRRule(ms.repeat, ms.allDay)] : [];
   },
 
-  async insert(calendarId, draft) {
-    const ms = load();
-    const id = `ev${Math.random().toString(36).slice(2, 10)}`;
+  async insert(calendarId, id, draft) {
+    const ms = load().filter((x) => x.id !== id);
     ms.push(fromDraft(id, calendarId, draft));
     save(ms);
-    return { id };
   },
 
   async update(ev, draft, scope) {

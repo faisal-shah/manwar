@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CalEvent, EventDraft } from '../../src/calendar/types';
+import { newEventId, type CalEvent, type EventDraft } from '../../src/calendar/types';
 
 vi.mock('../../src/data/session', () => ({ googleAccessToken: async () => 'token' }));
 
@@ -438,6 +438,37 @@ describe('google calendar: writing events', () => {
         `DELETE /calendars/${CAL}/events/swim2`,
       ]);
     });
+  });
+
+  it('adds an event under the id the app chose, and a retry updates it instead of adding it twice', async () => {
+    const id = newEventId();
+    expect(id).toMatch(/^[0-9a-v]{26}$/);
+    expect(newEventId()).not.toBe(id);
+    const draft: EventDraft = {
+      ...allDayDraft,
+      allDay: false,
+      start: new Date('2026-11-06T09:00'),
+      end: new Date('2026-11-06T10:00'),
+    };
+    routes.push((c) =>
+      c.method === 'POST' && calls.filter((x) => x.method === 'POST').length === 1 ? { body: { id } } : undefined,
+    );
+    routes.push((c) =>
+      c.method === 'POST'
+        ? { status: 409, body: { error: { code: 409, message: 'The requested identifier already exists.' } } }
+        : undefined,
+    );
+    routes.push((c) => (c.method === 'PATCH' ? { body: { id } } : undefined));
+    await googleSource.insert(CAL, id, draft);
+    expect(calls[0].body).toMatchObject({ id, summary: 'Dentist' });
+    // The response was lost and the parent taps Add again, with the title fixed.
+    await googleSource.insert(CAL, id, { ...draft, title: 'Dentist (Asiyah)' });
+    expect(calls.map((c) => `${c.method} ${c.path}`)).toEqual([
+      `POST /calendars/${CAL}/events`,
+      `POST /calendars/${CAL}/events`,
+      `PATCH /calendars/${CAL}/events/${id}`,
+    ]);
+    expect(calls[2].body.summary).toBe('Dentist (Asiyah)');
   });
 
   it('treats deleting an event that is already gone as done', async () => {

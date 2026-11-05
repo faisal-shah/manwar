@@ -206,12 +206,18 @@ export const googleSource: CalendarSource = {
     return g.recurrence ?? [];
   },
 
-  async insert(calendarId, draft) {
-    const g = await call<GEvent>(`/calendars/${encodeURIComponent(calendarId)}/events`, {
-      method: 'POST',
-      body: JSON.stringify(draftBody(draft)),
-    });
-    return { id: g.id };
+  async insert(calendarId, id, draft) {
+    const cal = encodeURIComponent(calendarId);
+    try {
+      await call<GEvent>(`/calendars/${cal}/events`, { method: 'POST', body: JSON.stringify({ ...draftBody(draft), id }) });
+    } catch (e) {
+      // A retry after a lost response: the event exists already, so bring it up to date instead of adding it twice.
+      if (!(e instanceof GoogleError && e.status === 409)) throw e;
+      await call(`/calendars/${cal}/events/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify(draftBody(draft)),
+      });
+    }
   },
 
   async update(ev, draft, scope) {

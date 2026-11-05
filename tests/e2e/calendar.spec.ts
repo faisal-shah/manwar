@@ -112,11 +112,12 @@ test('creates an event', async ({ page }) => {
   await sheet.locator('input[name="startTime"]').fill('16:00');
   await expect(sheet.locator('input[name="endTime"]')).toHaveValue('17:00');
   await sheet.locator('.picker button', { hasText: 'Asiyah' }).click();
-  await sheet.getByRole('button', { name: 'Add', exact: true }).click();
+  // A double tap adds one event.
+  await sheet.getByRole('button', { name: 'Add', exact: true }).dblclick();
   await expect(page.locator('.toast')).toContainText('Event added');
   await expect(sheet).toHaveCount(0);
   const block = page.locator('.sched-col[data-day="2026-11-05"] .ev-block', { hasText: 'Science fair' });
-  await expect(block).toBeVisible();
+  await expect(block).toHaveCount(1);
   await expect(block).not.toHaveClass(/ev-unassigned/);
   await block.click();
   await expect(page.locator('.ev-detail')).toContainText('Asiyah');

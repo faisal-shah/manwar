@@ -9,6 +9,7 @@ import {
   writableCalendars,
 } from '../../calendar/engine';
 import { fromRecurrence } from '../../calendar/rrule';
+import { newEventId } from '../../calendar/types';
 import { asParent } from '../../core/lock';
 import { currentTime } from '../../lib/clock';
 import { addDays, hhmmToMinutes } from '../../lib/date';
@@ -21,7 +22,7 @@ import type { Repeat } from '../../data/types';
 import { askScope, deleteFlow, errorToast } from './actions';
 import { draftFromForm, formFromEvent, formProblem, newForm, sameRepeat, setAllDay, shiftStart, type Form } from './form';
 import { calendarName, reminderLabel } from './model';
-import type { EditorRequest } from './state';
+import { editorSaved, type EditorRequest } from './state';
 
 const REMINDERS = [0, 5, 10, 15, 30, 60, 120, 1440];
 
@@ -39,6 +40,8 @@ export function EventEditor({ req, onClose }: { req: EditorRequest; onClose: () 
   /** The series' rule as loaded, to tell whether the repeat was changed. */
   const [loadedRule, setLoadedRule] = useState<Repeat | undefined>(undefined);
   const [busy, setBusy] = useState(false);
+  /** One id for the event this editor adds, kept across retries. */
+  const [newId] = useState(newEventId);
   const set = (patch: Partial<Form>) => setForm((f) => ({ ...f, ...patch }));
 
   // A recurring event's rule comes from its series. Rules the editor cannot show are kept as they are.
@@ -78,8 +81,9 @@ export function EventEditor({ req, onClose }: { req: EditorRequest; onClose: () 
       setBusy(true);
       try {
         if (ev) await updateEvent(ev, draft, scope, form.profiles, { countdown: form.countdown });
-        else await createEvent(form.calendarId, draft, form.profiles, { countdown: form.countdown });
+        else await createEvent(form.calendarId, newId, draft, form.profiles, { countdown: form.countdown });
         toast(ev ? 'Event saved' : 'Event added');
+        editorSaved();
         onClose();
       } catch (e) {
         errorToast('Could not save the event', e);
