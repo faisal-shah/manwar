@@ -88,7 +88,7 @@ export function ListCard({ list, compact }: { list: List; compact?: boolean }) {
           aria-checked={checked}
           aria-label={`${checked ? 'Uncheck' : 'Check off'} ${item.text}`}
           class="li-check"
-          onClick={() => setDone(item, !item.done)}
+          onClick={() => setDone(item, !checked)}
         >
           <span class="box">{checked && <Check size="2.4rem" strokeWidth={3} />}</span>
         </button>
@@ -358,7 +358,7 @@ function AddSectionField({ list, autoFocus, onDone }: { list: List; autoFocus: b
 function ItemEditor({
   list,
   view,
-  item,
+  item: opened,
   anchor,
   onClose,
 }: {
@@ -368,16 +368,23 @@ function ItemEditor({
   anchor: DOMRect;
   onClose: () => void;
 }) {
+  // The fields start from the item as opened; order, section and done follow the live item.
+  const live = (itemsByList.value.get(list.id) ?? []).find((i) => i.id === opened.id);
+  const item = live ?? opened;
   const from = sectionOf(list, item);
-  const [text, setText] = useState(item.text);
-  const [qty, setQty] = useState(item.qty ?? '');
-  const [section, setSection] = useState<string | null>(from);
+  const [text, setText] = useState(opened.text);
+  const [qty, setQty] = useState(opened.qty ?? '');
+  const [section, setSection] = useState<string | null>(sectionOf(list, opened));
+  // Deleted elsewhere (another device, or Clear done): nothing left to edit.
+  useEffect(() => {
+    if (!live) onClose();
+  }, [!live]);
   const group = view.groups.find((g) => (g.section?.id ?? null) === from)?.items.filter((i) => !i.done) ?? [];
   const idx = group.findIndex((i) => i.id === item.id);
   const save = () =>
     void asParent(() => {
       const order = section !== from ? topOrder(list, itemsByList.value.get(list.id) ?? [], section) : undefined;
-      updateItem(item, text.trim(), qty, section, order);
+      updateItem(item.id, text.trim(), qty, section, order);
       onClose();
     });
   const move = (d: -1 | 1) => void asParent(() => applyOrder(moveBy(group, item.id, d, from)));

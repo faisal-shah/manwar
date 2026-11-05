@@ -89,6 +89,13 @@ export function Popover({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+  // Place it again when the viewport changes (an on-screen keyboard that resizes the page), so it stays on screen.
+  const [viewport, setViewport] = useState(0);
+  useEffect(() => {
+    const onResize = () => setViewport((n) => n + 1);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -103,7 +110,7 @@ export function Popover({
     if (left < gap) left = Math.max(gap, Math.min(vw - w - gap, anchor.left + anchor.width / 2 - w / 2));
     const top = Math.max(gap, Math.min(vh - h - gap, anchor.top + anchor.height / 2 - h / 2));
     setPos({ left, top });
-  }, [anchor, width]);
+  }, [anchor, width, viewport]);
   return portal(
     <>
       <div class="popover-scrim" onClick={onClose} />
