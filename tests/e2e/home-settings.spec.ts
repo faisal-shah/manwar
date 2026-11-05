@@ -172,6 +172,20 @@ test('hides a tab, keeping Home or Calendar on', async ({ page }) => {
   await expect(page.getByRole('switch', { name: /^Calendar/ })).toBeEnabled();
 });
 
+test('the message composer and a new event open with their text field focused', async ({ page }) => {
+  await open(page);
+  await rail(page, 'Home').click();
+  await page.getByRole('button', { name: 'Message' }).click();
+  await expect(page.getByRole('textbox', { name: 'Message' })).toBeFocused();
+  await page.keyboard.type('Hi');
+  await expect(page.getByRole('textbox', { name: 'Message' })).toHaveValue('Hi');
+  await page.locator('.sheet').getByRole('button', { name: 'Cancel' }).click();
+
+  await rail(page, 'Calendar').click();
+  await page.locator('.fab').click();
+  await expect(page.locator('.sheet input[name=title]')).toBeFocused();
+});
+
 test('posts a message that shows full screen until someone taps OK', async ({ page }) => {
   await open(page);
   await rail(page, 'Home').click();

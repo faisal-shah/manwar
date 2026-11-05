@@ -296,6 +296,9 @@ generated from it: `node scripts/icons/render.mjs` after any brand change.
 - Up and Down buttons on a reorderable list move with their row: route taps
   through `moveTarget` (`settings/logic.ts`) so a quick run of taps on one
   spot keeps moving the row it started with.
+- `autoFocus` does nothing after the first focus on the page (the button
+  that opened a sheet has it): focus a field with `useAutoFocus`
+  (`ui/controls.tsx`), a ref that calls `focus()` once it is mounted.
 - Overlays (`Sheet`, `Modal`, `Popover`, the calendar `Menu`) portal to
   `document.body` and register through `useOverlay(onClose)`: its `scrim`
   handler lets the second tap of the double tap that opened the overlay

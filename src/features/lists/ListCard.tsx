@@ -5,7 +5,7 @@ import { ArrowDown, ArrowUp, Check, ChevronDown, ChevronUp, Ellipsis, Plus, X } 
 import { asParent, pinRequest, requireParent, unlocked } from '../../core/lock';
 import { put } from '../../data/store';
 import type { List, ListItem } from '../../data/types';
-import { Button, Chips } from '../../ui/controls';
+import { Button, Chips, useAutoFocus } from '../../ui/controls';
 import { Popover, confirm, toast } from '../../ui/overlays';
 import { parseIngredient } from '../meals/ingredients';
 import { groupItems, listColor, moveBy, reorder, sectionOf, topOrder, type ListView } from './logic';
@@ -277,10 +277,7 @@ function AddItemField({
   onDone?: () => void;
 }) {
   const [text, setText] = useState('');
-  const ref = useRef<HTMLInputElement>(null);
-  useEffect(() => {
-    if (autoFocus) ref.current?.focus();
-  }, [autoFocus]);
+  const ref = useAutoFocus<HTMLInputElement>(autoFocus);
   const submit = () => {
     const raw = text.trim();
     if (!raw) return;

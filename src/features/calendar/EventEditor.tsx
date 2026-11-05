@@ -12,7 +12,7 @@ import { fromRecurrence } from '../../calendar/rrule';
 import { newEventId } from '../../calendar/types';
 import { asParent } from '../../core/lock';
 import { currentTime } from '../../lib/clock';
-import { Button, Field, Toggle } from '../../ui/controls';
+import { Button, Field, Toggle, useAutoFocus } from '../../ui/controls';
 import { Sheet, toast } from '../../ui/overlays';
 import { ProfilePicker } from '../../ui/profile';
 import { RepeatEditor } from '../../ui/pickers';
@@ -50,6 +50,7 @@ export function EventEditor({ req, onClose }: { req: EditorRequest; onClose: () 
   /** The series' rule as loaded, to tell whether the repeat was changed. */
   const [loadedRule, setLoadedRule] = useState<Repeat | undefined>(undefined);
   const [busy, setBusy] = useState(false);
+  const titleField = useAutoFocus<HTMLInputElement>(!ev);
   /** One id for the event this editor adds, kept across retries. */
   const [newId] = useState(newEventId);
   const set = (patch: Partial<Form>) => setForm((f) => ({ ...f, ...patch }));
@@ -132,11 +133,11 @@ export function EventEditor({ req, onClose }: { req: EditorRequest; onClose: () 
       <div class="cal-editor">
         <Field label="Title">
           <input
+            ref={titleField}
             class="input"
             name="title"
             value={form.title}
             placeholder="Event title"
-            autoFocus={!ev}
             onInput={(e) => set({ title: (e.target as HTMLInputElement).value })}
           />
         </Field>

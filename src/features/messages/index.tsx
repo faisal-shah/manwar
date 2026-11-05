@@ -6,7 +6,7 @@ import { asParent } from '../../core/lock';
 import { profileById, settings } from '../../data/store';
 import type { Message } from '../../data/types';
 import { nowMs } from '../../lib/clock';
-import { Button, Field } from '../../ui/controls';
+import { Button, Field, useAutoFocus } from '../../ui/controls';
 import { Sheet } from '../../ui/overlays';
 import { Avatar, ProfilePicker } from '../../ui/profile';
 import { MAX_MESSAGE_LENGTH, messageSize, timeAgo } from './logic';
@@ -30,6 +30,7 @@ function Composer() {
   const [text, setText] = useState('');
   const [from, setFrom] = useState<string | undefined>();
   const [readAloud, setReadAloud] = useState(false);
+  const field = useAutoFocus<HTMLTextAreaElement>();
   const close = () => (composerOpen.value = false);
   const body = text.trim();
   const post = () =>
@@ -54,13 +55,13 @@ function Composer() {
     >
       <Field label="Message">
         <textarea
+          ref={field}
           class="input message-input"
           aria-label="Message"
           maxLength={MAX_MESSAGE_LENGTH}
           placeholder="Write a note for the family"
           value={text}
           onInput={(e) => setText((e.target as HTMLTextAreaElement).value)}
-          autoFocus
         />
         <span class="message-count">
           {text.length}/{MAX_MESSAGE_LENGTH}
