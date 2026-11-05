@@ -216,7 +216,6 @@ function NowLine() {
 
 function Row({ row, color }: { row: AgendaRow; color?: string }) {
   const ev = row.ev;
-  const sub = [row.span, ev.location].filter(Boolean);
   return (
     <li>
       <button
@@ -234,9 +233,16 @@ function Row({ row, color }: { row: AgendaRow; color?: string }) {
           <span class="phc-ev-title" dir="auto">
             {ev.title}
           </span>
-          {sub.length > 0 && (
+          {(row.span || ev.location) && (
             <span class="phc-ev-sub" dir="auto">
-              {sub.join(' · ')}
+              {/* A location alone sets the line's direction (an Arabic one is cut at its end); after "Day 2 of 4" it is isolated. */}
+              {row.span && ev.location ? (
+                <>
+                  {row.span} · <bdi>{ev.location}</bdi>
+                </>
+              ) : (
+                (row.span ?? ev.location)
+              )}
             </span>
           )}
         </span>

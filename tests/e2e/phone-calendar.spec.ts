@@ -22,6 +22,25 @@ const LIBRARY = 'mamma@demo::library';
 const day = (page: Page, d: string) => page.locator(`.phc-day[data-day="${d}"]`);
 const calTab = (page: Page) => page.locator('.ph-nav button', { hasText: 'Calendar' });
 
+/** A demo calendar of `masters` (calendar/fake.ts) for a phone, written before the app starts and only then. */
+function demoCalendar(masters: object[]): string {
+  const json = JSON.stringify(JSON.stringify(masters));
+  return `if (!sessionStorage.getItem('demoCal')) { sessionStorage.setItem('demoCal', '1'); localStorage.setItem('manwar.demoCalendar.v1', ${json}); }`;
+}
+const timed = (id: string, title: string, day: string, startMin: number, durMin: number, extra: object = {}) => ({
+  id,
+  calendarId: 'family@demo',
+  title,
+  allDay: false,
+  day,
+  startMin,
+  durMin,
+  days: 1,
+  exdates: [],
+  overrides: {},
+  ...extra,
+});
+
 function track(page: Page): string[] {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(String(e)));
@@ -619,5 +638,24 @@ test('scrolling far ahead and back keeps the agenda whole and quick', async ({ b
   });
   console.log(`filter redraw with ${await page.locator('.phc-ev').count()} rows: ${Math.round(ms)} ms`);
   expect(ms).toBeLessThan(1000);
+  expect(p.errors).toEqual([]);
+});
+
+test('a busy day opens at its Now line, with today on top and no Today button', async ({ browser }) => {
+  const household = `phcal-${RUN}-busy`;
+  await seededWall(browser, household);
+  const busy = Array.from({ length: 20 }, (_, i) => timed(`busy${i}`, `Busy ${i + 1}`, '2026-11-04', 6 * 60 + i * 45, 40));
+  const p = await phoneCal(browser, household, { init: demoCalendar(busy) });
+  const page = p.page;
+  await expect(page.locator('[data-event="family@demo::busy0"]')).toHaveCount(1);
+  // At 11:44 Busy 8 (11:15 - 11:55) is under way; the Now line after it is in the upper half of the list.
+  await page.waitForTimeout(500);
+  const list = (await page.locator('.phc-list').boundingBox())!;
+  const now = (await page.locator('.phc-now').boundingBox())!;
+  expect(now.y).toBeGreaterThan(list.y);
+  expect(now.y + now.height).toBeLessThan(list.y + list.height / 2 + 20);
+  await expect(page.locator('[data-event="family@demo::busy7"]')).toBeInViewport();
+  await expect(page.locator('.ph-head h1')).toHaveText('November');
+  await expect(page.locator('.phc-today')).toHaveCount(0);
   expect(p.errors).toEqual([]);
 });

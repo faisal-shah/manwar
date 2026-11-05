@@ -17,6 +17,8 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
+  /* One flat color, so the sticky day headers do not show as boxes on the page's gradient. */
+  background: var(--bg-top);
 }
 
 /* Header buttons */
@@ -57,10 +59,18 @@
 /* Above the list: the events to assign and the person filter (chips scroll sideways) */
 .phc-top {
   flex: none;
+  /*
+   * A layer of its own over the list: at a fractional pixel ratio (2.625,
+   * a Pixel 7) Chrome otherwise paints a sliver of the scrolled rows over it.
+   */
+  position: relative;
+  z-index: 3;
+  will-change: transform;
   display: flex;
   flex-direction: column;
   gap: 0.8rem;
   padding: 0.2rem 0 1rem;
+  background: var(--bg-top);
 }
 .phc-waiting {
   display: flex;
@@ -142,9 +152,6 @@
 
 /* A day */
 .phc-day {
-  /* A long agenda draws only the days near the screen. */
-  content-visibility: auto;
-  contain-intrinsic-size: auto 48rem;
   padding-bottom: 0.8rem;
 }
 .phc-day-head {
@@ -250,7 +257,8 @@
   text-align: start;
   font-size: 1.7rem;
   font-weight: 600;
-  line-height: 1.25;
+  /* Room for Arabic letters on the clamped second line. */
+  line-height: 1.4;
 }
 .phc-ev-sub {
   overflow: hidden;
