@@ -52,6 +52,13 @@ test('a note posted on the phone pops up on the wall; dismissed on either side, 
   const note = w.page.locator('.message-layer');
   await expect(note).toContainText('Dinner at 7, wash your hands!');
   await expect(note).toContainText('From: Mamma');
+  // Read aloud is asked of the wall with the note.
+  const docs = (await (await fetch(`${FS}/households/demo-${hh}/messages`, { headers: OWNER })).json()) as {
+    documents: { fields: Record<string, { stringValue?: string; booleanValue?: boolean }> }[];
+  };
+  expect(
+    docs.documents.find((d) => d.fields.text.stringValue === 'Dinner at 7, wash your hands!')?.fields.readAloud?.booleanValue,
+  ).toBe(true);
   const shown = p.page.locator('.pn-note', { hasText: 'Dinner at 7' });
   await expect(shown).toContainText('Showing');
   await expect(shown).toContainText('From Mamma');
@@ -248,6 +255,48 @@ test("the phone's Back closes a meal's card and the plan sheet, then Meals", asy
   await back(p.page, 2);
   await expect(p.page.locator('.ph-head h1')).toHaveText('More');
   expect(p.errors).toEqual([]);
+});
+
+test('nothing runs off the side at 360 px with a larger text size, in light and dark', async ({ browser }) => {
+  const hh = name('narrow');
+  await wall(browser, hh);
+  for (const theme of ['light', 'dark']) {
+    const ctx = await browser.newContext({
+      viewport: { width: 360, height: 780 },
+      isMobile: true,
+      hasTouch: true,
+      deviceScaleFactor: 2,
+      timezoneId: 'America/Chicago',
+    });
+    const page = await ctx.newPage();
+    const errors: string[] = [];
+    page.on('pageerror', (e) => errors.push(String(e)));
+    await page.goto(`/?demo=${hh}&layout=phone&now=2026-11-04T11:44&theme=${theme}`);
+    await expect(page.locator('.ph-nav')).toBeVisible({ timeout: 30_000 });
+    await page.evaluate(() => (document.documentElement.style.fontSize = '75%'));
+    /** Every box inside the screen's width: nothing to scroll sideways, nothing cut at the right. */
+    const fits = () =>
+      page.evaluate(() => {
+        const w = document.documentElement.clientWidth;
+        const over = [...document.querySelectorAll<HTMLElement>('.ph-body *, .sheet *, .popover *')].filter((el) => {
+          const r = el.getBoundingClientRect();
+          return r.width > 0 && (r.right > w + 0.5 || r.left < -0.5);
+        });
+        return over.map((el) => `${el.tagName}.${el.className}`).slice(0, 5);
+      });
+    await page.locator('.ph-nav').getByRole('button', { name: 'Lists' }).click();
+    expect(await fits()).toEqual([]);
+    await page.locator('.phl-row', { hasText: 'Grocery List' }).click();
+    await page.waitForTimeout(500);
+    expect(await fits()).toEqual([]);
+    for (const row of ['Meals', 'Note to the wall', 'Wall timer', 'Wall screen']) {
+      await more(page, row);
+      expect(await fits(), row).toEqual([]);
+    }
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    expect(errors).toEqual([]);
+    await ctx.close();
+  }
 });
 
 test('an empty household: a typed dinner, a note from no one, and the timer', async ({ browser }) => {

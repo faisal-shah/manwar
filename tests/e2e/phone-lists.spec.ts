@@ -252,6 +252,32 @@ test('a double tap on a list opens it without checking, focusing or asking anyth
   expect(p.errors).toEqual([]);
 });
 
+test('a double tap on a menu item closes the menu without pressing the row under it', async ({ browser }) => {
+  const hh = name('closetap');
+  await wall(browser, hh);
+  const p = await phone(browser, hh);
+  await openList(p.page, 'Grocery List');
+  for (const label of ['Hide done items', 'Show done items']) {
+    await p.page.getByRole('button', { name: 'Grocery List menu' }).click();
+    const item = p.page.locator('.popover .menu').getByRole('button', { name: label });
+    await expect(item).toBeVisible();
+    await p.page.waitForTimeout(500);
+    // At the right, where the rows under the menu have their check boxes.
+    const b = (await item.boundingBox())!;
+    const x = b.x + b.width - 30;
+    const y = b.y + b.height / 2;
+    await p.page.mouse.click(x, y);
+    await p.page.waitForTimeout(120);
+    await p.page.mouse.click(x, y);
+    await p.page.waitForTimeout(700);
+    await expect(p.page.locator('.popover')).toHaveCount(0);
+    // Only Olive oil (checked in the demo) is checked, and it shows only when done items do.
+    await expect(p.page.locator('.phl-card .li-row.checked')).toHaveCount(label === 'Hide done items' ? 0 : 1);
+    await expect(p.page.locator('.phl-card .ls-group .done-head .ls-count')).toHaveText('1');
+  }
+  expect(p.errors).toEqual([]);
+});
+
 test('a list deleted on the phone closes without a word about another device', async ({ browser }) => {
   const hh = name('delhere');
   await wall(browser, hh);

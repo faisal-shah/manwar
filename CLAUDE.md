@@ -283,7 +283,10 @@ sequenceDiagram
   a dialog does (`content` in `useOverlay`); an inner view that replaces
   what was tapped spreads `useOpeningGuard()` (`ui/overlays.tsx`) on its
   box for the same (pointerdown, mousedown and click, so no field under the
-  second tap takes focus either). In e2e, wait half a second after opening
+  second tap takes focus either). An overlay a tap closes (a menu item, OK,
+  its scrim) shields the spot for the rest of the double-tap time
+  (`shieldClosingTap`), as the rows it covered are under the second tap. In
+  e2e, wait half a second after opening
   a sheet or view before tapping near where it was opened.
 - **Lists tab** (`phone/lists/`): every list as a row (its first open
   items, the open count), and one list full screen on the wall's own body:

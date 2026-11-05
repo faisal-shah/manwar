@@ -23,17 +23,47 @@ const portal = (node: ComponentChildren) => createPortal(node, document.body);
 export const DOUBLE_TAP_MS = 450;
 const DOUBLE_TAP_REM = 6;
 let lastDown = { x: -1e9, y: -1e9 };
+let lastDownAt = -1e9;
 if (typeof window !== 'undefined')
-  window.addEventListener('pointerdown', (e) => (lastDown = { x: e.clientX, y: e.clientY }), { capture: true, passive: true });
+  window.addEventListener(
+    'pointerdown',
+    (e) => {
+      lastDown = { x: e.clientX, y: e.clientY };
+      lastDownAt = performance.now();
+    },
+    { capture: true, passive: true },
+  );
+
+const near = (e: MouseEvent, at: { x: number; y: number }) => {
+  const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 10;
+  return Math.hypot(e.clientX - at.x, e.clientY - at.y) < DOUBLE_TAP_REM * rem;
+};
+
+/**
+ * An overlay that a tap just closed (a menu item, Clear, OK, its scrim) is
+ * gone before the rest of that double tap lands, which would then press
+ * whatever the overlay covered: on a phone, where menus and popovers are
+ * bottom sheets over the list, a check box. For the rest of the double-tap
+ * time, taps near that one press nothing.
+ */
+function shieldClosingTap(): void {
+  const from = lastDown;
+  const until = lastDownAt + DOUBLE_TAP_MS;
+  if (performance.now() >= until) return;
+  const types = ['pointerdown', 'mousedown', 'click'] as const;
+  const drop = (e: MouseEvent) => {
+    if (performance.now() >= until || !near(e, from)) return;
+    e.stopPropagation();
+    e.preventDefault();
+  };
+  types.forEach((t) => window.addEventListener(t, drop, true));
+  setTimeout(() => types.forEach((t) => window.removeEventListener(t, drop, true)), until - performance.now());
+}
 
 /** Whether a tap is the rest of the double tap that opened the calling overlay. */
 function useOpeningTap(): (e: MouseEvent) => boolean {
   const opened = useRef({ at: performance.now(), ...lastDown });
-  return (e) => {
-    const o = opened.current;
-    const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 10;
-    return performance.now() - o.at < DOUBLE_TAP_MS && Math.hypot(e.clientX - o.x, e.clientY - o.y) < DOUBLE_TAP_REM * rem;
-  };
+  return (e) => performance.now() - opened.current.at < DOUBLE_TAP_MS && near(e, opened.current);
 }
 
 /** The onClose of every overlay on screen, for closeOverlays(). */
@@ -55,7 +85,10 @@ export function useOverlay(onClose: () => void): { scrim: (e: MouseEvent) => voi
   useBack(onClose, isPhone);
   useEffect(() => {
     onScreen.add(close);
-    return () => void onScreen.delete(close);
+    return () => {
+      onScreen.delete(close);
+      if (isPhone) shieldClosingTap();
+    };
   }, []);
   return {
     scrim: (e) => {
