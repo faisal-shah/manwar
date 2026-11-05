@@ -1,10 +1,14 @@
 /// <reference types="vitest/config" />
-import { defineConfig } from 'vite';
+import { realpathSync } from 'node:fs';
+import { defineConfig, searchForWorkspaceRoot } from 'vite';
 import preact from '@preact/preset-vite';
 import { VitePWA } from 'vite-plugin-pwa';
 import { APP_TITLE, NAME_AR } from './src/ui/brand';
 
 export default defineConfig({
+  // Git worktrees symlink node_modules from the main checkout; let the dev
+  // server read through the link (fonts), or it answers 403.
+  server: { fs: { allow: [searchForWorkspaceRoot(process.cwd()), realpathSync('node_modules')] } },
   plugins: [
     preact(),
     // The tab title comes from the one brand definition.
