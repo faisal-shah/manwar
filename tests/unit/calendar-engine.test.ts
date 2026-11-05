@@ -19,7 +19,7 @@ vi.mock('../../src/data/store', async () => {
   const remove = async (coll: 'eventMeta', id: string) => {
     data[coll].value = data[coll].value.filter((d) => d.id !== id);
   };
-  return { data, settings, profileById, put, remove };
+  return { data, settings, profileById, put, remove, householdId: signal<string | null>('h1') };
 });
 
 const source = vi.hoisted(() => ({}) as CalendarSource);
