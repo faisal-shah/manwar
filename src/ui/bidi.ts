@@ -17,9 +17,10 @@ type FieldProps = { type?: string; dir?: string };
 
 /** The vnode with dir="auto" when it is a text field without a direction of its own. */
 export function autoDirection(vnode: VNode): void {
+  // Every vnode passes here, text nodes (whose props are the text) included: look at fields only.
+  if (vnode.type !== 'input' && vnode.type !== 'textarea') return;
   const props = vnode.props as FieldProps;
-  if (props.dir !== undefined) return;
-  if (vnode.type === 'textarea' || (vnode.type === 'input' && TEXT_TYPES.has(props.type))) props.dir = 'auto';
+  if (props.dir === undefined && (vnode.type === 'textarea' || TEXT_TYPES.has(props.type))) props.dir = 'auto';
 }
 
 let installed = false;
