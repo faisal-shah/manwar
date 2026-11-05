@@ -781,6 +781,38 @@ describe('google calendar: writing events', () => {
       expect(calls.find((c) => c.method === 'POST')!.body.recurrence).toEqual(['RRULE:FREQ=WEEKLY;BYDAY=SU,SA', ...exdates]);
     });
 
+    it('renaming a whole series from an occurrence changed on a phone keeps the series times', async () => {
+      // This Saturday's lesson runs long (9:30 to 11:00, set on a phone); the series is 9:30 to 10:15.
+      routes.push((c) =>
+        c.method === 'GET'
+          ? {
+              body: base({
+                id: 'swim',
+                recurrence: ['RRULE:FREQ=WEEKLY'],
+                start: { dateTime: '2026-10-31T09:30:00-05:00', timeZone: 'America/Chicago' },
+                end: { dateTime: '2026-10-31T10:15:00-05:00', timeZone: 'America/Chicago' },
+              }),
+            }
+          : undefined,
+      );
+      routes.push((c) => (c.method === 'PATCH' ? { body: { id: 'swim' } } : undefined));
+      const long: CalEvent = {
+        ...timed,
+        id: 'swim_20261121T153000Z',
+        key: `${CAL}::swim_20261121T153000Z`,
+        seriesId: 'swim',
+        originalStart: new Date('2026-11-21T09:30'),
+        start: new Date('2026-11-21T09:30'),
+        end: new Date('2026-11-21T11:00'),
+        timeZone: 'America/Chicago',
+      };
+      await googleSource.update(long, { ...draft, title: 'Swimming', start: long.start, end: long.end }, 'all');
+      const patch = calls.find((c) => c.method === 'PATCH')!.body;
+      expect(patch.summary).toBe('Swimming');
+      expect(patch).not.toHaveProperty('start');
+      expect(patch).not.toHaveProperty('end');
+    });
+
     it('moving a whole series keeps the zone it repeats in', async () => {
       const occ: CalEvent = { ...london, id: 'call_20261121T160000Z', key: `${CAL}::call_20261121T160000Z`, seriesId: 'call' };
       routes.push((c) =>

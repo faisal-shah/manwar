@@ -387,10 +387,14 @@ export const googleSource: CalendarSource = {
       const newStart = new Date(masterStart.getTime() + (draft.start.getTime() - ev.start.getTime()));
       moved = { ...draft, start: newStart, end: new Date(newStart.getTime() + (draft.end.getTime() - draft.start.getTime())) };
     }
-    await call(`/calendars/${cal}/events/${encodeURIComponent(ev.seriesId)}`, {
-      method: 'PATCH',
-      body: JSON.stringify(keepExdates(draftBody(moved, zones), master.recurrence ?? [])),
-    });
+    const body = keepExdates(draftBody(moved, zones), master.recurrence ?? []);
+    if (draft.allDay === ev.allDay && +draft.start === +ev.start && +draft.end === +ev.end) {
+      // Times not changed: the series keeps its own. The occurrence may be one moved or made longer on a
+      // phone, whose times are not the series'.
+      delete body.start;
+      delete body.end;
+    }
+    await call(`/calendars/${cal}/events/${encodeURIComponent(ev.seriesId)}`, { method: 'PATCH', body: JSON.stringify(body) });
     return {};
   },
 
