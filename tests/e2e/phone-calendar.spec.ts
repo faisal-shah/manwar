@@ -282,6 +282,70 @@ test('To assign: a tap assigns, both badges go down, and the wall’s assignment
   expect([...w.errors, ...p.errors]).toEqual([]);
 });
 
+test('one lesson of a series that has people waits alone and is assigned alone', async ({ browser }) => {
+  const household = `phcal-${RUN}-alone`;
+  const w = await seededWall(browser, household);
+  // Thursday's reading lost its person (a profile delete leaves NOBODY): it waits, the series stays Asiyah's.
+  const key = encodeURIComponent('family@demo::reading_20261105');
+  const res = await fetch(`${FS}/households/demo-${household}/eventMeta/${encodeURIComponent(key)}`, {
+    method: 'PATCH',
+    headers: { Authorization: 'Bearer owner', 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      fields: {
+        id: { stringValue: key },
+        profiles: { arrayValue: { values: [{ stringValue: '-' }] } },
+        updatedAt: { integerValue: '1' },
+      },
+    }),
+  });
+  expect(res.ok, await res.text()).toBe(true);
+  await expect(w.page.locator('.rail .badge')).toHaveText('4');
+  const p = await phoneCal(browser, household);
+  const page = p.page;
+  await page.locator('.phc-waiting').click();
+  const row = page.locator('[data-triage="family@demo::reading"]');
+  await expect(row).toContainText('This time only');
+  await expect(row).toContainText('Thursday, Nov 5');
+  await row.getByRole('button', { name: 'Hashim!', exact: true }).click();
+  await expect(row).toContainText('For Hashim!');
+  // Tapped again with a second person: still that lesson alone.
+  await row.getByRole('button', { name: 'Mamma', exact: true }).click();
+  await expect(row).toContainText('For Hashim!, Mamma');
+  await expect(w.page.locator('.rail .badge')).toHaveText('3');
+  await page.goBack();
+  const avatars = (id: string) => page.locator(`[data-event="family@demo::${id}"] .avatar`);
+  await expect(avatars('reading_20261105')).toHaveCount(2);
+  await expect(avatars('reading_20261106')).toHaveCount(1);
+  await expect(page.locator('[data-event="family@demo::reading_20261106"] .avatar')).toHaveText('A');
+  expect([...w.errors, ...p.errors]).toEqual([]);
+});
+
+test('a repeating event waiting to be assigned gets every tap for the whole series', async ({ browser }) => {
+  const household = `phcal-${RUN}-series`;
+  const w = await seededWall(browser, household);
+  // Swim lessons with nobody: the series waits (once the seed has reached the server, or it would bring it back).
+  const doc = `${FS}/households/demo-${household}/eventMeta/${encodeURIComponent(encodeURIComponent('family@demo::swim'))}`;
+  await expect.poll(async () => (await fetch(doc, { headers: { Authorization: 'Bearer owner' } })).status).toBe(200);
+  const res = await fetch(doc, { method: 'DELETE', headers: { Authorization: 'Bearer owner' } });
+  expect(res.ok, await res.text()).toBe(true);
+  await expect(w.page.locator('.rail .badge')).toHaveText('4');
+  const p = await phoneCal(browser, household);
+  const page = p.page;
+  await page.locator('.phc-waiting').click();
+  const row = page.locator('[data-triage="family@demo::swim"]');
+  await expect(row).toContainText('Repeats: every time');
+  await row.getByRole('button', { name: 'Hashim!', exact: true }).click();
+  await expect(row).toContainText('For Hashim!');
+  // The series has someone now; the next tap still changes the series, not one lesson.
+  await row.getByRole('button', { name: 'Asiyah', exact: true }).click();
+  await expect(row).toContainText('For Hashim!, Asiyah');
+  await page.goBack();
+  for (const d of ['20261107', '20261114', '20261121'])
+    await expect(page.locator(`[data-event="family@demo::swim_${d}"] .avatar`)).toHaveCount(2);
+  await expect(w.page.locator('.rail .badge')).toHaveText('3');
+  expect([...w.errors, ...p.errors]).toEqual([]);
+});
+
 test('a double tap on a chip assigns once, and quick taps on two chips keep both', async ({ browser }) => {
   const { w, p } = await pair(browser, 'double');
   const page = p.page;
@@ -417,6 +481,25 @@ test('an unpaired phone asks for the PIN; a paired one never does', async ({ bro
     expect(await b.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
   }
   expect(small.errors).toEqual([]);
+
+  // Edit asks for the PIN over the event sheet; the PIN swaps both for the editor, and Back still walks out.
+  const locked = await phoneCal(browser, household);
+  const lp = locked.page;
+  await lp.locator(`[data-event="${READING}"]`).click();
+  await lp.locator('.ev-detail').getByRole('button', { name: 'Edit' }).click();
+  await expect(lp.locator('.pin-keys')).toBeVisible();
+  await backDepth(lp, 3);
+  await lp.waitForTimeout(500);
+  for (const d of '2468') await lp.locator('.pin-keys').getByRole('button', { name: d, exact: true }).click();
+  await expect(lp.locator('.sheet input[name="title"]')).toBeVisible();
+  await expect(lp.locator('.ev-detail, .pin-keys')).toHaveCount(0);
+  await backDepth(lp, 2);
+  await lp.goBack();
+  await expect(lp.locator('.sheet')).toHaveCount(0);
+  await backDepth(lp, 1);
+  await lp.goBack();
+  await expect(lp.locator('.ph-head h1')).toHaveText('Today');
+  expect(locked.errors).toEqual([]);
 
   await calTab(paired.page).click();
   await paired.page.locator('.phc-waiting').click();
