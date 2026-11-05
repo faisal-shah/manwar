@@ -306,7 +306,9 @@ function useReveal(body: { current: HTMLDivElement | null }) {
 function AddItemField({
   list,
   sectionId,
-  autoFocus,
+  // Only a section's field opened with its + takes focus: a card's top field focusing as it mounts raised the
+  // keyboard (and with a PIN set, the PIN pad) whenever Lists or Home opened.
+  autoFocus = false,
   onAdded,
   onDone,
 }: {
