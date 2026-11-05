@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { Recipe } from '../../src/data/types';
-import { displayUrl, ingredientLines, instructionSteps, searchRecipes, sourceUrlError } from '../../src/features/recipes/text';
+import {
+  displayUrl,
+  ingredientLines,
+  ingredientRows,
+  instructionSteps,
+  searchRecipes,
+  sourceUrlError,
+} from '../../src/features/recipes/text';
 
 describe('instructionSteps', () => {
   it('splits a paragraph at sentence ends', () => {
@@ -34,6 +41,13 @@ describe('instructionSteps', () => {
 describe('recipe text helpers', () => {
   it('splits ingredients one per line', () => {
     expect(ingredientLines(' 2 eggs \n\nMilk\n')).toEqual(['2 eggs', 'Milk']);
+  });
+  it('shows stored lines without markers, with group headings', () => {
+    expect(ingredientRows(['Ingredients:', '- 2 cups flour', '', 'For the sauce:', '1. 1 cup milk'])).toEqual([
+      { text: '2 cups flour', heading: false },
+      { text: 'For the sauce', heading: true },
+      { text: '1 cup milk', heading: false },
+    ]);
   });
   it('drops pasted bullets and list numbers but keeps quantities', () => {
     expect(ingredientLines('- 2 cups flour\n• Salt\n1. 3 eggs\n2) 1.5 cups milk\n-\n1.5 kg lamb')).toEqual([

@@ -127,6 +127,11 @@
 }
 .rc-source {
   max-width: 100%;
+  align-items: flex-start;
+}
+.rc-source > svg {
+  flex: none;
+  margin-top: 0.2rem;
 }
 .rc-source > span {
   min-width: 0;

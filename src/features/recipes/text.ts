@@ -1,6 +1,6 @@
 import type { Recipe } from '../../data/types';
 import { fold } from '../../lib/text';
-import { stripMarker } from '../meals/ingredients';
+import { isHeading, stripMarker } from '../meals/ingredients';
 
 /**
  * Instructions as numbered steps for reading across the kitchen. Several
@@ -22,6 +22,19 @@ export function instructionSteps(text: string): string[] {
     .split(/(?<=[.!?])\s+(?=[A-Z0-9])/)
     .map((s) => s.trim())
     .filter(Boolean);
+}
+
+/**
+ * Ingredient lines for display: markers dropped, "For the sauce:" lines as
+ * headings (without the colon), and a leading "Ingredients" heading dropped,
+ * since the column already says so.
+ */
+export function ingredientRows(lines: string[]): { text: string; heading: boolean }[] {
+  const rows = lines
+    .map(stripMarker)
+    .filter(Boolean)
+    .map((l) => (isHeading(l) ? { text: l.replace(/:$/, '').trim(), heading: true } : { text: l, heading: false }));
+  return rows[0]?.heading && /^ingredients$/i.test(rows[0].text) ? rows.slice(1) : rows;
 }
 
 /** Ingredients typed or pasted one per line: bullets and list numbers dropped, blank lines dropped. */
