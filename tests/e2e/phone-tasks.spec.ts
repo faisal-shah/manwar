@@ -23,6 +23,11 @@ import {
 const expect = baseExpect.configure({ timeout: 15_000 });
 test.describe.configure({ timeout: 120_000 });
 
+// Every wall and phone a test opened is its own browser context: close them, or a worker holds them all.
+test.afterEach(async ({ browser }) => {
+  await Promise.all(browser.contexts().map((c) => c.close()));
+});
+
 test('a check-off on the phone shows on the wall, and the wall one on the phone', async ({ browser }) => {
   const { w, p, errors } = await wallAndPhone(browser, 'live', { tab: 'Tasks' });
   const page = p.page;
