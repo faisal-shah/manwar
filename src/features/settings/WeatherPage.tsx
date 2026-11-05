@@ -28,7 +28,12 @@ export function WeatherPage() {
       setBusy(true);
       searchPlaces(q)
         .then((r) => live && setResults(r))
-        .catch(() => live && setError('The place search is not reachable. Check the Wi-Fi and try again.'))
+        .catch(() => {
+          if (!live) return;
+          // The last query's places are not answers to this one.
+          setResults(null);
+          setError('The place search is not reachable. Check the Wi-Fi and try again.');
+        })
         .finally(() => live && setBusy(false));
     }, SEARCH_DELAY_MS);
     return () => {

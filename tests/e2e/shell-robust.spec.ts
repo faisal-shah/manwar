@@ -231,6 +231,29 @@ test('a sleep or night window with the same From and To says it never turns on',
   await expect(page.locator('.set-page [role=alert]')).toBeVisible();
 });
 
+test("a failed place search shows only the failure, not the last query's places", async ({ page }) => {
+  let up = true;
+  await page.route('**/geocoding-api.open-meteo.com/**', (r) =>
+    up
+      ? r.fulfill({
+          json: {
+            results: [{ name: 'Springfield', admin1: 'Illinois', country: 'United States', latitude: 39.8, longitude: -89.6 }],
+          },
+        })
+      : r.abort('internetdisconnected'),
+  );
+  await open(page);
+  await openSettings(page, 'Weather');
+  const search = page.getByRole('searchbox', { name: 'Search for a place' });
+  await search.fill('Springfield');
+  await expect(page.getByRole('button', { name: /Springfield/ })).toBeVisible();
+  up = false;
+  await search.fill('Springfielt');
+  await expect(page.getByText('The place search is not reachable.')).toBeVisible();
+  await expect(page.getByRole('button', { name: /Springfield/ })).toHaveCount(0);
+  await expect(page.getByText('No places found.')).toHaveCount(0);
+});
+
 test('five wrong PINs pause the pad; the right PIN works after the pause', async ({ page }) => {
   await page.clock.install();
   await open(page);
