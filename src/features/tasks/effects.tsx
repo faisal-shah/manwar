@@ -1,5 +1,5 @@
 import { signal } from '@preact/signals';
-import { useEffect, useMemo } from 'preact/hooks';
+import { useMemo } from 'preact/hooks';
 import { playCelebrate } from '../../core/sound';
 
 /**
@@ -98,9 +98,21 @@ const RAIN = ['😎', '🥳', '🎉', '🌟', '🤩', '🦄', '🌈', '🏆', '�
 
 export const celebration = signal<{ name: string; emoji: string; color: string; key: number } | null>(null);
 
+/** How long the rain lasts. */
+const RAIN_MS = 3400;
+
+/**
+ * Start the rain. It ends on its own time, whether or not a host shows it:
+ * one that no host showed in time (Back pressed before it began, or while
+ * it fell) is over, not played on the next visit to the tab.
+ */
 export function celebrate(name: string, color: string, emoji?: string): void {
   playCelebrate();
-  celebration.value = { name, color, emoji: emoji || RAIN[Math.floor(Math.random() * RAIN.length)], key: Date.now() };
+  const c = { name, color, emoji: emoji || RAIN[Math.floor(Math.random() * RAIN.length)], key: Date.now() };
+  celebration.value = c;
+  setTimeout(() => {
+    if (celebration.peek() === c) celebration.value = null;
+  }, RAIN_MS);
 }
 
 /** Full-screen emoji rain with the profile's name; tap or wait about 3 s to dismiss. */
@@ -117,11 +129,6 @@ export function CelebrationHost() {
       })),
     [c?.key],
   );
-  useEffect(() => {
-    if (!c) return;
-    const t = setTimeout(() => (celebration.value = null), 3400);
-    return () => clearTimeout(t);
-  }, [c?.key]);
   if (!c) return null;
   // A tap landing just as the rain starts is part of the completing tap, not a dismissal.
   const dismiss = () => {

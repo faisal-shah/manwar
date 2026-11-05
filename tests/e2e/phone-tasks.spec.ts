@@ -204,6 +204,40 @@ test('a check-off made offline shows at once and reaches the wall once back onli
   expect(errors().filter((e) => !/ERR_INTERNET_DISCONNECTED/.test(e))).toEqual([]);
 });
 
+test('a celebration left by Back is not played on the next visit to Tasks', async ({ browser }) => {
+  const { p, errors } = await wallAndPhone(browser, 'celebrate-left', { tab: 'Tasks' });
+  const page = p.page;
+  const rain = page.locator('.fx-celebrate');
+  /** Check off all of `person`'s tasks; Back right after the last one (`during`: once the rain is up). */
+  const finishAndLeave = async (person: string, during: boolean) => {
+    await chip(page, person).click();
+    const open = page.locator('.pt .tk-card:not(.done)');
+    await expect(open.first()).toBeVisible();
+    // By place, not title: a routine in two sections has two cards.
+    for (let left = await open.count(); left > 1; left--) {
+      await open.first().locator('.tk-check').click();
+      await expect(open).toHaveCount(left - 1);
+    }
+    await backSettled(page, 1);
+    await open.first().locator('.tk-check').click();
+    if (during) await expect(rain).toBeVisible();
+    await page.goBack();
+    await expect(page.locator('.ph-head h1')).toHaveText('Today');
+    // Long past the rain's own end, then back to Tasks: nothing plays.
+    await page.waitForTimeout(4500);
+    await phoneTab(page, 'Tasks');
+    await expect(page.locator('.pt .tk-card').first()).toBeVisible();
+    for (let t = 0; t < 10; t++) {
+      expect(await rain.count(), person).toBe(0);
+      await page.waitForTimeout(100);
+    }
+  };
+  // Back in the 450 ms before the rain starts, then Back while it falls.
+  await finishAndLeave('baba', false);
+  await finishAndLeave('hashim', true);
+  expect(errors()).toEqual([]);
+});
+
 test('the header + adds a chore, and the details edit it', async ({ browser }) => {
   const { w, p, errors } = await wallAndPhone(browser, 'add', { tab: 'Tasks' });
   const page = p.page;

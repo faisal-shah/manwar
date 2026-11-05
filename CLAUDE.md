@@ -374,6 +374,8 @@ sequenceDiagram
   chores with the ones done and who did them, through the wall's
   `TaskCard`, `ColumnHead`, details, claim dialog, editor and
   celebrations (`features/tasks`; every rule and write is the wall's).
+  A celebration ends on its own time (`celebrate`), so one left by Back
+  before or during the rain does not play on the next visit.
   The person picked is kept on the phone (`tasksFor`,
   `manwar.phoneTasksFor.v1`); the one shown falls back to the first while
   it is gone (`shownPerson`). The header's + opens the editor for that
