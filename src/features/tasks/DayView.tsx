@@ -30,7 +30,7 @@ export function NoColumns() {
   return profiles.value.length ? (
     <Empty emoji="👀">Every profile is hidden. Use Filter to show them.</Empty>
   ) : (
-    <Empty emoji="👪">Add your family in Settings, under Profiles. Each person gets a column here.</Empty>
+    <Empty emoji="🏡">Add your family in Settings, under Profiles. Each person gets a column here.</Empty>
   );
 }
 

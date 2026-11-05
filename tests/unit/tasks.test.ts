@@ -124,3 +124,21 @@ describe('the task history window', () => {
     expect(occurrencesOn(TODAY, [{ ...t, lastDone: { a: TODAY } }], s, TODAY).map((o) => o.state?.status)).toEqual(['done']);
   });
 });
+
+describe('late chores across month and year ends', () => {
+  it('carries the latest missed occurrence over the boundary', () => {
+    const monthly = base({ date: '2026-10-31', repeat: { every: 1, unit: 'month' } });
+    // Nov has no 31st; Dec 31 is the latest occurrence before Jan 2.
+    expect(occurrencesOn('2027-01-02', [monthly], states(), '2027-01-02').map((o) => [o.date, o.lateDays])).toEqual([
+      ['2026-12-31', 2],
+    ]);
+    const yearly = base({ date: '2025-12-30', repeat: { every: 1, unit: 'year' } });
+    expect(occurrencesOn('2027-01-01', [yearly], states(), '2027-01-01').map((o) => [o.date, o.lateDays])).toEqual([
+      ['2026-12-30', 2],
+    ]);
+    const weekly = base({ date: '2026-12-01', repeat: { every: 1, unit: 'week', weekdays: [4] } }); // Thursdays
+    expect(occurrencesOn('2027-01-04', [weekly], states(), '2027-01-04').map((o) => [o.date, o.lateDays])).toEqual([
+      ['2026-12-31', 4],
+    ]);
+  });
+});
