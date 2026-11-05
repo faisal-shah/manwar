@@ -133,6 +133,8 @@ test('a tablet that boots offline with an expired sign-in still opens its househ
 });
 
 test('with no household remembered, an offline boot waits and opens once the network is back', async ({ page }) => {
+  // Unrouting fires no `online` event, so this waits out the 15 s retry; leave room under a loaded parallel run.
+  test.setTimeout(75_000);
   await open(page);
   await expireSignIn(page);
   await page.evaluate(() => localStorage.removeItem('manwar.claims.v1'));
