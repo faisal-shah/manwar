@@ -34,7 +34,9 @@ function RewardColumn({ p }: { p: Profile }) {
       <header class="pcol-head">
         <Avatar profile={p} size={5.6} />
         <div class="pcol-id">
-          <span class="pcol-name serif">{p.name}</span>
+          <span class="pcol-name serif" dir="auto">
+            {p.name}
+          </span>
           <div class="pcol-pills">
             <StarPill profileId={p.id} value={p.stars} />
           </div>

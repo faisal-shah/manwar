@@ -88,7 +88,9 @@ export function ColumnHead({ col }: { col: Pick<Col, 'id' | 'profile' | 'all'> }
         </span>
       )}
       <div class="pcol-id">
-        <span class="pcol-name serif">{p ? p.name : 'Up for Grabs'}</span>
+        <span class="pcol-name serif" dir="auto">
+          {p ? p.name : 'Up for Grabs'}
+        </span>
         <div class="pcol-pills">
           <ProgressPill {...prog} />
           {p && <StarPill profileId={p.id} value={p.stars} />}
