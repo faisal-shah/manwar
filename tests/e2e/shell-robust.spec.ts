@@ -472,6 +472,43 @@ test('Reconnect asks for the PIN once the lock has relocked behind an open Setti
   await expect(page.locator('.modal', { hasText: 'Parent PIN' })).toContainText('Enter the PIN to reconnect Google.');
 });
 
+test('a task or reward editor left open past the relock asks for the PIN to save', async ({ page }) => {
+  await page.clock.install();
+  await open(page);
+  const key = (d: string) => page.locator('.pin-setup .pin-keys button', { hasText: new RegExp(`^${d}$`) });
+  await openSettings(page, 'Parental lock');
+  await page.getByRole('button', { name: /Set a PIN/ }).click();
+  for (const d of '1357') await key(d).click();
+  await expect(page.locator('.pin-setup')).toContainText('Enter the PIN again');
+  for (const d of '1357') await key(d).click();
+  await expect(page.getByText('The lock is on')).toBeVisible();
+  await page.getByRole('button', { name: 'Close' }).click();
+  const pad = page.locator('.modal', { hasText: 'Parent PIN' });
+
+  // Still unlocked: a parent opens a chore, then walks away; the lock relocks behind the open editor.
+  await rail(page, 'Tasks').click();
+  await page.locator('[data-column="asiyah"] .tk-card .tk-body').first().click();
+  await page.getByTestId('task-details').getByRole('button', { name: 'Edit task' }).click();
+  const editor = page.getByRole('dialog', { name: 'Edit task' });
+  await expect(editor).toBeVisible();
+  await page.clock.fastForward('02:10');
+  await editor.getByRole('button', { name: 'Save' }).click();
+  await expect(pad).toBeVisible();
+  await pad.getByRole('button', { name: 'Cancel' }).click();
+  await expect(editor).toBeVisible();
+  await editor.getByRole('button', { name: 'Cancel' }).click();
+
+  await rail(page, 'Rewards').click();
+  await page.locator('.rw-card .rw-body').first().click();
+  await expect(pad).toBeVisible();
+  for (const d of '1357') await pad.locator('.pin-keys button', { hasText: new RegExp(`^${d}$`) }).click();
+  const rewardEditor = page.getByRole('dialog', { name: 'Edit reward' });
+  await expect(rewardEditor).toBeVisible();
+  await page.clock.fastForward('02:10');
+  await rewardEditor.getByRole('button', { name: 'Save' }).click();
+  await expect(pad).toBeVisible();
+});
+
 test("a failed place search shows only the failure, not the last query's places", async ({ page }) => {
   let up = true;
   await page.route('**/geocoding-api.open-meteo.com/**', (r) =>

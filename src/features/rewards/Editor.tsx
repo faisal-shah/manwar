@@ -1,4 +1,5 @@
 import { useState } from 'preact/hooks';
+import { asParent } from '../../core/lock';
 import { data, newId, saveEdited } from '../../data/store';
 import { EVERYONE, type Reward } from '../../data/types';
 import { currentTime } from '../../lib/clock';
@@ -33,23 +34,26 @@ function RewardEditor({ reward, onClose }: { reward: Reward | null; onClose: () 
     if (who.length === 0) return setError('Choose who can redeem it.');
     const bad = validateCost(cost);
     if (bad) return setError(bad);
-    // The stored reward, not the copy the editor opened with: a redemption meanwhile is kept.
-    const base = (reward && data.rewards.value.find((r) => r.id === reward.id)) ?? reward;
-    const out: Reward = {
-      id: reward?.id ?? newId(),
-      title: title.trim(),
-      emoji,
-      cost,
-      profiles: who.includes(EVERYONE) ? [] : who,
-      renews,
-      redeemedBy: base?.redeemedBy ?? {},
-      order: reward?.order ?? Math.max(0, ...data.rewards.value.map((r) => r.order)) + 1,
-      createdAt: reward?.createdAt ?? currentTime(),
-      archived: base?.archived,
-    };
-    void saveEdited('rewards', out, !reward, ['title', 'emoji', 'cost', 'profiles', 'renews']);
-    toast(reward ? `Saved "${out.title}"` : `Added "${out.title}"`);
-    onClose();
+    // The lock may have relocked while the editor stood open, so saving asks again.
+    void asParent(() => {
+      // The stored reward, not the copy the editor opened with: a redemption meanwhile is kept.
+      const base = (reward && data.rewards.value.find((r) => r.id === reward.id)) ?? reward;
+      const out: Reward = {
+        id: reward?.id ?? newId(),
+        title: title.trim(),
+        emoji,
+        cost,
+        profiles: who.includes(EVERYONE) ? [] : who,
+        renews,
+        redeemedBy: base?.redeemedBy ?? {},
+        order: reward?.order ?? Math.max(0, ...data.rewards.value.map((r) => r.order)) + 1,
+        createdAt: reward?.createdAt ?? currentTime(),
+        archived: base?.archived,
+      };
+      void saveEdited('rewards', out, !reward, ['title', 'emoji', 'cost', 'profiles', 'renews']);
+      toast(reward ? `Saved "${out.title}"` : `Added "${out.title}"`);
+      onClose();
+    }, 'Enter the PIN to save the reward.');
   };
 
   return (

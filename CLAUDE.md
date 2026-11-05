@@ -105,7 +105,8 @@ flowchart LR
   the same instant can still both award (the balance is an increment).
 - **Parental lock** (`core/lock.ts`): with a PIN set, only checking off tasks
   is open; wrap every other mutation in `asParent(() => ...)` or
-  `await requireParent()`. Repeated wrong PINs pause the pad
+  `await requireParent()`; an editor asks again on Save, since the lock can
+  relock behind an open sheet. Repeated wrong PINs pause the pad
   (`core/pin.ts`, in memory). The Calendar filter is a view preference and
   stays open.
 - **Display** (`core/display.ts`): night window switches to the dark theme

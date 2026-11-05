@@ -1,4 +1,5 @@
 import { useState } from 'preact/hooks';
+import { asParent } from '../../core/lock';
 import { data, newId, profiles, saveEdited } from '../../data/store';
 import type { PartOfDay, Task } from '../../data/types';
 import { currentTime, today } from '../../lib/clock';
@@ -41,29 +42,32 @@ function TaskEditor({ task, onClose }: { task: Task | null; onClose: () => void 
   };
   const chore = d.kind === 'chore';
 
+  // The lock may have relocked while the editor stood open, so saving asks again.
   const save = () => {
     const problem = validateDraft(d);
     if (problem) return setError(problem);
-    const order = task?.order ?? Math.max(0, ...data.tasks.value.map((t) => t.order)) + 1;
-    // The stored task, not the copy the editor opened with: a check-off meanwhile may have moved lastDone.
-    const base = (task && data.tasks.value.find((t) => t.id === task.id)) ?? task;
-    const out = taskFrom(d, base ?? { id: newId(), order, createdAt: currentTime() });
-    void saveEdited('tasks', out, !task, [
-      'kind',
-      'title',
-      'emoji',
-      'notes',
-      'assignees',
-      'upForGrabs',
-      'stars',
-      'date',
-      'time',
-      'repeat',
-      'repeatAfterDone',
-      'parts',
-    ]);
-    toast(task ? `Saved "${out.title}"` : `Added "${out.title}"`);
-    onClose();
+    void asParent(() => {
+      const order = task?.order ?? Math.max(0, ...data.tasks.value.map((t) => t.order)) + 1;
+      // The stored task, not the copy the editor opened with: a check-off meanwhile may have moved lastDone.
+      const base = (task && data.tasks.value.find((t) => t.id === task.id)) ?? task;
+      const out = taskFrom(d, base ?? { id: newId(), order, createdAt: currentTime() });
+      void saveEdited('tasks', out, !task, [
+        'kind',
+        'title',
+        'emoji',
+        'notes',
+        'assignees',
+        'upForGrabs',
+        'stars',
+        'date',
+        'time',
+        'repeat',
+        'repeatAfterDone',
+        'parts',
+      ]);
+      toast(task ? `Saved "${out.title}"` : `Added "${out.title}"`);
+      onClose();
+    }, 'Enter the PIN to save the task.');
   };
 
   return (
