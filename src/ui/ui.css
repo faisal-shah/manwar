@@ -9,7 +9,19 @@
 :where(.btn, .icon-btn, .ctl, .seg button, .chip, .toggle, .toast button, .swatches button, .pill, .cal-week-add, .mg-add) {
   position: relative;
 }
-:where(.btn, .icon-btn, .ctl, .seg button, .chip, .toggle, .toast button, .swatches button, .pill, .cal-week-add, .mg-add)::before {
+:where(
+  .btn,
+  .icon-btn,
+  .ctl,
+  .seg button,
+  .chip,
+  .toggle,
+  .toast button,
+  .swatches button,
+  .pill,
+  .cal-week-add,
+  .mg-add
+)::before {
   content: '';
   position: absolute;
   top: min(0rem, calc(50% - var(--touch) / 2));

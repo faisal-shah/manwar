@@ -146,7 +146,8 @@ for (const tab of ['Home', 'Calendar', 'Lists', 'Tasks', 'Rewards', 'Recipes']) 
         el.scrollTop = el.scrollHeight;
         for (const c of el.querySelectorAll<HTMLElement>('button, input, textarea, [role=button]')) {
           const b = c.getBoundingClientRect();
-          if (b.width && b.bottom > r.top && b.top < r.bottom && hit(b)) out.push(c.getAttribute('aria-label') || c.textContent!.trim());
+          if (b.width && b.bottom > r.top && b.top < r.bottom && hit(b))
+            out.push(c.getAttribute('aria-label') || c.textContent!.trim());
         }
       }
       return out;
@@ -161,7 +162,9 @@ test('Month fills its rows and never cuts "more" off (large text, a six-week mon
   await pickView(page, 'Month');
   // A tall row holds more than three lines: a busy day shows three items and its "more".
   await expect(page.locator('.month-more').first()).toBeVisible();
-  const lines = await page.locator('.month-item, .month-more').evaluateAll((els) => Math.max(...els.map((e) => parseInt((e as HTMLElement).style.gridRow))));
+  const lines = await page
+    .locator('.month-item, .month-more')
+    .evaluateAll((els) => Math.max(...els.map((e) => parseInt((e as HTMLElement).style.gridRow))));
   expect(lines).toBeGreaterThanOrEqual(5);
 
   await page.setViewportSize({ width: 1024, height: 600 });
@@ -179,7 +182,8 @@ test('Month fills its rows and never cuts "more" off (large text, a six-week mon
           const b = el.getBoundingClientRect();
           const out: string[] = [];
           if (b.bottom > wb.bottom + 1) out.push(`cut: ${el.textContent}`);
-          if (b.right > f.x && b.left < f.x + f.width && b.bottom > f.y && b.top < f.y + f.height) out.push(`under +: ${el.textContent}`);
+          if (b.right > f.x && b.left < f.x + f.width && b.bottom > f.y && b.top < f.y + f.height)
+            out.push(`under +: ${el.textContent}`);
           return out;
         });
       }),
@@ -196,7 +200,9 @@ test('a narrow Month (the Home pane) shows titles, not "10:45 AM Hanc"', async (
   const pills = page.locator('.month-item .ev-pill', { hasText: 'Handwriting' });
   await expect(pills.first().locator('.ev-prefix')).toBeHidden();
   await page.evaluate(() => document.fonts.ready);
-  const cut = await pills.locator('.ev-title').evaluateAll((els) => els.filter((el) => el.scrollWidth > el.clientWidth + 1).length);
+  const cut = await pills
+    .locator('.ev-title')
+    .evaluateAll((els) => els.filter((el) => el.scrollWidth > el.clientWidth + 1).length);
   expect(cut).toBe(0);
 });
 
@@ -243,7 +249,10 @@ test('text on a light profile or category color is dark enough to read', async (
     await page.waitForTimeout(500);
     const all = await contrasts(page, sel);
     expect(all.length, tab).toBeGreaterThan(0);
-    expect(all.filter((c) => c.ratio < 4.5), tab).toEqual([]);
+    expect(
+      all.filter((c) => c.ratio < 4.5),
+      tab,
+    ).toEqual([]);
   }
   await rail(page, 'Calendar').click();
   await pickView(page, 'Week');
@@ -293,8 +302,12 @@ function smallTargets(page: Page, scope: string) {
           return !!t && el.contains(t);
         };
         if (!on(x, y)) continue;
-        const ok = (r.width >= 5.55 * rem || (on(x - d, y) && on(x + d, y))) && (r.height >= 5.55 * rem || (on(x, y - d) && on(x, y + d)));
-        if (!ok) out.push(`${el.getAttribute('aria-label') || el.textContent!.trim()} ${(r.width / rem).toFixed(1)}x${(r.height / rem).toFixed(1)}`);
+        const ok =
+          (r.width >= 5.55 * rem || (on(x - d, y) && on(x + d, y))) && (r.height >= 5.55 * rem || (on(x, y - d) && on(x, y + d)));
+        if (!ok)
+          out.push(
+            `${el.getAttribute('aria-label') || el.textContent!.trim()} ${(r.width / rem).toFixed(1)}x${(r.height / rem).toFixed(1)}`,
+          );
       }
     return out;
   }, scope);
@@ -328,14 +341,21 @@ test('no text on the wall is under 1.3rem, and the glance text is bigger', async
         if (el.closest('.avatar, svg')) continue;
         const own = [...el.childNodes].filter((n) => n.nodeType === 3 && n.textContent!.trim());
         if (!own.length || !el.getBoundingClientRect().width) continue;
-        const text = own.map((n) => n.textContent).join('').trim();
+        const text = own
+          .map((n) => n.textContent)
+          .join('')
+          .trim();
         if (/^[\p{Extended_Pictographic}\u200d\ufe0f\s]+$/u.test(text)) continue;
         const px = parseFloat(getComputedStyle(el).fontSize);
         if (px / rem < 1.29) out.push(`${text} ${(px / rem).toFixed(2)}rem`);
       }
       return [...new Set(out)];
     });
-  const size = (sel: string) => page.locator(sel).first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+  const size = (sel: string) =>
+    page
+      .locator(sel)
+      .first()
+      .evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
   const r = await rem(page);
   await rail(page, 'Calendar').click();
   for (const view of ['Schedule', 'Week', 'Month']) {
@@ -373,7 +393,11 @@ test('with large text the running timer readout stays clear of the pie', async (
 });
 
 test('Meals: a sideways swipe that starts on a planned meal pages the week', async ({ browser }) => {
-  const ctx = await browser.newContext({ viewport: { width: 1600, height: 1000 }, hasTouch: true, timezoneId: 'America/Chicago' });
+  const ctx = await browser.newContext({
+    viewport: { width: 1600, height: 1000 },
+    hasTouch: true,
+    timezoneId: 'America/Chicago',
+  });
   const page = await ctx.newPage();
   await open(page);
   await rail(page, 'Meals').click();
@@ -397,9 +421,11 @@ test('eight people in the progress strip: each pill shows a whole name or none',
   for (const [i, n] of ['Zaynab Khadijah', 'Ibrahim', 'Aisha Siddiqa', 'Grandma Noor'].entries())
     await seedDoc(name, 'profiles', { id: `p${i}`, name: n, color: '#2177AE', order: 10 + i, stars: 0, createdAt: 10 + i });
   await expect(page.locator('.cal-prog')).toHaveCount(8);
-  const cut = await page.locator('.cal-prog-name').evaluateAll((els) =>
-    els.filter((el) => el.getBoundingClientRect().width > 0 && el.scrollWidth > el.clientWidth + 1).map((el) => el.textContent),
-  );
+  const cut = await page
+    .locator('.cal-prog-name')
+    .evaluateAll((els) =>
+      els.filter((el) => el.getBoundingClientRect().width > 0 && el.scrollWidth > el.clientWidth + 1).map((el) => el.textContent),
+    );
   expect(cut).toEqual([]);
   // Avatar and count stay whole in every pill.
   const counts = await page.locator('.cal-prog-count').evaluateAll((els) => els.map((el) => el.getBoundingClientRect().width));
