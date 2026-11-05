@@ -16,6 +16,7 @@ import { pending } from '../../features/messages/state';
 import { timeAgo } from '../../features/messages/logic';
 import { splitRemaining } from '../../features/timer/logic';
 import { timer, timerPhase } from '../../features/timer/state';
+import { editTask } from '../../features/tasks/actions';
 import { UFG_COLOR } from '../../features/tasks/TaskCard';
 import { progress } from '../../tasks/engine';
 import { todayOccurrences, todayProgress } from '../../tasks/state';
@@ -30,6 +31,7 @@ import './today.css';
 function TodayBody() {
   return (
     <div class="ph-stack pd">
+      <p class="pd-date">{formatLongDate(today.value)}</p>
       <OnTheWall />
       <NextUpCard />
       <ProgressCard />
@@ -95,7 +97,7 @@ function NextUpCard() {
     !next.today.allDay.length && !next.today.timed.length && !next.tomorrow?.allDay.length && !next.tomorrow?.timed.length;
   return (
     <section class="ph-card" aria-label="Calendar">
-      <CardHead icon={CalendarDays} title="Next up" onMore={() => goPhone('calendar')} more="Calendar" />
+      <CardHead icon={CalendarDays} title="Next up" onMore={() => goPhone('calendar')} more="See all" />
       {loading && empty ? (
         <p class="muted pd-empty">Loading the calendar…</p>
       ) : empty ? (
@@ -124,7 +126,7 @@ function Agenda({ label, agenda, now }: { label: string; agenda: DayAgenda; now:
       </ul>
       {more > 0 && (
         <button type="button" class="pd-more" onClick={() => goPhone('calendar')}>
-          {plural(more, 'more event')}
+          {plural(more, 'later event')}
         </button>
       )}
     </div>
@@ -184,7 +186,7 @@ function ProgressCard() {
   const noTasks = !data.tasks.value.some((t) => !t.archived);
   return (
     <section class="ph-card" aria-label="Tasks today">
-      <CardHead icon={ListChecks} title="Tasks today" onMore={people.length ? () => goPhone('tasks') : undefined} more="Tasks" />
+      <CardHead icon={ListChecks} title="Tasks today" />
       {!people.length ? (
         <p class="muted pd-empty">No people yet. People are added at the wall, in Settings, under Profiles.</p>
       ) : (
@@ -192,8 +194,8 @@ function ProgressCard() {
           {noTasks && (
             <p class="muted pd-empty">
               No tasks yet.{' '}
-              <button type="button" class="ph-inline-link" onClick={() => goPhone('tasks')}>
-                Add routines and chores on the Tasks tab.
+              <button type="button" class="ph-inline-link" onClick={addFirstTask}>
+                Add a routine or chore
               </button>
             </p>
           )}
@@ -217,7 +219,7 @@ function ProgressCard() {
                     class="pd-person"
                     style={{ '--c': p.color }}
                     data-person={p.id}
-                    aria-label={`${p.name}: ${pr.done} of ${plural(pr.total, 'task')} done`}
+                    aria-label={`${p.name}: ${pr.done} of ${pr.total} done`}
                     onClick={() => showTasksOf(p.id)}
                   >
                     <Avatar profile={p} size={4} />
@@ -289,17 +291,15 @@ function DinnerCard() {
   );
 }
 
-const MAX_COUNTDOWNS = 5;
-
+/** Every countdown in the household's window, soonest first. */
 function CountdownsCard() {
   const list = countdowns.value;
   if (!list.length) return null;
-  const { shown, more } = capped(list, MAX_COUNTDOWNS);
   return (
     <section class="ph-card" aria-label="Countdowns">
       <CardHead icon={Timer} title="Countdowns" />
       <ul class="pd-cds">
-        {shown.map(({ ev, days }) => {
+        {list.map(({ ev, days }) => {
           const emoji = countdownEmoji(ev);
           return (
             <li key={ev.key} class="pd-cd" style={fillStyle(ev, 'light')}>
@@ -314,19 +314,19 @@ function CountdownsCard() {
           );
         })}
       </ul>
-      {more > 0 && (
-        <button type="button" class="pd-more" onClick={() => goPhone('calendar')}>
-          {plural(more, 'more countdown')}
-        </button>
-      )}
     </section>
   );
+}
+
+/** The first task: the Tasks tab with its editor open. */
+function addFirstTask(): void {
+  goPhone('tasks');
+  editTask('new');
 }
 
 export const todayPage: PhonePage = {
   id: 'today',
   label: 'Today',
   icon: House,
-  title: () => formatLongDate(today.value),
   Body: TodayBody,
 };

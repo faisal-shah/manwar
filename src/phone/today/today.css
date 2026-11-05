@@ -1,5 +1,12 @@
 /* The phone's Today tab (class prefix pd-). Sizes in the phone's rem (10px at its default text size). */
 
+.pd-date {
+  margin: -0.8rem 0.2rem -0.2rem;
+  color: var(--text-2);
+  font-size: 1.6rem;
+  font-weight: 600;
+}
+
 .pd-head {
   display: flex;
   align-items: center;
