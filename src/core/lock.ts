@@ -3,6 +3,7 @@ import { deleteField } from 'firebase/firestore';
 import { saveSettings, settings } from '../data/store';
 import type { Settings } from '../data/types';
 import { currentTime, nowMs } from '../lib/clock';
+import { onActivity } from './activity';
 
 /**
  * Parental lock. With a PIN set, the tablet is in kid mode: anyone can look
@@ -76,13 +77,9 @@ export function lockNow(): void {
   unlockedUntil.value = 0;
 }
 
-/** Any touch while unlocked keeps it unlocked. */
-export function trackActivity(): void {
-  window.addEventListener(
-    'pointerdown',
-    () => {
-      if (lockEnabled.value && nowMs.value < unlockedUntil.value) extend();
-    },
-    { capture: true, passive: true },
-  );
+/** Any touch or key press while unlocked keeps it unlocked. */
+export function startRelock(): void {
+  onActivity(() => {
+    if (lockEnabled.peek() && currentTime() < unlockedUntil.peek()) extend();
+  });
 }

@@ -3,13 +3,15 @@ import { settings } from '../data/store';
 import type { TimeWindow } from '../data/types';
 import { currentTime, now } from '../lib/clock';
 import { hhmmToMinutes, minutesOfDay } from '../lib/date';
+import { onActivity } from './activity';
 import { setBrightness, wakeScreen } from './kiosk';
 
 /**
  * Display states: day (light), night (dark theme, dimmed) and sleep (black,
  * backlight off). Night and sleep follow their daily windows; "Sleep now"
  * forces sleep until the next wake time; a tap during sleep wakes the screen
- * for a few minutes; a running timer holds scheduled sleep off.
+ * and it stays awake until nobody has touched it for a few minutes; a
+ * running timer holds scheduled sleep off.
  */
 
 export function inWindow(w: TimeWindow, minutes: number): boolean {
@@ -19,9 +21,23 @@ export function inWindow(w: TimeWindow, minutes: number): boolean {
   return a <= b ? minutes >= a && minutes < b : minutes >= a || minutes < b;
 }
 
-/** Sleep forced on until this instant ("Sleep now"). */
-export const sleepForcedUntil = signal(0);
-/** Woken by a tap until this instant. */
+const FORCED_KEY = 'manwar.sleepUntil.v1';
+
+function loadForced(): number {
+  try {
+    return Number(localStorage.getItem(FORCED_KEY)) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Sleep forced on until this instant ("Sleep now"). Kept in localStorage, so
+ * a reload in the night (an update, the kiosk browser restarting) does not
+ * turn the screen back on.
+ */
+export const sleepForcedUntil = signal(typeof localStorage !== 'undefined' ? loadForced() : 0);
+/** Awake until this instant: a tap on the sleep screen, then each touch while awake, keeps it on. */
 export const wokenUntil = signal(0);
 /** Scheduled sleep waits until this instant (a running timer holds it to 5 minutes past its end). */
 export const sleepHeldUntil = signal(0);
@@ -63,6 +79,21 @@ export function wake(): void {
 }
 
 export function startDisplay(): void {
+  // Someone using the wall keeps it awake: scheduled sleep starts only after
+  // WAKE_MS without a touch. A touch on the sleep screen itself wakes it
+  // through wake(), and "Sleep now" (a touch too) clears this hold.
+  onActivity(() => {
+    if (!sleeping.peek()) wokenUntil.value = Math.max(wokenUntil.peek(), currentTime() + WAKE_MS);
+  });
+  effect(() => {
+    const until = sleepForcedUntil.value;
+    try {
+      if (until > currentTime()) localStorage.setItem(FORCED_KEY, String(until));
+      else localStorage.removeItem(FORCED_KEY);
+    } catch {
+      /* storage unavailable: forced sleep lasts for this page load only */
+    }
+  });
   effect(() => {
     document.documentElement.dataset.theme = theme.value;
     document.documentElement.dataset.text = settings.value.textScale;

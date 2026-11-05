@@ -1,33 +1,45 @@
 import { effect, signal } from '@preact/signals';
+import { idleFor } from '../core/activity';
 import { settings } from '../data/store';
 import type { TabId } from '../data/types';
-import { currentTime } from '../lib/clock';
-
-/** Rail order; the fallback when the open tab is hidden is the first one still shown. */
-const TAB_ORDER: TabId[] = ['home', 'calendar', 'lists', 'tasks', 'rewards', 'meals', 'recipes'];
+import { fallbackTab } from '../features/settings/logic';
 
 export const activeTab = signal<TabId>('calendar');
 /** Settings sheet and Sleep popover, opened from the bottom of the rail. */
 export const settingsOpen = signal(false);
 export const sleepMenuOpen = signal(false);
+/** The Settings page shown; it stays put between openings. */
+export const settingsPage = signal('profiles');
 
 export function goTo(tab: TabId): void {
   activeTab.value = tab;
 }
 
-let lastTouch = currentTime();
+/** Open Settings, on a given page (e.g. 'profiles' from an empty Tasks tab). */
+export function openSettings(page?: string): void {
+  if (page) settingsPage.value = page;
+  settingsOpen.value = true;
+}
 
-/** Return to Home after the configured idle time (DAKboard-style). */
+const IDLE_CHECK_MS = 15_000;
+
+/**
+ * Return to Home after the configured idle time (DAKboard-style). Settings
+ * and the Sleep menu close too, so a sheet a parent walked away from does not
+ * hold the wall.
+ */
 export function startIdleReturn(): void {
-  window.addEventListener('pointerdown', () => (lastTouch = currentTime()), { capture: true, passive: true });
   setInterval(() => {
     const m = settings.value.idleHomeMinutes;
-    if (m > 0 && activeTab.value !== 'home' && currentTime() - lastTouch > m * 60_000 && !settingsOpen.value)
-      activeTab.value = 'home';
-  }, 15_000);
+    if (m <= 0 || idleFor() <= m * 60_000) return;
+    const home = settings.value.hiddenTabs.includes('home') ? fallbackTab(settings.value.hiddenTabs) : 'home';
+    settingsOpen.value = false;
+    sleepMenuOpen.value = false;
+    activeTab.value = home;
+  }, IDLE_CHECK_MS);
   // Never leave the wall on a tab that was just hidden.
   effect(() => {
     const hidden = settings.value.hiddenTabs;
-    if (hidden.includes(activeTab.value)) activeTab.value = TAB_ORDER.find((t) => !hidden.includes(t)) ?? 'calendar';
+    if (hidden.includes(activeTab.value)) activeTab.value = fallbackTab(hidden);
   });
 }

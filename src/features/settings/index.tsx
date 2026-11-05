@@ -1,7 +1,7 @@
-import { signal } from '@preact/signals';
 import type { ComponentType, FunctionComponent } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { CalendarDays, CalendarSync, CloudSun, Info, ListChecks, Lock, Monitor, Users, Utensils } from 'lucide-preact';
+import { settingsPage } from '../../app/nav';
 import { requireParent, unlocked } from '../../core/lock';
 import { Sheet } from '../../ui/overlays';
 import { CalendarPage } from './CalendarPage';
@@ -34,9 +34,6 @@ const PAGES: PageDef[] = [
   { id: 'about', label: 'About', icon: Info, Page: AboutPage },
 ];
 
-/** The last page shown, so reopening Settings returns to it. */
-const page = signal(PAGES[0].id);
-
 /** The rail's Settings: behind the PIN when the lock is on. */
 export function SettingsSheet({ onClose }: { onClose: () => void }) {
   const [allowed, setAllowed] = useState(() => unlocked.value);
@@ -44,7 +41,7 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
     if (!allowed) void requireParent('Enter the PIN to open Settings.').then((ok) => (ok ? setAllowed(true) : onClose()));
   }, []);
   if (!allowed) return null;
-  const current = PAGES.find((p) => p.id === page.value) ?? PAGES[0];
+  const current = PAGES.find((p) => p.id === settingsPage.value) ?? PAGES[0];
   return (
     <Sheet title="Settings" wide onClose={onClose}>
       <div class="settings">
@@ -54,7 +51,7 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
               type="button"
               class={p.id === current.id ? 'on' : ''}
               aria-current={p.id === current.id ? 'page' : undefined}
-              onClick={() => (page.value = p.id)}
+              onClick={() => (settingsPage.value = p.id)}
             >
               <p.icon size="2.2rem" strokeWidth={1.9} />
               {p.label}

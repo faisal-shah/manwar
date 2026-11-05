@@ -169,13 +169,14 @@ test('runs a short timer to the end', async ({ page }) => {
 test('a running timer holds off scheduled sleep until 5 minutes after it ends', async ({ page }) => {
   await open(page);
   await page.clock.install();
-  // A sleep window around now: the screen sleeps at once.
+  // A sleep window around now: the screen sleeps once nobody has touched it for 3 minutes.
   await rail(page, 'Sleep').click();
   await page.locator('.modal .set-switch').click();
   await page.getByRole('textbox', { name: 'From' }).fill('11:00');
   await page.getByRole('textbox', { name: 'To' }).fill('13:00');
   await page.getByRole('button', { name: 'Save' }).click();
   const sleepScreen = page.locator('.sleep-screen');
+  await page.clock.fastForward('03:05');
   await expect(sleepScreen).toBeVisible();
 
   await sleepScreen.click();

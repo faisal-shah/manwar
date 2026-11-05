@@ -3,7 +3,8 @@ import { registerSW } from 'virtual:pwa-register';
 import { startCalendarSync } from '../calendar/engine';
 import { startDisplay } from '../core/display';
 import { holdWakeLock } from '../core/kiosk';
-import { trackActivity } from '../core/lock';
+import { idleFor, trackActivity } from '../core/activity';
+import { startRelock } from '../core/lock';
 import { startWeather } from '../core/weather';
 import { seedIfEmpty } from '../data/seed';
 import { ready } from '../data/store';
@@ -12,9 +13,10 @@ import { startIdleReturn } from './nav';
 
 /** Background services, started once the household is open. */
 export function startApp(): void {
-  startDisplay();
-  holdWakeLock();
   trackActivity();
+  startDisplay();
+  startRelock();
+  holdWakeLock();
   let started = false;
   effect(() => {
     if (session.value.state !== 'signedIn' || !ready.value || started) return;
@@ -38,10 +40,7 @@ const CHECK_MS = 30 * 60_000;
  */
 function startUpdates(): void {
   let waiting = false;
-  let lastTouch = Date.now();
-  window.addEventListener('pointerdown', () => (lastTouch = Date.now()), { capture: true, passive: true });
-  const safe = () =>
-    session.value.state !== 'signedIn' || (Date.now() - lastTouch > IDLE_MS && !document.querySelector('[role="dialog"]'));
+  const safe = () => session.value.state !== 'signedIn' || (idleFor() > IDLE_MS && !document.querySelector('[role="dialog"]'));
   const tryApply = () => {
     if (waiting && safe()) void update(true);
   };
@@ -52,7 +51,8 @@ function startUpdates(): void {
       tryApply();
     },
     onRegisteredSW(_url, reg) {
-      if (reg) setInterval(() => void reg.update(), CHECK_MS);
+      // Offline, the check rejects; the next one retries.
+      if (reg) setInterval(() => void reg.update().catch(() => {}), CHECK_MS);
     },
   });
   setInterval(tryApply, 30_000);

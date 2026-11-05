@@ -26,7 +26,8 @@ The product research behind it, with screenshots, is in
 | **Meals** | A week of breakfast, lunch, dinner and snacks; planned meals show on the calendar |
 | **Recipes** | Recipes with ingredients and steps; add ingredients to the grocery list |
 
-**Sleep** blanks the screen on a schedule or on demand; a tap wakes it.
+**Sleep** blanks the screen on a schedule or on demand; a tap wakes it, and
+it stays awake while someone is using it.
 **Settings** covers people, calendars, display (night mode, text size, hidden
 tabs), weather, the parental PIN and meal categories.
 
