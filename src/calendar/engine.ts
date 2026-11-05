@@ -1,6 +1,6 @@
 import { batch as signalBatch, computed, effect, signal } from '@preact/signals';
 import { demoMode } from '../config';
-import { data, householdId, profileById, put, remove as removeDoc, settings, upsert } from '../data/store';
+import { data, householdId, patch, profileById, put, remove as removeDoc, settings, upsert } from '../data/store';
 import { EVERYONE, type EventMeta, type ISODate } from '../data/types';
 import { addDays, addMonths, dateAt, diffDays, toISODate } from '../lib/date';
 import { currentTime, today } from '../lib/clock';
@@ -199,9 +199,10 @@ async function fetchAll(): Promise<void> {
     events.value = [...kept, ...fresh].sort((a, b) => a.start.getTime() - b.start.getTime());
     const errors = results.flatMap((r) => (r.status === 'rejected' ? [r.reason] : []));
     const at = Date.now();
-    shown.forEach((c, i) => results[i].status === 'fulfilled' && syncedAt.set(c.id, at));
+    const answered = shown.filter((c) => !failed.includes(c));
+    answered.forEach((c) => syncedAt.set(c.id, at));
     loaded = w;
-    const far = await fetchFarCountdowns();
+    const far = await fetchFarCountdowns(new Set(answered.map((c) => c.id)));
     if (stale()) return;
     farCountdowns.value = far.found;
     const limit = limitIn([...errors, ...far.errors]);
@@ -467,14 +468,20 @@ export function setCountdown(ev: CalEvent, on: boolean): void {
 /**
  * Countdown events past the fetched window, fetched one by one: with the
  * Always setting a countdown months ahead (a summer trip) still shows.
+ * When Google says an event has nothing left to count down to (deleted,
+ * declined, over), its countdown is turned off, so no tablet asks again.
  */
 const farCountdowns = signal<CalEvent[]>([]);
 /** Next occurrence per countdown meta id, re-checked hourly rather than on every poll. */
-const farCache = new Map<string, { at: number; ev: CalEvent | null }>();
+const farCache = new Map<string, { at: number; ev: CalEvent }>();
 const FAR_TTL_MS = 60 * 60_000;
 
-/** The countdown events past the window, for fetchAll to show, and why any of them could not be asked. */
-async function fetchFarCountdowns(): Promise<{ found: CalEvent[]; errors: unknown[] }> {
+/**
+ * The countdown events past the window, for fetchAll to show, and why any
+ * of them could not be asked. Only calendars that answered this fetch
+ * (`answered`) are asked: a failing one's "none" could mean it is unreadable.
+ */
+async function fetchFarCountdowns(answered: Set<string>): Promise<{ found: CalEvent[]; errors: unknown[] }> {
   if (settings.value.countdownWindow !== 'always') return { found: [], errors: [] };
   const shown = new Set(visibleCalendars().map((c) => c.id));
   const loadedKeys = new Set(
@@ -490,9 +497,16 @@ async function fetchFarCountdowns(): Promise<{ found: CalEvent[]; errors: unknow
     .filter((k) => shown.has(k.calendarId));
   const now = currentTime();
   const after = dateAt(today.value);
-  const stale = wanted.filter((k) => (farCache.get(k.metaId)?.at ?? -Infinity) <= now - FAR_TTL_MS);
+  const stale = wanted.filter((k) => answered.has(k.calendarId) && (farCache.get(k.metaId)?.at ?? -Infinity) <= now - FAR_TTL_MS);
   const found = await Promise.allSettled(stale.map((k) => source.nextOccurrence(k.calendarId, k.id, after)));
-  found.forEach((r, i) => r.status === 'fulfilled' && farCache.set(stale[i].metaId, { at: now, ev: r.value }));
+  found.forEach((r, i) => {
+    if (r.status !== 'fulfilled') return;
+    const { metaId } = stale[i];
+    if (r.value) return void farCache.set(metaId, { at: now, ev: r.value });
+    farCache.delete(metaId);
+    // updateDoc, not a merge: a document deleted meanwhile is not brought back.
+    void patch('eventMeta', metaId, { countdown: false, updatedAt: now }).catch(() => {});
+  });
   return {
     found: wanted.flatMap((k) => farCache.get(k.metaId)?.ev ?? []),
     errors: found.flatMap((r) => (r.status === 'rejected' ? [r.reason] : [])),

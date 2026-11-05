@@ -100,7 +100,9 @@ flowchart LR
   Events with no meta are **unassigned** and listed in `unassigned` (the
   triage queue, badge on the Calendar rail item). `[EVERYONE]` means the
   whole family. Countdowns past the window (setting Always) come from
-  `CalendarSource.nextOccurrence`. New events get their id from
+  `CalendarSource.nextOccurrence`, asked hourly and only of calendars that
+  answered the fetch; when it finds nothing left (deleted, declined, over)
+  the meta gets `countdown: false`, so no tablet asks again. New events get their id from
   `newEventId()` once per editor, so a retried save updates instead of
   duplicating; the engine remembers which calendars a failed save of an id
   went to, and a retry to another calendar moves the event from there

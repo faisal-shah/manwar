@@ -36,7 +36,14 @@ vi.mock('../../src/data/store', async () => {
     server.delete(id);
     data.eventMeta.value = data.eventMeta.value.filter((d) => d.id !== id);
   };
-  return { data, settings, profileById, put, upsert, remove, householdId: signal<string | null>('h1') };
+  // updateDoc: fails for a document that does not exist.
+  const patch = async (_coll: 'eventMeta', id: string, partial: Partial<EventMeta>) => {
+    const local = data.eventMeta.value.find((d) => d.id === id);
+    if (!local) throw new Error(`No document to update: ${id}`);
+    if (server.has(id)) server.set(id, { ...server.get(id)!, ...partial });
+    show({ ...local, ...partial });
+  };
+  return { data, settings, profileById, put, upsert, patch, remove, householdId: signal<string | null>('h1') };
 });
 
 const source = vi.hoisted(() => ({}) as CalendarSource);
@@ -386,5 +393,39 @@ describe('countdowns past the fetched window', () => {
     await engine.refresh();
     expect(asked).toHaveLength(2);
     expect(engine.countdowns.value.map((c) => c.ev.id)).toEqual(['trip']);
+  });
+
+  it('turns off a countdown Google has nothing left for, so it is not asked for again', async () => {
+    const asked: string[] = [];
+    const flaky: CalendarInfo = { ...CAL, id: 'flaky', name: 'Flaky', primary: false };
+    source.listCalendars = async () => [CAL, flaky];
+    source.listEvents = async (id) => {
+      if (id === 'flaky') throw new Error('Google Calendar 500: Backend Error');
+      return [];
+    };
+    source.nextOccurrence = async (_cal, id) => {
+      asked.push(id);
+      return null;
+    };
+    const flakyMeta: EventMeta = { id: engine.metaKey('flaky', 'camp'), profiles: ['asiyah'], countdown: true, updatedAt: 0 };
+    // Deleted in Google, and a one-off trip long over; both had countdowns.
+    store.data.eventMeta.value = [
+      meta('deleted', ['asiyah'], { countdown: true }),
+      meta('past-trip', ['hashim'], { countdown: true }),
+      flakyMeta,
+    ];
+    store.settings.value = { ...DEFAULT_SETTINGS, countdownWindow: 'always' };
+    await engine.refresh();
+    // A calendar that did not answer is not asked: its "none" would mean nothing.
+    expect(asked.sort()).toEqual(['deleted', 'past-trip']);
+    expect(metaDoc('deleted')).toMatchObject({ profiles: ['asiyah'], countdown: false });
+    expect(metaDoc('past-trip')).toMatchObject({ profiles: ['hashim'], countdown: false });
+    // Hours later nothing is asked again; the flaky calendar's countdown is still on.
+    nowMs.value += 2 * 3_600_000;
+    asked.length = 0;
+    await engine.refresh();
+    nowMs.value -= 2 * 3_600_000;
+    expect(asked).toEqual([]);
+    expect(store.data.eventMeta.value.find((m) => m.id === flakyMeta.id)?.countdown).toBe(true);
   });
 });
