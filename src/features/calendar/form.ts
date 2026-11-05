@@ -1,6 +1,6 @@
 import type { CalEvent, EventDraft } from '../../calendar/types';
 import type { HHMM, ISODate, Repeat } from '../../data/types';
-import { addDays, dateAt, diffDays, minutesToHHMM, toISODate } from '../../lib/date';
+import { addDays, dateAt, diffDays, hhmmToMinutes, minutesToHHMM, toISODate } from '../../lib/date';
 import { plainText } from './text';
 
 /** Pure event-editor form logic (tests/unit/calendar-form.test.ts). */
@@ -18,6 +18,12 @@ export interface Form {
   calendarId: string;
   /** 'default' (calendar's own reminders), 'none', or minutes before as a string. */
   reminder: string;
+  /**
+   * The reminder as read from the event. While `reminder` still equals it,
+   * the event's own reminders are written back untouched (email ones, more
+   * than one popup).
+   */
+  loadedReminder?: string;
   location: string;
   /** Notes as plain text (a Google description may be HTML). */
   notes: string;
@@ -54,6 +60,8 @@ export function newForm(day: ISODate | undefined, nowMs: number, calendarId: str
 
 export function formFromEvent(ev: CalEvent, profiles: string[], countdown: boolean): Form {
   const lastDay = toISODate(new Date(ev.end.getTime() - 1));
+  const reminder =
+    ev.reminderMinutes === undefined ? 'default' : ev.reminderMinutes === null ? 'none' : String(ev.reminderMinutes);
   return {
     title: ev.title,
     allDay: ev.allDay,
@@ -63,7 +71,8 @@ export function formFromEvent(ev: CalEvent, profiles: string[], countdown: boole
     endTime: hhmm(ev.end),
     profiles,
     calendarId: ev.calendarId,
-    reminder: ev.reminderMinutes === undefined ? 'default' : ev.reminderMinutes === null ? 'none' : String(ev.reminderMinutes),
+    reminder,
+    loadedReminder: reminder,
     location: ev.location ?? '',
     notes: ev.description ? plainText(ev.description) : '',
     description: ev.description ? { raw: ev.description, shown: plainText(ev.description) } : undefined,
@@ -88,8 +97,12 @@ export function draftFromForm(f: Form, keepRecurrence: boolean): EventDraft {
     repeat: f.repeat,
     keepRecurrence,
     location: f.location.trim() || undefined,
-    description: f.description && f.notes === f.description.shown ? f.description.raw : f.notes.trim() || undefined,
+    // Untouched notes go back as they came; cleared ones are cleared. Empty notes on an event read without
+    // any (an offline snapshot too big to keep them) are left out, so they cannot wipe notes not loaded.
+    description:
+      f.description && f.notes === f.description.shown ? f.description.raw : f.notes.trim() || (f.description ? '' : undefined),
     reminderMinutes,
+    keepReminders: f.loadedReminder !== undefined && f.reminder === f.loadedReminder,
   };
   if (f.allDay)
     return {
@@ -119,13 +132,28 @@ export function sameRepeat(a: Repeat | undefined, b: Repeat | undefined): boolea
   return a.every === b.every && a.unit === b.unit && days(a) === days(b) && (a.until ?? '') === (b.until ?? '');
 }
 
+/** Start to end on the clock, in minutes. */
+const clockMinutes = (f: Form) => diffDays(f.startDate, f.endDate) * 1440 + hhmmToMinutes(f.endTime) - hhmmToMinutes(f.startTime);
+
+/**
+ * Set the end time. An event under a day long stays under a day: the end is
+ * the first time it reads after the start, on the start day or the next (so
+ * 11 PM to 1 AM ends the next day, and setting the end back to 11:30 PM
+ * brings it back). A longer event the parent set up keeps its end day.
+ */
+export function setEndTime(f: Form, endTime: HHMM): Form {
+  if (clockMinutes(f) > 1440) return { ...f, endTime };
+  const endDate = hhmmToMinutes(endTime) > hhmmToMinutes(f.startTime) ? f.startDate : addDays(f.startDate, 1);
+  return { ...f, endTime, endDate };
+}
+
 /** Move the start and keep the duration. */
 export function shiftStart(f: Form, startDate: ISODate, startTime: HHMM): Form {
   if (f.allDay) {
     const len = diffDays(f.startDate, f.endDate);
     return { ...f, startDate, startTime, endDate: addDays(startDate, Math.max(0, len)) };
   }
-  const dur = Math.max(5, (dateAt(f.endDate, f.endTime).getTime() - dateAt(f.startDate, f.startTime).getTime()) / 60_000);
-  const end = new Date(dateAt(startDate, startTime).getTime() + dur * 60_000);
-  return { ...f, startDate, startTime, endDate: toISODate(end), endTime: hhmm(end) };
+  // On the clock, so a night shift moved off (or onto) the night clocks change keeps its end time.
+  const end = hhmmToMinutes(startTime) + Math.max(5, clockMinutes(f));
+  return { ...f, startDate, startTime, endDate: addDays(startDate, Math.floor(end / 1440)), endTime: minutesToHHMM(end % 1440) };
 }

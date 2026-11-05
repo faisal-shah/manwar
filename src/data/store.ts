@@ -86,11 +86,21 @@ export const ready = signal(false);
 export const profiles = computed(() => [...data.profiles.value].sort((a, b) => a.order - b.order || a.createdAt - b.createdAt));
 export const profileById = computed(() => new Map(profiles.value.map((p) => [p.id, p])));
 
+/**
+ * The ledger listener holds the household's newest entries, up to this many;
+ * the star history sheet pages further back with loadOlderLedger.
+ */
+export const LEDGER_LIVE = 1000;
+
 /** Live listeners by collection ('settings' for the settings document). */
 const listeners = new Map<string, Unsubscribe>();
-/** Collections whose latest snapshot came from the server, not only the local cache. */
-const fromServer = new Set<CollectionName>();
-export const confirmedByServer = (name: CollectionName) => fromServer.has(name);
+/** Collections (and 'settings') whose latest snapshot came from the server, not only the local cache. */
+const fromServer = new Set<CollectionName | 'settings'>();
+export const confirmedByServer = (name: CollectionName | 'settings') => fromServer.has(name);
+const noteSource = (name: CollectionName | 'settings', fromCache: boolean) => {
+  if (fromCache) fromServer.delete(name);
+  else fromServer.add(name);
+};
 
 /** Listeners that failed (and wait to resubscribe), with the reason. */
 const failed = signal<ReadonlyMap<string, string>>(new Map());
@@ -113,7 +123,7 @@ function hid(): string {
 
 export const colRef = (name: CollectionName) => collection(db, 'households', hid(), name);
 export const docRef = (name: CollectionName, id: string) => doc(db, 'households', hid(), name, id);
-const settingsRef = () => doc(db, 'households', hid(), 'settings', 'main');
+export const settingsRef = () => doc(db, 'households', hid(), 'settings', 'main');
 
 /**
  * Keep one listener alive. Firestore ends a listener for good on an error
@@ -154,12 +164,11 @@ export function openHousehold(id: string): void {
       // back as the task views do, plus a margin; the window moves on each listen.
       const since = toISODate(new Date(currentTime() - (HISTORY_DAYS + 2) * 86_400_000));
       if (name === 'taskStates') q = query(q, where('date', '>=', since));
-      if (name === 'ledger') q = query(q, orderBy('at', 'desc'), limit(1000));
+      if (name === 'ledger') q = query(q, orderBy('at', 'desc'), limit(LEDGER_LIVE));
       return onSnapshot(
         q,
         (snap) => {
-          if (snap.metadata.fromCache) fromServer.delete(name);
-          else fromServer.add(name);
+          noteSource(name, snap.metadata.fromCache);
           data[name].value = snap.docs.map((d) => d.data()) as never;
           arrived(name);
         },
@@ -171,6 +180,7 @@ export function openHousehold(id: string): void {
     onSnapshot(
       settingsRef(),
       (snap) => {
+        noteSource('settings', snap.metadata.fromCache);
         settings.value = mergeSettings(snap.exists() ? snap.data() : {});
         arrived('settings');
       },
@@ -207,6 +217,20 @@ export function patch<K extends CollectionName>(name: K, id: string, partial: Pa
   return updateDoc(docRef(name, id), partial as object);
 }
 
+/** `partial` as a field-by-field change: an undefined value deletes the field (plain writes skip it). */
+export function fieldChanges(partial: object): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(partial).map(([k, v]) => [k, v === undefined ? deleteField() : v]));
+}
+
+/**
+ * Write only the fields in `partial` (undefined deletes one), creating the
+ * document when it does not exist. For documents more than one device may
+ * change at once: fields this write does not name are kept.
+ */
+export function upsert<K extends CollectionName>(name: K, id: string, partial: Partial<Collections[K]>): Promise<void> {
+  return setDoc(docRef(name, id), fieldChanges(partial), { merge: true });
+}
+
 /**
  * Save what an editor shows: create the document when it is new, otherwise
  * update only `fields` (undefined deletes the field). Fields the editor does
@@ -220,9 +244,7 @@ export function saveEdited<K extends CollectionName>(
   fields: readonly (keyof Collections[K] & string)[],
 ): Promise<void> {
   if (isNew) return put(name, value);
-  const partial: Record<string, unknown> = {};
-  for (const f of fields) partial[f] = value[f] === undefined ? deleteField() : value[f];
-  return updateDoc(docRef(name, value.id), partial);
+  return updateDoc(docRef(name, value.id), fieldChanges(Object.fromEntries(fields.map((f) => [f, value[f]]))));
 }
 
 export function remove(name: CollectionName, id: string): Promise<void> {
@@ -247,6 +269,11 @@ export function batch() {
     },
     remove(name: CollectionName, id: string) {
       b.delete(docRef(name, id));
+      return api;
+    },
+    /** Merge into the settings document, as saveSettings does. */
+    settings(partial: Partial<Settings>) {
+      b.set(settingsRef(), partial, { merge: true });
       return api;
     },
     /** Adjust a profile's star balance by delta. */

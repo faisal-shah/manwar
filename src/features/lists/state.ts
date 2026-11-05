@@ -1,6 +1,6 @@
 import { computed, signal } from '@preact/signals';
-import { deleteField } from 'firebase/firestore';
-import { batch, data, newId, patch, put } from '../../data/store';
+import { arrayUnion, deleteField } from 'firebase/firestore';
+import { batch, data, fieldChanges, newId, patch, put } from '../../data/store';
 import type { List, ListItem, ListKind, ListSection } from '../../data/types';
 import { currentTime } from '../../lib/clock';
 import {
@@ -155,12 +155,14 @@ export function applyOrder(patches: OrderPatch[]): void {
 export function mergeItems(list: List, rows: MergeItem[]): () => void {
   const b = batch();
   const created: string[] = [];
-  const reopened: ListItem[] = [];
+  /** What the undo puts back on each reopened item: only the fields the merge changed. */
+  const reopened: { id: string; was: Partial<ListItem> }[] = [];
   const now = currentTime();
   for (const { row, prior, order } of placeMerge(list, itemsByList.value.get(list.id) ?? [], rows)) {
     if (prior) {
-      reopened.push(prior);
-      b.patch('listItems', prior.id, { done: false, order, ...(row.qty ? { qty: row.qty } : {}) });
+      const change: Partial<ListItem> = { done: false, order, ...(row.qty ? { qty: row.qty } : {}) };
+      reopened.push({ id: prior.id, was: Object.fromEntries(Object.keys(change).map((k) => [k, prior[k as keyof ListItem]])) });
+      b.patch('listItems', prior.id, change);
       continue;
     }
     const item: ListItem = {
@@ -179,7 +181,9 @@ export function mergeItems(list: List, rows: MergeItem[]): () => void {
   return () => {
     const u = batch();
     created.forEach((id) => u.remove('listItems', id));
-    reopened.forEach((it) => u.put('listItems', it));
+    // Only the merged fields go back: a rename or move made since is kept, and an item deleted since stays deleted.
+    const live = new Set((itemsByList.value.get(list.id) ?? []).map((i) => i.id));
+    reopened.forEach(({ id, was }) => live.has(id) && u.patch('listItems', id, fieldChanges(was) as Partial<ListItem>));
     void u.commit();
   };
 }
@@ -203,41 +207,68 @@ export interface ListDraft {
   isDefaultGrocery: boolean;
 }
 
+/** Clear the default-grocery flag on every list but `keep`. */
+function releaseDefault(b: ReturnType<typeof batch>, keep: string): void {
+  for (const l of lists.value)
+    if (l.id !== keep && l.isDefaultGrocery) b.patch('lists', l.id, { isDefaultGrocery: deleteField() as never });
+}
+
 /**
- * Create or update a list. Making it the default grocery list clears the
- * flag elsewhere; a new grocery list takes it when no grocery list has it
- * (a new to-do or other list only when asked); removed sections release
- * their items.
+ * Create a list. Making it the default grocery list clears the flag
+ * elsewhere; a new grocery list takes it when no grocery list has it (a new
+ * to-do or other list only when asked).
  */
-export function saveList(draft: ListDraft, existing?: List): List {
+export function createList(draft: ListDraft): List {
   const all = lists.value;
-  const b = batch();
-  const list: List = existing
-    ? { ...existing, ...draft, emoji: draft.emoji || undefined, isDefaultGrocery: draft.isDefaultGrocery || undefined }
-    : {
-        id: newId(),
-        ...draft,
-        emoji: draft.emoji || undefined,
-        isDefaultGrocery: draft.isDefaultGrocery || (draft.kind === 'grocery' && !defaultGroceryList(all)) || undefined,
-        order: all.length ? Math.max(...all.map((l) => l.order)) + 1 : 0,
-        createdAt: currentTime(),
-      };
-  b.put('lists', list);
-  if (list.isDefaultGrocery)
-    for (const l of all)
-      if (l.id !== list.id && l.isDefaultGrocery) b.patch('lists', l.id, { isDefaultGrocery: deleteField() as never });
-  if (existing) {
-    const kept = new Set(list.sections.map((s) => s.id));
-    for (const it of itemsByList.value.get(existing.id) ?? [])
-      if (it.sectionId && !kept.has(it.sectionId)) b.patch('listItems', it.id, { sectionId: deleteField() as never });
-  }
+  const list: List = {
+    id: newId(),
+    ...draft,
+    emoji: draft.emoji || undefined,
+    isDefaultGrocery: draft.isDefaultGrocery || (draft.kind === 'grocery' && !defaultGroceryList(all)) || undefined,
+    order: all.length ? Math.max(...all.map((l) => l.order)) + 1 : 0,
+    createdAt: currentTime(),
+  };
+  const b = batch().put('lists', list);
+  if (list.isDefaultGrocery) releaseDefault(b, list.id);
   void b.commit();
   return list;
 }
 
+/**
+ * Save the list editor over `opened`, the list as the editor opened it. Only
+ * the fields the editor shows are written, a section added elsewhere
+ * meanwhile is kept, and sections removed in the editor release their items.
+ * False (nothing written) when the list was deleted meanwhile.
+ */
+export function updateList(opened: List, draft: ListDraft): boolean {
+  const live = lists.value.find((l) => l.id === opened.id);
+  if (!live) return false;
+  const known = new Set(opened.sections.map((s) => s.id));
+  const sections = [...draft.sections, ...live.sections.filter((s) => !known.has(s.id))];
+  const b = batch().patch(
+    'lists',
+    live.id,
+    fieldChanges({
+      title: draft.title,
+      kind: draft.kind,
+      emoji: draft.emoji || undefined,
+      color: draft.color,
+      sections,
+      isDefaultGrocery: draft.isDefaultGrocery || undefined,
+    }) as Partial<List>,
+  );
+  if (draft.isDefaultGrocery) releaseDefault(b, live.id);
+  const kept = new Set(sections.map((s) => s.id));
+  for (const it of itemsByList.value.get(live.id) ?? [])
+    if (it.sectionId && !kept.has(it.sectionId)) b.patch('listItems', it.id, { sectionId: deleteField() as never });
+  void b.commit();
+  return true;
+}
+
+/** Append a section; one added on another device at the same moment is kept too. */
 export function addSection(list: List, name: string): ListSection {
   const section = { id: newId(), name };
-  void patch('lists', list.id, { sections: [...list.sections, section] });
+  void patch('lists', list.id, { sections: arrayUnion(section) as never });
   return section;
 }
 
@@ -256,7 +287,7 @@ export function deleteList(list: List): void {
 export function ensureGroceryList(): List {
   const g = groceryList.value;
   if (g) return g;
-  return saveList({
+  return createList({
     title: 'Grocery List',
     kind: 'grocery',
     emoji: '🛒',

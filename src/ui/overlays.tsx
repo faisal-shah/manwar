@@ -33,6 +33,19 @@ export function useScrimClose(onClose: () => void): (e: MouseEvent) => void {
   };
 }
 
+/**
+ * Close an editor or popover once what it shows is gone from the store
+ * (deleted on another device), so a save cannot bring it back or fail;
+ * `message` says why it closed.
+ */
+export function useCloseWhenGone(gone: boolean, onClose: () => void, message?: string): void {
+  useEffect(() => {
+    if (!gone) return;
+    onClose();
+    if (message) toast(message);
+  }, [gone]);
+}
+
 /** Right-hand side sheet (editors, settings pages). */
 export function Sheet({
   title,

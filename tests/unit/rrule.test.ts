@@ -18,9 +18,14 @@ describe('rrule', () => {
     expect(fromRecurrence(['EXDATE:20261104'])).toBeNull();
   });
   it('ends a series before an occurrence', () => {
-    expect(endSeriesBefore(['RRULE:FREQ=WEEKLY;COUNT=10', 'EXDATE:20261104'], '2026-11-18', true)).toEqual([
+    expect(endSeriesBefore(['RRULE:FREQ=WEEKLY;COUNT=10', 'EXDATE:20261104'], new Date(2026, 10, 18), true)).toEqual([
       'RRULE:FREQ=WEEKLY;UNTIL=20261117',
       'EXDATE:20261104',
+    ]);
+  });
+  it('ends a timed series a second before the occurrence', () => {
+    expect(endSeriesBefore(['RRULE:FREQ=WEEKLY'], new Date('2026-11-21T15:30:00Z'), false)).toEqual([
+      'RRULE:FREQ=WEEKLY;UNTIL=20261121T152959Z',
     ]);
   });
 });

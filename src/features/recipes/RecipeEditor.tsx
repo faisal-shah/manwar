@@ -2,14 +2,15 @@ import { useState } from 'preact/hooks';
 import type { TargetedEvent } from 'preact';
 import { Plus } from 'lucide-preact';
 import { asParent } from '../../core/lock';
+import { data } from '../../data/store';
 import type { MealCategoryId, Recipe } from '../../data/types';
 import { Button, Field, Stepper } from '../../ui/controls';
-import { Sheet } from '../../ui/overlays';
+import { Sheet, useCloseWhenGone } from '../../ui/overlays';
 import { EmojiPicker } from '../../ui/pickers';
 import { categories } from '../meals/state';
 import { CategoryPicker } from '../meals/ui';
 import { askDeleteRecipe } from './RecipeView';
-import { saveRecipe, showRecipe } from './state';
+import { createRecipe, showRecipe, updateRecipe } from './state';
 import { ingredientLines, sourceUrlError } from './text';
 
 /** Add or edit a recipe: name, emoji, category, servings, ingredients (one per line), instructions, source URL. */
@@ -25,21 +26,25 @@ export function RecipeEditor({ recipe, onClose }: { recipe?: Recipe; onClose: ()
   const urlError = sourceUrlError(url);
   const valid = !!name.trim() && !urlError;
 
+  useCloseWhenGone(
+    !!recipe && !data.recipes.value.some((r) => r.id === recipe.id),
+    onClose,
+    `${recipe?.name} was deleted on another device.`,
+  );
+
   const save = () =>
     void asParent(() => {
-      const r = saveRecipe(
-        {
-          name: name.trim(),
-          emoji,
-          category,
-          servings: servings || undefined,
-          ingredients: ingredientLines(ingredients),
-          instructions: instructions.trim(),
-          sourceUrl: url.trim() || undefined,
-        },
-        recipe,
-      );
-      if (!recipe) showRecipe(r.id);
+      const draft = {
+        name: name.trim(),
+        emoji,
+        category,
+        servings: servings || undefined,
+        ingredients: ingredientLines(ingredients),
+        instructions: instructions.trim(),
+        sourceUrl: url.trim() || undefined,
+      };
+      if (recipe) updateRecipe(recipe, draft);
+      else showRecipe(createRecipe(draft).id);
       onClose();
     });
 

@@ -1,6 +1,6 @@
-import { computed, effect, signal } from '@preact/signals';
+import { batch as signalBatch, computed, effect, signal } from '@preact/signals';
 import { demoMode } from '../config';
-import { data, profileById, put, remove as removeDoc, settings } from '../data/store';
+import { data, householdId, profileById, put, remove as removeDoc, settings, upsert } from '../data/store';
 import { EVERYONE, type EventMeta, type ISODate } from '../data/types';
 import { addDays, addMonths, dateAt, diffDays, toISODate } from '../lib/date';
 import { currentTime, today } from '../lib/clock';
@@ -47,36 +47,73 @@ let loaded = fetchWindow();
 
 const SNAPSHOT_KEY = demoMode ? 'manwar.demoEvents.v1' : 'manwar.events.v1';
 
+type StoredEvent = Omit<CalEvent, 'start' | 'end' | 'originalStart'> & { start: number; end: number; originalStart?: number };
+
 interface Snapshot {
+  /** Whose events these are: a tablet connected to another account never shows them. */
+  household: string;
   calendars: CalendarInfo[];
-  events: (Omit<CalEvent, 'start' | 'end'> & { start: number; end: number })[];
+  events: StoredEvent[];
   from: ISODate;
   to: ISODate;
   at: number;
 }
 
-function saveSnapshot() {
+/**
+ * Keep the events for offline display. Notes take most of the room; when
+ * the whole snapshot does not fit in storage the events are kept without
+ * them, and when even that fails the last snapshot is removed: an old one
+ * left in place would come back on the next offline start as if current.
+ */
+function saveSnapshot(household: string) {
+  const stored = (withNotes: boolean): StoredEvent[] =>
+    events.value.map((e) => ({
+      ...e,
+      description: withNotes ? e.description : undefined,
+      start: e.start.getTime(),
+      end: e.end.getTime(),
+      originalStart: e.originalStart?.getTime(),
+    }));
+  const snapshot = (withNotes: boolean): Snapshot => ({
+    household,
+    calendars: calendars.value,
+    events: stored(withNotes),
+    from: loaded.from,
+    to: loaded.to,
+    at: Date.now(),
+  });
+  for (const withNotes of [true, false]) {
+    try {
+      localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(snapshot(withNotes)));
+      return;
+    } catch {
+      /* over the quota: try smaller */
+    }
+  }
   try {
-    const s: Snapshot = {
-      calendars: calendars.value,
-      events: events.value.map((e) => ({ ...e, start: e.start.getTime(), end: e.end.getTime() })),
-      from: loaded.from,
-      to: loaded.to,
-      at: Date.now(),
-    };
-    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(s));
+    localStorage.removeItem(SNAPSHOT_KEY);
   } catch {
-    /* quota or storage unavailable: the next sync repopulates */
+    /* storage unavailable: nothing was kept */
   }
 }
 
-function loadSnapshot() {
+/** Show the household's last events until the first sync; another household's are dropped. */
+function loadSnapshot(household: string) {
   try {
     const raw = localStorage.getItem(SNAPSHOT_KEY);
     if (!raw) return;
     const s = JSON.parse(raw) as Snapshot;
+    if (s.household !== household) {
+      localStorage.removeItem(SNAPSHOT_KEY);
+      return;
+    }
     calendars.value = s.calendars;
-    events.value = s.events.map((e) => ({ ...e, start: new Date(e.start), end: new Date(e.end) }));
+    events.value = s.events.map((e) => ({
+      ...e,
+      start: new Date(e.start),
+      end: new Date(e.end),
+      originalStart: e.originalStart === undefined ? undefined : new Date(e.originalStart),
+    }));
     sync.value = { ...sync.value, lastSync: s.at };
   } catch {
     /* corrupt snapshot: ignore */
@@ -88,12 +125,19 @@ const visibleCalendars = () => calendars.value.filter((c) => !settings.value.hid
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 async function fetchAll(): Promise<void> {
+  const household = householdId.peek();
+  if (!household) return;
+  // Results of a fetch that outlived its household (the tablet switched accounts) belong to no one on screen.
+  const stale = () => householdId.peek() !== household;
   sync.value = { ...sync.value, loading: true };
   try {
-    calendars.value = await source.listCalendars();
+    const cals = await source.listCalendars();
+    if (stale()) return;
+    calendars.value = cals;
     const w = fetchWindow();
     const shown = visibleCalendars();
     const results = await Promise.allSettled(shown.map((c) => source.listEvents(c.id, dateAt(w.from), dateAt(w.to))));
+    if (stale()) return;
     // A calendar that fails keeps the events it had, so one bad calendar neither blanks nor freezes the wall.
     const failed = shown.filter((_, i) => results[i].status === 'rejected');
     const kept = events.value.filter((e) => failed.some((c) => c.id === e.calendarId));
@@ -101,14 +145,29 @@ async function fetchAll(): Promise<void> {
     events.value = [...kept, ...fresh].sort((a, b) => a.start.getTime() - b.start.getTime());
     const firstError = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
     if (!failed.length) loaded = w;
-    await fetchFarCountdowns();
+    const far = await fetchFarCountdowns();
+    if (stale()) return;
+    farCountdowns.value = far;
     sync.value = firstError
       ? { loading: false, lastSync: sync.value.lastSync, error: `${failed[0].name}: ${message(firstError.reason)}` }
       : { loading: false, lastSync: Date.now(), error: null };
-    saveSnapshot();
+    saveSnapshot(household);
   } catch (e) {
-    sync.value = { ...sync.value, loading: false, error: message(e) };
+    if (!stale()) sync.value = { ...sync.value, loading: false, error: message(e) };
   }
+}
+
+/** Forget everything shown for the last household, so the next one starts from its own. */
+function resetForHousehold(household: string | null): void {
+  signalBatch(() => {
+    calendars.value = [];
+    events.value = [];
+    farCountdowns.value = [];
+    sync.value = { loading: false, lastSync: null, error: null };
+  });
+  farCache.clear();
+  loaded = fetchWindow();
+  if (household) loadSnapshot(household);
 }
 
 let running: Promise<void> | null = null;
@@ -143,8 +202,17 @@ const POLL_MS = 3 * 60_000;
 export function startCalendarSync(): void {
   if (started) return;
   started = true;
-  loadSnapshot();
+  let household = householdId.peek();
+  if (household) loadSnapshot(household);
   void refresh();
+  // Another account connected on this tablet (or none): drop the last one's events and fetch the new one's.
+  effect(() => {
+    const next = householdId.value;
+    if (next === household) return;
+    household = next;
+    resetForHousehold(next);
+    if (next) void refresh();
+  });
   setInterval(() => void refresh(), POLL_MS);
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') void refresh();
@@ -265,26 +333,36 @@ export const unassigned = computed(() => {
   return out;
 });
 
+type MetaFields = Partial<Pick<EventMeta, 'profiles' | 'countdown' | 'emoji'>>;
+
+/**
+ * Write `fields` (undefined clears one) into a meta document, creating it
+ * when there is none. Only those fields are written, so a change another
+ * device made to the others (an assignment, a countdown) is kept.
+ */
+function writeMeta(id: string, existing: EventMeta | undefined, fields: MetaFields): void {
+  void upsert('eventMeta', id, { ...(existing ? {} : { profiles: [] }), ...fields, id, updatedAt: currentTime() });
+}
+
 /**
  * Write the occurrence's own document with `fields` changed (undefined
  * clears a field). A document left with nothing of its own is removed, so
  * the occurrence follows its series again.
  */
-function putOwn(ev: CalEvent, fields: Partial<Pick<EventMeta, 'profiles' | 'countdown' | 'emoji'>>): void {
+function putOwn(ev: CalEvent, fields: MetaFields): void {
   const { own, ownKey } = metaDocs(ev);
   const next: EventMeta = { profiles: [], ...own, ...fields, id: ownKey, updatedAt: currentTime() };
   if (!next.profiles.length && next.countdown == null && next.emoji == null) {
     if (own) void removeDoc('eventMeta', ownKey);
     return;
   }
-  void put('eventMeta', next);
+  writeMeta(ownKey, own, fields);
 }
 
 /** Write the series document (or the event's own one, for a one-off event) with `fields` changed. */
-function putSeries(ev: CalEvent, fields: Partial<Pick<EventMeta, 'profiles' | 'countdown' | 'emoji'>>): void {
+function putSeries(ev: CalEvent, fields: MetaFields): void {
   const { own, series, ownKey, seriesKey } = metaDocs(ev);
-  const base = seriesKey ? series : own;
-  void put('eventMeta', { profiles: [], ...base, ...fields, id: seriesKey ?? ownKey, updatedAt: currentTime() });
+  writeMeta(seriesKey ?? ownKey, seriesKey ? series : own, fields);
 }
 
 /**
@@ -313,11 +391,9 @@ const farCountdowns = signal<CalEvent[]>([]);
 const farCache = new Map<string, { at: number; ev: CalEvent | null }>();
 const FAR_TTL_MS = 60 * 60_000;
 
-async function fetchFarCountdowns(): Promise<void> {
-  if (settings.value.countdownWindow !== 'always') {
-    farCountdowns.value = [];
-    return;
-  }
+/** The countdown events past the window, for fetchAll to show. */
+async function fetchFarCountdowns(): Promise<CalEvent[]> {
+  if (settings.value.countdownWindow !== 'always') return [];
   const shown = new Set(visibleCalendars().map((c) => c.id));
   const loadedKeys = new Set(
     events.value.flatMap((e) => [metaKey(e.calendarId, e.id), metaKey(e.calendarId, e.seriesId ?? e.id)]),
@@ -335,7 +411,7 @@ async function fetchFarCountdowns(): Promise<void> {
   const stale = wanted.filter((k) => (farCache.get(k.metaId)?.at ?? -Infinity) <= now - FAR_TTL_MS);
   const found = await Promise.allSettled(stale.map((k) => source.nextOccurrence(k.calendarId, k.id, after)));
   found.forEach((r, i) => r.status === 'fulfilled' && farCache.set(stale[i].metaId, { at: now, ev: r.value }));
-  farCountdowns.value = wanted.flatMap((k) => farCache.get(k.metaId)?.ev ?? []);
+  return wanted.flatMap((k) => farCache.get(k.metaId)?.ev ?? []);
 }
 
 /** Countdown events within the configured window, soonest first, one per series. */

@@ -4,6 +4,7 @@ import { addDays } from '../../src/lib/date';
 import { occurrencesOn, taskStateId } from '../../src/tasks/engine';
 import {
   DEFAULT_FILTER,
+  isFiltered,
   buildColumns,
   completionEffects,
   defaultExpanded,
@@ -46,6 +47,17 @@ const st = (t: Task, date: string, part: TaskState['part'], profileId: string, e
   ...extra,
 });
 const map = (...s: TaskState[]) => new Map(s.map((x) => [x.id, x]));
+
+describe('isFiltered', () => {
+  it('counts only profiles that still exist as hidden', () => {
+    const ids = new Set(['a', 'b']);
+    expect(isFiltered(DEFAULT_FILTER, ids)).toBe(false);
+    expect(isFiltered({ ...DEFAULT_FILTER, hidden: ['b'] }, ids)).toBe(true);
+    // The hidden profile was deleted on another tablet.
+    expect(isFiltered({ ...DEFAULT_FILTER, hidden: ['gone'] }, ids)).toBe(false);
+    expect(isFiltered({ ...DEFAULT_FILTER, completed: false }, ids)).toBe(true);
+  });
+});
 
 describe('buildColumns', () => {
   const ufg = task({ assignees: [], upForGrabs: true, repeat: { every: 1, unit: 'day' } });

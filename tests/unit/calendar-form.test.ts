@@ -7,6 +7,7 @@ import {
   newForm,
   sameRepeat,
   setAllDay,
+  setEndTime,
   shiftStart,
   type Form,
 } from '../../src/features/calendar/form';
@@ -53,6 +54,15 @@ describe('event editor form', () => {
     const a = shiftStart(valid({ allDay: true, endDate: '2026-11-08' }), '2026-11-10', '09:00');
     expect([a.startDate, a.endDate]).toEqual(['2026-11-10', '2026-11-12']);
   });
+  it('keeps the clock times of a night shift moved off the night the clocks go back', () => {
+    // 10 PM Oct 31 to 6 AM Nov 1 lasts nine hours (1 AM comes twice) but reads eight on the clock.
+    const shift = valid({ startDate: '2026-10-31', startTime: '22:00', endDate: '2026-11-01', endTime: '06:00' });
+    const moved = shiftStart(shift, '2026-11-07', '22:00');
+    expect([moved.endDate, moved.endTime]).toEqual(['2026-11-08', '06:00']);
+    // And onto it.
+    const back = shiftStart(moved, '2026-10-31', '22:00');
+    expect([back.endDate, back.endTime]).toEqual(['2026-11-01', '06:00']);
+  });
   it('reads an all-day multi-day event back as its first and last day', () => {
     const ev: CalEvent = {
       key: 'c::g',
@@ -98,6 +108,48 @@ describe('event editor form', () => {
     const t = valid({ startTime: '14:00', endTime: '15:30' });
     expect(setAllDay(setAllDay(t, true), false)).toEqual(t);
   });
+  it('keeps an event under a day long when the end time changes, and rolls the end day back', () => {
+    const late = valid({ startTime: '23:00', endTime: '23:30' });
+    const overnight = setEndTime(late, '01:00');
+    expect([overnight.endDate, overnight.endTime]).toEqual(['2026-11-07', '01:00']);
+    // Changing the mind back: the same evening again, not a 24-hour event.
+    const back = setEndTime(overnight, '23:45');
+    expect([back.endDate, back.endTime]).toEqual(['2026-11-06', '23:45']);
+    expect(formProblem(back)).toBeNull();
+    // An overnight event read from Google, shortened to end before midnight.
+    const party = setEndTime(valid({ startTime: '20:00', endDate: '2026-11-07', endTime: '02:00' }), '22:30');
+    expect([party.endDate, party.endTime]).toEqual(['2026-11-06', '22:30']);
+    // An end at the start time is a whole day; moving it on stays within the day after the start.
+    const day = setEndTime(valid({ startTime: '09:00', endTime: '10:00' }), '09:00');
+    expect([day.endDate, setEndTime(day, '09:30').endDate]).toEqual(['2026-11-07', '2026-11-06']);
+  });
+  it('keeps the end day of an event set to run longer than a day', () => {
+    const visit = valid({ startTime: '15:00', endDate: '2026-11-09', endTime: '11:00' });
+    expect(setEndTime(visit, '17:00')).toMatchObject({ endDate: '2026-11-09', endTime: '17:00' });
+    const longer = valid({ startTime: '15:00', endDate: '2026-11-07', endTime: '17:00' });
+    expect(setEndTime(longer, '18:00')).toMatchObject({ endDate: '2026-11-07', endTime: '18:00' });
+  });
+  it("writes the event's own reminders back unless the reminder was changed", () => {
+    const ev: CalEvent = {
+      key: 'c::r',
+      calendarId: 'c',
+      id: 'r',
+      title: 'Dentist',
+      allDay: false,
+      start: new Date('2026-11-06T16:30'),
+      end: new Date('2026-11-06T17:30'),
+      editable: true,
+      // Google: an email a day before and popups at 10 and 60 minutes; the editor shows the first popup.
+      reminderMinutes: 10,
+    };
+    const f = formFromEvent(ev, ['asiyah'], false);
+    expect(f.reminder).toBe('10');
+    expect(draftFromForm({ ...f, title: 'Dentist (Asiyah)' }, false).keepReminders).toBe(true);
+    expect(draftFromForm({ ...f, reminder: '30' }, false)).toMatchObject({ keepReminders: false, reminderMinutes: 30 });
+    expect(draftFromForm({ ...f, reminder: 'none' }, false)).toMatchObject({ keepReminders: false, reminderMinutes: null });
+    // A new event has nothing of its own to keep.
+    expect(draftFromForm(valid({ reminder: 'none' }), false).keepReminders).toBe(false);
+  });
   it('compares repeat rules regardless of weekday order', () => {
     expect(sameRepeat({ every: 1, unit: 'week', weekdays: [4, 6] }, { every: 1, unit: 'week', weekdays: [6, 4] })).toBe(true);
     expect(sameRepeat({ every: 1, unit: 'week', weekdays: [4] }, { every: 1, unit: 'week', weekdays: [4, 6] })).toBe(false);
@@ -133,6 +185,13 @@ describe('event notes', () => {
     expect(f.notes).toBe(plainText(html));
     expect(draftFromForm({ ...f, title: 'Field trip!' }, false).description).toBe(html);
     expect(draftFromForm({ ...f, notes: 'Only water' }, false).description).toBe('Only water');
-    expect(draftFromForm({ ...f, notes: '  ' }, false).description).toBeUndefined();
+    // Cleared notes clear the event's.
+    expect(draftFromForm({ ...f, notes: '  ' }, false).description).toBe('');
+  });
+  it('leaves notes out when the event was read without any', () => {
+    // Saved from an offline snapshot too big to keep notes: empty notes must not wipe the real ones.
+    const bare = formFromEvent({ ...ev, description: undefined }, ['asiyah'], false);
+    expect(draftFromForm({ ...bare, title: 'Field trip!' }, false).description).toBeUndefined();
+    expect(draftFromForm({ ...bare, notes: 'Bring water' }, false).description).toBe('Bring water');
   });
 });

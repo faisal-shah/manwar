@@ -1,8 +1,9 @@
 import { CalendarDays, Clock, Pencil, Repeat, SkipForward, Star, StickyNote, Trash2, Users } from 'lucide-preact';
 import { profileById, profiles, settings } from '../../data/store';
+import { stillOn } from '../../tasks/state';
 import { dateAt, formatLongDate, formatTime } from '../../lib/date';
 import { Button, IconButton } from '../../ui/controls';
-import { Modal, Popover } from '../../ui/overlays';
+import { Modal, Popover, useCloseWhenGone } from '../../ui/overlays';
 import { Avatar } from '../../ui/profile';
 import { archiveTask, claimRequest, complete, detailsFor, editTask, fresh, skip, tapCheck } from './actions';
 import { SECTION_META, lateLabel, repeatSummary } from './logic';
@@ -11,7 +12,12 @@ import { SECTION_META, lateLabel, repeatSummary } from './logic';
 export function DetailsHost() {
   const d = detailsFor.value;
   if (!d) return null;
+  return <Details d={d} />;
+}
+
+function Details({ d }: { d: NonNullable<typeof detailsFor.value> }) {
   const o = fresh(d.o);
+  useCloseWhenGone(!stillOn(o, d.day), () => (detailsFor.value = null));
   const t = o.task;
   const close = () => (detailsFor.value = null);
   const done = o.state?.status === 'done';
@@ -128,7 +134,12 @@ export function DetailsHost() {
 export function ClaimHost() {
   const r = claimRequest.value;
   if (!r) return null;
+  return <Claim r={r} />;
+}
+
+function Claim({ r }: { r: NonNullable<typeof claimRequest.value> }) {
   const close = () => (claimRequest.value = null);
+  useCloseWhenGone(!stillOn(r.o, r.day), close);
   const t = r.o.task;
   return (
     <Modal title="Who did it?" onClose={close} actions={<Button onClick={close}>Cancel</Button>}>

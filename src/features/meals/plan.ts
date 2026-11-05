@@ -94,7 +94,10 @@ function shiftRepeat(rule: Repeat, days: number): Repeat {
 
 /**
  * Writes that change (or, with `changes` null, remove) the occurrence of
- * `entry` on `date`. A one-off entry ignores `scope`. For a repeating entry:
+ * `entry` on `date`. The entry itself is only ever patched with the fields
+ * that change (undefined removes one), never rewritten whole, so a change
+ * made meanwhile on another device to a field this edit does not touch is
+ * kept. A one-off entry ignores `scope`. For a repeating entry:
  * 'all' edits the series itself; 'following' ends the series the day before
  * and starts a new one with the changes; 'one' ends it the day before, adds
  * a one-off with the changes, and continues the series from its next
@@ -122,7 +125,7 @@ export function editOccurrence(
   }
   if (!entry.repeat || scope === 'all') {
     if (!changes) return [{ op: 'remove', id: entry.id }];
-    return [{ op: 'put', entry: { ...entry, ...changes } }];
+    return [{ op: 'patch', id: entry.id, data: changes }];
   }
   const ops: MealOp[] = [];
   const isFirst = date <= entry.date;
@@ -132,9 +135,10 @@ export function editOccurrence(
       : { op: 'patch', id: entry.id, data: { repeat: { ...entry.repeat!, until: addDays(date, -1) } } };
 
   if (scope === 'following') {
+    if (isFirst && changes) return [{ op: 'patch', id: entry.id, data: { date, ...changes } }];
     ops.push(endBefore());
-    if (changes) ops.push({ op: 'put', entry: { ...entry, date, ...changes, id: isFirst ? entry.id : newId() } });
-    return normalize(ops);
+    if (changes) ops.push({ op: 'put', entry: { ...entry, date, ...changes, id: newId() } });
+    return ops;
   }
 
   // scope 'one'
@@ -151,8 +155,17 @@ export function editOccurrence(
   return ops;
 }
 
-/** A remove followed by a put of the same id is a put. */
-function normalize(ops: MealOp[]): MealOp[] {
-  const puts = new Set(ops.filter((o) => o.op === 'put').map((o) => (o as { entry: MealEntry }).entry.id));
-  return ops.filter((o) => !(o.op === 'remove' && puts.has(o.id)));
+/**
+ * The writes that undo `ops` (from editOccurrence on `entry`): the entries
+ * they created go, a removed entry comes back, and a patched one gets back
+ * only the fields the patch changed, so a change made since to anything
+ * else is kept.
+ */
+export function undoOps(entry: MealEntry, ops: MealOp[]): MealOp[] {
+  return ops.map((o): MealOp => {
+    if (o.op === 'put') return { op: 'remove', id: o.entry.id };
+    if (o.op === 'remove') return { op: 'put', entry };
+    const was = Object.fromEntries(Object.keys(o.data).map((k) => [k, entry[k as keyof MealEntry]]));
+    return { op: 'patch', id: o.id, data: was as Partial<MealEntry> };
+  });
 }

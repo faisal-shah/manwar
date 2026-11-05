@@ -5,18 +5,8 @@ import { settings } from '../../../data/store';
 import type { ISODate } from '../../../data/types';
 import { now, today } from '../../../lib/clock';
 import { dateRange, diffDays, formatTime, isWeekend } from '../../../lib/date';
-import { layoutLanes, packRows, periodHasToday } from '../layout';
-import {
-  fillStyle,
-  isPast,
-  isUnassigned,
-  itemsByDay,
-  nowMinute,
-  segmentOn,
-  timeLabel,
-  type DayItems,
-  type MealItem,
-} from '../model';
+import { layoutLanes, packRows, periodHasToday, segmentOn } from '../layout';
+import { fillStyle, isPast, isUnassigned, itemsByDay, nowMinute, timeLabel, type DayItems, type MealItem } from '../model';
 import { EventPill, EventWho, MealPill } from '../parts';
 import { HOUR_MAX, HOUR_MIN, hourHeight, openDetail, periodOf, todayPressed, type CalNav } from '../state';
 import { remPx, usePinchZoom } from '../gestures';

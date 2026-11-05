@@ -12,7 +12,6 @@ import { fromRecurrence } from '../../calendar/rrule';
 import { newEventId } from '../../calendar/types';
 import { asParent } from '../../core/lock';
 import { currentTime } from '../../lib/clock';
-import { addDays, hhmmToMinutes } from '../../lib/date';
 import { Button, Field, Toggle } from '../../ui/controls';
 import { Sheet, toast } from '../../ui/overlays';
 import { ProfilePicker } from '../../ui/profile';
@@ -20,7 +19,17 @@ import { RepeatEditor } from '../../ui/pickers';
 import { settings } from '../../data/store';
 import type { Repeat } from '../../data/types';
 import { askScope, deleteFlow, errorToast } from './actions';
-import { draftFromForm, formFromEvent, formProblem, newForm, sameRepeat, setAllDay, shiftStart, type Form } from './form';
+import {
+  draftFromForm,
+  formFromEvent,
+  formProblem,
+  newForm,
+  sameRepeat,
+  setAllDay,
+  setEndTime,
+  shiftStart,
+  type Form,
+} from './form';
 import { calendarName, reminderLabel } from './model';
 import { editorSaved, type EditorRequest } from './state';
 
@@ -185,13 +194,7 @@ export function EventEditor({ req, onClose }: { req: EditorRequest; onClose: () 
                   value={form.endTime}
                   onInput={(e) => {
                     const v = (e.target as HTMLInputElement).value;
-                    if (!v) return;
-                    // An end time earlier than the start on the same day means the next day.
-                    setForm((f) =>
-                      f.endDate === f.startDate && hhmmToMinutes(v) <= hhmmToMinutes(f.startTime)
-                        ? { ...f, endTime: v, endDate: addDays(f.startDate, 1) }
-                        : { ...f, endTime: v },
-                    );
+                    if (v) setForm((f) => setEndTime(f, v));
                   }}
                 />
               )}

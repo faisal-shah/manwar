@@ -2,6 +2,7 @@ import type { CalendarView, ISODate } from '../../data/types';
 import {
   addDays,
   addMonths,
+  dateAt,
   diffDays,
   formatHeaderDate,
   formatMonthYear,
@@ -11,6 +12,7 @@ import {
   monthShort,
   startOfMonth,
   startOfWeek,
+  toISODate,
 } from '../../lib/date';
 
 /**
@@ -315,6 +317,43 @@ export function layoutMonthWeek(bars: WeekBar[], singles: string[][], maxLines: 
 }
 
 /* ---------- Mini month ---------- */
+
+/**
+ * All-day events and events of a day or longer go in the all-day row and
+ * month bars. A day is a day on the clock: midnight to midnight on the day
+ * clocks go forward is 23 hours and still a whole day (other calendars send
+ * all-day events that way).
+ */
+export function isLong(ev: { allDay: boolean; start: Date; end: Date }): boolean {
+  if (ev.allDay) return true;
+  const dayLater = new Date(ev.start);
+  dayLater.setDate(dayLater.getDate() + 1);
+  return ev.end >= dayLater;
+}
+
+/**
+ * Minutes after midnight on `day` where a timed segment starts and ends
+ * (clipped to the day), from the wall clock so the hours line up across
+ * DST. On the night clocks go back, an event that starts in the first pass
+ * of the repeated hour and ends in the second reads as ending before it
+ * started (1:30 AM for 45 minutes ends at 1:15 AM); it is drawn from its
+ * start for as long as it lasts instead of as a sliver.
+ */
+export function segmentOn(ev: { start: Date; end: Date }, day: ISODate): { startMin: number; endMin: number } {
+  const dayStart = dateAt(day).getTime();
+  const dayEnd = dateAt(addDays(day, 1)).getTime();
+  const s = Math.max(ev.start.getTime(), dayStart);
+  const e = Math.min(ev.end.getTime(), dayEnd);
+  const toMin = (t: number, isEnd: boolean) => {
+    if (isEnd && t >= dayEnd) return 24 * 60;
+    const d = new Date(t);
+    return toISODate(d) === day ? d.getHours() * 60 + d.getMinutes() : 0;
+  };
+  const startMin = toMin(s, false);
+  const endMin = toMin(e, true);
+  const lasts = Math.round((e - s) / 60_000);
+  return { startMin, endMin: endMin <= startMin && lasts > 0 ? Math.min(24 * 60, startMin + lasts) : endMin };
+}
 
 /** The 6 weeks (42 days) of a mini month, leading and trailing days included. */
 export function miniMonthDays(month: ISODate, weekStart: 0 | 1): ISODate[] {

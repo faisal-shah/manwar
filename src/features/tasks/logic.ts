@@ -25,6 +25,17 @@ export interface TaskFilter {
 
 export const DEFAULT_FILTER: TaskFilter = { hidden: [], upForGrabs: true, completed: true, skipped: true };
 
+/**
+ * The filter hides something. A hidden profile that was deleted since (on
+ * any tablet) hides nothing, so it does not keep the Filter button lit.
+ */
+export function isFiltered(f: TaskFilter, profileIds: ReadonlySet<string>): boolean {
+  const live = { ...f, hidden: f.hidden.filter((id) => profileIds.has(id)) };
+  return (Object.keys(DEFAULT_FILTER) as (keyof TaskFilter)[]).some((k) =>
+    k === 'hidden' ? live.hidden.length > 0 : live[k] !== DEFAULT_FILTER[k],
+  );
+}
+
 export interface Column {
   /** Profile id, or UP_FOR_GRABS. */
   id: string;

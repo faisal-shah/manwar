@@ -8,7 +8,7 @@ import { Popover } from '../../ui/overlays';
 import { Avatar } from '../../ui/profile';
 import { editTask } from './actions';
 import { DayView } from './DayView';
-import { DEFAULT_FILTER, weekTitle, type TaskFilter } from './logic';
+import { isFiltered, weekTitle, type TaskFilter } from './logic';
 import { TasksOverlays } from './overlays';
 import { UFG_COLOR } from './TaskCard';
 import { dayOffset, firstDay, mode, selectedDay, taskFilter, weekOffset, weekStart } from './view';
@@ -22,7 +22,7 @@ function Controls() {
   const atStart = (m === 'day' ? selectedDay.value : weekStart.value) <= firstDay.value;
   const [filterAt, setFilterAt] = useState<DOMRect | null>(null);
   const f = taskFilter.value;
-  const filtered = JSON.stringify(f) !== JSON.stringify(DEFAULT_FILTER);
+  const filtered = isFiltered(f, new Set(profiles.value.map((p) => p.id)));
   return (
     <div class="ctl-group">
       <Segmented<'day' | 'week'>

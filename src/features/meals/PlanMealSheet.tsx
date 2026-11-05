@@ -6,12 +6,12 @@ import type { ISODate, MealCategoryId, MealEntry, Recipe, Repeat } from '../../d
 import { today } from '../../lib/clock';
 import { formatLongDate } from '../../lib/date';
 import { Button, Field, Segmented, SettingRow, Toggle } from '../../ui/controls';
-import { Sheet, choose, toast } from '../../ui/overlays';
-import { recipes, saveRecipe } from '../recipes/state';
+import { Sheet, choose, toast, useCloseWhenGone } from '../../ui/overlays';
+import { createRecipe, recipes } from '../recipes/state';
 import { ingredientLines, searchRecipes } from '../recipes/text';
 import { openIngredients } from './IngredientsModal';
 import type { Scope } from './plan';
-import { categoryById, changeOccurrence, planMeal, visibleCategories } from './state';
+import { categoryById, changeOccurrence, liveMeal, planMeal, visibleCategories } from './state';
 import { CategoryBadge, CategoryPicker, DayPicker, RepeatRow } from './ui';
 
 export const SCOPES: { value: Scope; label: string }[] = [
@@ -60,6 +60,7 @@ export function PlanMealSheet({
   const [ingredients, setIngredients] = useState('');
   const [pickDay, setPickDay] = useState(false);
   const linked = recipeId ? recipes.value.find((r) => r.id === recipeId) : undefined;
+  useCloseWhenGone(!!entry && !liveMeal(entry.id), onClose, `${entry?.title} was removed on another device.`);
 
   const found = searchRecipes(recipes.value, query);
   const inCat = query.trim() ? found : found.filter((r) => r.category === cat);
@@ -83,7 +84,7 @@ export function PlanMealSheet({
     void asParent(() => {
       const name = title.trim();
       const recipe = asRecipe
-        ? saveRecipe({ name, category: cat, ingredients: ingredientLines(ingredients), instructions: notes.trim() })
+        ? createRecipe({ name, category: cat, ingredients: ingredientLines(ingredients), instructions: notes.trim() })
         : undefined;
       const e = planMeal({
         date: day,

@@ -71,6 +71,16 @@ flowchart LR
   `DEFAULT_SETTINGS` (`data/settings.ts`). Firestore ends a listener for
   good on an error, so `listen()` in the store reports it (`loadError`,
   shown on the loading screen) and subscribes again after 30 seconds.
+- **Several tablets, one household**: `put` (a whole document) is for new
+  documents only. A change to an existing one writes only the fields it
+  changes (`patch`, `saveEdited` for editors, `upsert` to create or merge,
+  `fieldChanges` turns undefined into a field delete; `arrayUnion`/
+  `arrayRemove` for one element of a list), so another tablet's change to
+  the other fields survives, and a document deleted elsewhere is not
+  written back. Writes start from the store's current document, not the
+  copy an editor opened with. An editor or popover whose document is
+  deleted elsewhere closes itself through `useCloseWhenGone`
+  (`ui/overlays.tsx`), with a toast for an editor.
 - **Calendar events** live in the household's Google calendars. `calendar/engine.ts`
   fetches a window around today (six weeks back, four months ahead, widened
   to the days the latest view asked for with `ensureRange`), caches a snapshot
@@ -86,7 +96,23 @@ flowchart LR
   whole family. Countdowns past the window (setting Always) come from
   `CalendarSource.nextOccurrence`. New events get their id from
   `newEventId()` once per editor, so a retried save updates instead of
-  duplicating.
+  duplicating. The snapshot names its household; a change of household
+  clears everything and drops another household's snapshot, and a fetch
+  that outlives its household is discarded.
+- **Google mapping** (`calendar/google.ts`, the API boundary): working
+  locations, focus time, cancelled stubs and invitations the household
+  declined are not on the wall; birthdays, Gmail events and locked copies
+  are read-only (the API refuses their times and text); hidden details read
+  Busy. Writes keep what the editor does not show: reminders are written
+  only when the reminder was changed (`keepReminders`), notes only when the
+  event had some or the editor gave some (`''` clears), every timed write names
+  the event's own zones (the tablet's for new or formerly all-day events),
+  All events leaves the series times out when they were not changed, a
+  changed repeat replaces only the RRULE line (EXDATEs stay), and This and
+  following copies guests, color and reminders to the new series and cuts
+  the old one at the occurrence's `originalStart` (where the series had it,
+  not where it was moved to). A 401 drops the cached token and retries once;
+  requests give up after 30 seconds.
 - **Tasks**: `tasks/engine.ts` is pure (occurrences from schedules; late
   chores; Up for Grabs; repeat-after-done via `Task.lastDone`), unit-tested.
   `tasks/state.ts` has the reactive views and the writes. Stars use an
@@ -97,10 +123,15 @@ flowchart LR
   through `exclusive()` until `onSnapshotsInSync` fires, since the local
   snapshot lags the write by milliseconds and a second tap in between would
   award or charge twice; writes return null when they did nothing.
-  Check-offs on another day are stamped on that day (`madeAt`).
+  Check-offs on another day are stamped on that day (`madeAt`), and are
+  written only for an occurrence still on that day (`stillOn`: not for a
+  task deleted or reassigned on another tablet while its popover was open).
   `HISTORY_DAYS` bounds the task views, late carry-over, the writes and the
-  store's `taskStates` query. Two devices completing the same occurrence in
-  the same instant can still both award (the balance is an increment).
+  store's `taskStates` query. The ledger listener holds the household's
+  newest `LEDGER_LIVE` entries; the star history sheet reads older pages on
+  Show older (`rewards/history-state.ts`, shown without Undo). Balances never
+  depend on the window. Two devices completing the same occurrence in the
+  same instant can still both award (the balance is an increment).
 - **Parental lock** (`core/lock.ts`): with a PIN set, only checking off tasks
   is open; wrap every other mutation in `asParent(() => ...)` or
   `await requireParent()`. Repeated wrong PINs pause the pad
@@ -160,11 +191,13 @@ so `1rem` = 10 design px. Use rem for every size. Tokens are CSS variables in
   data; clear localStorage key `manwar.demoCalendar.v1` to reset demo events.
 - `?now=2026-11-04T11:44` pins the clock's start (screenshots, tests).
 - `?seed=none` (with `?demo=<new name>`) seeds a demo household the way a
-  real one starts: no people, only the Grocery List. Seeding runs only after
-  a server read confirms the household is empty (an offline start with a
-  cold cache must not seed; it asks again every 20 seconds until the server
-  answers), and the real seed uses the fixed list id `grocery` so two
-  tablets on their first run do not make two lists.
+  real one starts: no people, only the Grocery List. A household is seeded
+  once in its life: the seed sets `settings.seededAt`, and a household
+  with people or lists gets it set too. Seeding runs only after a server
+  read confirms the household was never seeded and is empty (an offline
+  start with a cold cache must not seed; it asks again every 20 seconds
+  until the server answers), and the real seed uses the fixed list id
+  `grocery` so two tablets on their first run do not make two lists.
 - Screenshots: `node tests/visual/shoot.mjs out.png "now=2026-11-04T11:44" [steps.json]`
   (`W`, `H`, `WAIT`, `BASE` env). Look at them; e2e tests only prove that
   things render.

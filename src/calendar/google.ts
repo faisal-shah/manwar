@@ -1,4 +1,4 @@
-import { googleAccessToken } from '../data/session';
+import { dropGoogleToken, googleAccessToken } from '../data/session';
 import { addDays, diffDays, fromISODate, toISODate } from '../lib/date';
 import { endSeriesBefore, recurrenceCount, toRRule, withCount } from './rrule';
 import { eventKey, type AccessRole, type CalEvent, type CalendarInfo, type CalendarSource, type EventDraft } from './types';
@@ -14,19 +14,54 @@ class GoogleError extends Error {
   }
 }
 
+/**
+ * A request Google has not answered in this long is given up. A connection
+ * that died without closing (the Wi-Fi dropped mid-request) otherwise holds
+ * its sync, and every sync queued behind it, for as long as the network
+ * stack takes to notice.
+ */
+const REQUEST_TIMEOUT_MS = 30_000;
+
+async function request(url: URL, init: RequestInit, token: string): Promise<{ res: Response; body: any }> {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, {
+      ...init,
+      signal: ctl.signal,
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...init.headers },
+    });
+    // A body that is not JSON (a proxy's error page) is no body; one cut off by the timeout is a timeout.
+    const body =
+      res.status === 204
+        ? null
+        : await res.json().catch((e) => {
+            if (ctl.signal.aborted) throw e;
+            return null;
+          });
+    return { res, body };
+  } catch (e) {
+    throw ctl.signal.aborted ? new Error('Google Calendar did not answer in time.') : e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /** Google Calendar API boundary: every response is validated here. */
 async function call<T>(path: string, init: RequestInit & { query?: Record<string, string> } = {}): Promise<T> {
   const url = new URL(API + path);
   for (const [k, v] of Object.entries(init.query ?? {})) url.searchParams.set(k, v);
-  const token = await googleAccessToken();
-  const res = await fetch(url, {
-    ...init,
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...init.headers },
-  });
-  if (res.status === 204) return undefined as T;
-  const body = await res.json().catch(() => null);
-  if (!res.ok) throw new GoogleError(res.status, `Google Calendar ${res.status}: ${body?.error?.message ?? res.statusText}`);
-  return body as T;
+  for (let attempt = 0; ; attempt++) {
+    const token = await googleAccessToken();
+    const { res, body } = await request(url, init, token);
+    // A token Google no longer takes (expired early by the tablet's clock, or revoked): ask for a new one, once.
+    if (res.status === 401 && attempt === 0) {
+      dropGoogleToken(token);
+      continue;
+    }
+    if (!res.ok) throw new GoogleError(res.status, `Google Calendar ${res.status}: ${body?.error?.message ?? res.statusText}`);
+    return (res.status === 204 ? undefined : body) as T;
+  }
 }
 
 /** DELETE that treats an event already gone (deleted on a phone meanwhile) as done. */
@@ -47,14 +82,18 @@ interface GTime {
 interface GEvent {
   id: string;
   status?: string;
+  eventType?: string;
   summary?: string;
   description?: string;
   location?: string;
+  visibility?: string;
+  locked?: boolean;
   start: GTime;
   end: GTime;
   recurringEventId?: string;
   recurrence?: string[];
   organizer?: { email?: string; self?: boolean };
+  attendees?: { email?: string; self?: boolean; responseStatus?: string }[];
   guestsCanModify?: boolean;
   reminders?: { useDefault?: boolean; overrides?: { method: string; minutes: number }[] };
   originalStartTime?: GTime;
@@ -68,50 +107,132 @@ function parseTime(t: GTime): { at: Date; allDay: boolean } {
   throw new Error('Google Calendar: event without a start/end time');
 }
 
+/**
+ * Event types that are not family events: the working location (Home,
+ * Office) Google shows as a chip over a work day, and work focus blocks.
+ * Out of office, birthdays and events Gmail added (flights, bookings) stay.
+ */
+const OFF_WALL_TYPES = new Set(['workingLocation', 'focusTime']);
+
+/** Is the event on the household's schedule? Not cancelled stubs, the types above, or invitations it declined. */
+function onWall(g: GEvent): boolean {
+  if (g.status === 'cancelled' || !g.start || !g.end) return false;
+  if (g.eventType && OFF_WALL_TYPES.has(g.eventType)) return false;
+  return !g.attendees?.some((a) => a.self && a.responseStatus === 'declined');
+}
+
+/** Types whose times and text the API does not let anyone change (birthdays, events from Gmail). */
+const FIXED_TYPES = new Set(['birthday', 'fromGmail']);
+
 function toCalEvent(calendarId: string, g: GEvent, role: AccessRole): CalEvent {
   const s = parseTime(g.start);
   const e = parseTime(g.end);
   const popup =
     g.reminders?.useDefault === false ? (g.reminders.overrides?.find((o) => o.method === 'popup')?.minutes ?? null) : undefined;
+  // Free/busy access, and private events on a calendar shared read-only, come without their details.
+  const detailsHidden = role === 'freeBusyReader' || (role === 'reader' && g.visibility === 'private');
+  const fixed = !!g.eventType && FIXED_TYPES.has(g.eventType);
   return {
     key: eventKey(calendarId, g.id),
     calendarId,
     id: g.id,
     seriesId: g.recurringEventId,
-    title: g.summary?.trim() || '(No title)',
+    originalStart: g.originalStartTime ? parseTime(g.originalStartTime).at : undefined,
+    title: g.summary?.trim() || (detailsHidden ? 'Busy' : '(No title)'),
     allDay: s.allDay,
     start: s.at,
     end: e.at,
     location: g.location || undefined,
     description: g.description || undefined,
-    organizer: g.organizer && !g.organizer.self ? g.organizer.email : undefined,
+    // Gmail adds its events under a placeholder organizer, not someone who invited the family.
+    organizer: g.organizer && !g.organizer.self && g.eventType !== 'fromGmail' ? g.organizer.email : undefined,
     editable:
-      (role === 'owner' || role === 'writer') && (!g.organizer || g.organizer.self === true || g.guestsCanModify === true),
+      (role === 'owner' || role === 'writer') &&
+      !fixed &&
+      g.locked !== true &&
+      (!g.organizer || g.organizer.self === true || g.guestsCanModify === true),
     reminderMinutes: popup,
+    timeZone: g.start.timeZone || undefined,
+    endTimeZone: g.end.timeZone || undefined,
   };
 }
 
-function draftBody(d: EventDraft): Partial<GEvent> {
-  const tz = zone();
+/** Time zones to write with a timed start and end. */
+interface Zones {
+  start: string;
+  end: string;
+}
+
+/**
+ * Zones for a change to an event: a timed one keeps its own (a weekly call
+ * set in London time keeps following London's clock changes, a flight keeps
+ * its arrival zone); an all-day one, or one without a zone, takes the
+ * tablet's. Always written, since a recurrence needs one.
+ */
+function zonesOf(wasAllDay: boolean, start?: string | null, end?: string | null): Zones {
+  const tablet = zone();
+  if (wasAllDay) return { start: tablet, end: tablet };
+  return { start: start || tablet, end: end || start || tablet };
+}
+
+function draftBody(d: EventDraft, zones: Zones): Partial<GEvent> {
+  const timed = (at: Date, timeZone: string): GTime => ({ date: null, dateTime: at.toISOString(), timeZone });
   const body: Partial<GEvent> = {
     summary: d.title,
-    description: d.description ?? '',
+    ...(d.description !== undefined && { description: d.description }),
     location: d.location ?? '',
     // PATCH merges nested objects: clear the other kind of time, or a timed <-> all-day change is rejected.
-    start: d.allDay
-      ? { date: d.firstDay ?? toISODate(d.start), dateTime: null, timeZone: null }
-      : { date: null, dateTime: d.start.toISOString(), timeZone: tz },
+    start: d.allDay ? { date: d.firstDay ?? toISODate(d.start), dateTime: null, timeZone: null } : timed(d.start, zones.start),
     end: d.allDay
       ? { date: addDays(d.lastDay ?? toISODate(d.start), 1), dateTime: null, timeZone: null }
-      : { date: null, dateTime: d.end.toISOString(), timeZone: tz },
-    reminders:
+      : timed(d.end, zones.end),
+  };
+  if (!d.keepReminders)
+    body.reminders =
       d.reminderMinutes === undefined
         ? { useDefault: true }
-        : { useDefault: false, overrides: d.reminderMinutes === null ? [] : [{ method: 'popup', minutes: d.reminderMinutes }] },
-  };
+        : { useDefault: false, overrides: d.reminderMinutes === null ? [] : [{ method: 'popup', minutes: d.reminderMinutes }] };
   if (!d.keepRecurrence) body.recurrence = d.repeat ? [toRRule(d.repeat, d.allDay)] : [];
   return body;
 }
+
+/**
+ * What a new series made by "This and following" takes over from the old
+ * one besides the editor's fields, as Google's own split does: the guests
+ * stay invited, the color, reminders and visibility stay.
+ */
+const CARRIED = [
+  'description',
+  'colorId',
+  'transparency',
+  'visibility',
+  'attendees',
+  'guestsCanInviteOthers',
+  'guestsCanModify',
+  'guestsCanSeeOtherGuests',
+  'anyoneCanAddSelf',
+  'extendedProperties',
+  'source',
+  'reminders',
+] as const;
+
+function carried(master: GEvent): Record<string, unknown> {
+  const m = master as unknown as Record<string, unknown>;
+  return Object.fromEntries(CARRIED.filter((k) => m[k] !== undefined).map((k) => [k, m[k]]));
+}
+
+/**
+ * A changed repeat rule replaces the series' RRULE line only. Its other
+ * lines stay: EXDATEs are occurrences deleted on other clients (phones
+ * syncing over CalDAV, imported calendars), which would come back.
+ */
+function keepExdates(body: Partial<GEvent>, lines: string[]): Partial<GEvent> {
+  if (body.recurrence?.length) body.recurrence = [...body.recurrence, ...lines.filter((l) => !l.startsWith('RRULE:'))];
+  return body;
+}
+
+/** Where an occurrence sits in its series: its original start, which a moved occurrence no longer shows. */
+const seriesStart = (ev: CalEvent) => ev.originalStart ?? ev.start;
 
 /** Occurrences of a series starting before `before`, cancelled ones included (COUNT counts them too). */
 async function instancesBefore(cal: string, seriesId: string, before: Date): Promise<number> {
@@ -170,10 +291,7 @@ export const googleSource: CalendarSource = {
           ...(pageToken ? { pageToken } : {}),
         },
       });
-      for (const g of r.items ?? []) {
-        if (g.status === 'cancelled' || !g.start || !g.end) continue;
-        out.push(toCalEvent(calendarId, g, roles.get(calendarId) ?? 'reader'));
-      }
+      for (const g of r.items ?? []) if (onWall(g)) out.push(toCalEvent(calendarId, g, roles.get(calendarId) ?? 'reader'));
       pageToken = r.nextPageToken;
     } while (pageToken);
     return out;
@@ -189,15 +307,17 @@ export const googleSource: CalendarSource = {
       if (e instanceof GoogleError && (e.status === 404 || e.status === 410)) return null;
       throw e;
     }
-    if (g.status === 'cancelled' || !g.start || !g.end) return null;
+    if (g.status === 'cancelled') return null;
     if (!g.recurrence?.length) {
+      if (!onWall(g)) return null;
       const ev = toCalEvent(calendarId, g, role);
       return ev.end > after ? ev : null;
     }
+    // A few instances, so one the household declined does not end the countdown.
     const r = await call<{ items?: GEvent[] }>(`/calendars/${cal}/events/${encodeURIComponent(id)}/instances`, {
-      query: { timeMin: after.toISOString(), maxResults: '1' },
+      query: { timeMin: after.toISOString(), maxResults: '10' },
     });
-    const next = r.items?.find((i) => i.status !== 'cancelled' && i.start && i.end);
+    const next = r.items?.find(onWall);
     return next ? toCalEvent(calendarId, next, role) : null;
   },
 
@@ -208,42 +328,47 @@ export const googleSource: CalendarSource = {
 
   async insert(calendarId, id, draft) {
     const cal = encodeURIComponent(calendarId);
+    // A new event is in the tablet's time zone.
+    const body = draftBody(draft, zonesOf(true));
     try {
-      await call<GEvent>(`/calendars/${cal}/events`, { method: 'POST', body: JSON.stringify({ ...draftBody(draft), id }) });
+      await call<GEvent>(`/calendars/${cal}/events`, { method: 'POST', body: JSON.stringify({ ...body, id }) });
     } catch (e) {
       // A retry after a lost response: the event exists already, so bring it up to date instead of adding it twice.
       if (!(e instanceof GoogleError && e.status === 409)) throw e;
-      await call(`/calendars/${cal}/events/${encodeURIComponent(id)}`, {
-        method: 'PATCH',
-        body: JSON.stringify(draftBody(draft)),
-      });
+      await call(`/calendars/${cal}/events/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(body) });
     }
   },
 
   async update(ev, draft, scope) {
     const cal = encodeURIComponent(ev.calendarId);
     if (!ev.seriesId || scope === 'this') {
-      const body = draftBody({ ...draft, keepRecurrence: ev.seriesId ? true : draft.keepRecurrence });
+      const body = draftBody(
+        { ...draft, keepRecurrence: ev.seriesId ? true : draft.keepRecurrence },
+        zonesOf(ev.allDay, ev.timeZone, ev.endTimeZone),
+      );
       await call(`/calendars/${cal}/events/${encodeURIComponent(ev.id)}`, { method: 'PATCH', body: JSON.stringify(body) });
       return {};
     }
     const master = await call<GEvent>(`/calendars/${cal}/events/${encodeURIComponent(ev.seriesId)}`);
     const masterStart = parseTime(master.start).at;
-    if (scope === 'following' && toISODate(masterStart) < toISODate(ev.start)) {
-      // Start a new series here, then end the old one the day before this occurrence.
+    const seriesAllDay = !master.start.dateTime;
+    const zones = zonesOf(seriesAllDay, master.start.timeZone, master.end.timeZone);
+    const cut = seriesStart(ev);
+    if (scope === 'following' && toISODate(masterStart) < toISODate(cut)) {
+      // Start a new series here, then end the old one just before this occurrence.
       const lines = master.recurrence ?? [];
-      const body = draftBody({ ...draft, keepRecurrence: false });
+      const body = { ...carried(master), ...keepExdates(draftBody({ ...draft, keepRecurrence: false }, zones), lines) };
       if (draft.keepRecurrence) {
         // A COUNT rule continues with the occurrences it has left, not a fresh COUNT.
         const count = recurrenceCount(lines);
         body.recurrence =
-          count === null ? lines : withCount(lines, Math.max(1, count - (await instancesBefore(cal, ev.seriesId, ev.start))));
+          count === null ? lines : withCount(lines, Math.max(1, count - (await instancesBefore(cal, ev.seriesId, cut))));
       }
       const created = await call<GEvent>(`/calendars/${cal}/events`, { method: 'POST', body: JSON.stringify(body) });
       try {
         await call(`/calendars/${cal}/events/${encodeURIComponent(ev.seriesId)}`, {
           method: 'PATCH',
-          body: JSON.stringify({ recurrence: endSeriesBefore(lines, toISODate(ev.start), ev.allDay) }),
+          body: JSON.stringify({ recurrence: endSeriesBefore(lines, cut, seriesAllDay) }),
         });
       } catch (e) {
         // Without the old series ended, the new one would double every occurrence.
@@ -263,10 +388,14 @@ export const googleSource: CalendarSource = {
       const newStart = new Date(masterStart.getTime() + (draft.start.getTime() - ev.start.getTime()));
       moved = { ...draft, start: newStart, end: new Date(newStart.getTime() + (draft.end.getTime() - draft.start.getTime())) };
     }
-    await call(`/calendars/${cal}/events/${encodeURIComponent(ev.seriesId)}`, {
-      method: 'PATCH',
-      body: JSON.stringify(draftBody(moved)),
-    });
+    const body = keepExdates(draftBody(moved, zones), master.recurrence ?? []);
+    if (draft.allDay === ev.allDay && +draft.start === +ev.start && +draft.end === +ev.end) {
+      // Times not changed: the series keeps its own. The occurrence may be one moved or made longer on a
+      // phone, whose times are not the series'.
+      delete body.start;
+      delete body.end;
+    }
+    await call(`/calendars/${cal}/events/${encodeURIComponent(ev.seriesId)}`, { method: 'PATCH', body: JSON.stringify(body) });
     return {};
   },
 
@@ -281,13 +410,14 @@ export const googleSource: CalendarSource = {
       return;
     }
     const master = await call<GEvent>(`/calendars/${cal}/events/${encodeURIComponent(ev.seriesId)}`);
-    if (toISODate(parseTime(master.start).at) >= toISODate(ev.start)) {
+    const cut = seriesStart(ev);
+    if (toISODate(parseTime(master.start).at) >= toISODate(cut)) {
       await del(`/calendars/${cal}/events/${encodeURIComponent(ev.seriesId)}`);
       return;
     }
     await call(`/calendars/${cal}/events/${encodeURIComponent(ev.seriesId)}`, {
       method: 'PATCH',
-      body: JSON.stringify({ recurrence: endSeriesBefore(master.recurrence ?? [], toISODate(ev.start), ev.allDay) }),
+      body: JSON.stringify({ recurrence: endSeriesBefore(master.recurrence ?? [], cut, !master.start.dateTime) }),
     });
   },
 };

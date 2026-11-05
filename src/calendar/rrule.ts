@@ -1,5 +1,5 @@
 import type { ISODate, Repeat, Weekday } from '../data/types';
-import { toISODate } from '../lib/date';
+import { addDays, toISODate } from '../lib/date';
 
 const DAYS = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
 const FREQ: Record<Repeat['unit'], string> = { day: 'DAILY', week: 'WEEKLY', month: 'MONTHLY', year: 'YEARLY' };
@@ -7,12 +7,14 @@ const UNIT: Record<string, Repeat['unit']> = { DAILY: 'day', WEEKLY: 'week', MON
 
 const pad = (n: number) => String(n).padStart(2, '0');
 
+const utcStamp = (t: Date) =>
+  `${t.getUTCFullYear()}${pad(t.getUTCMonth() + 1)}${pad(t.getUTCDate())}T${pad(t.getUTCHours())}${pad(t.getUTCMinutes())}${pad(t.getUTCSeconds())}Z`;
+
 /** UNTIL value: a date for all-day series, the end of that local day in UTC for timed ones. */
 function untilValue(until: ISODate, allDay: boolean): string {
   if (allDay) return until.replace(/-/g, '');
   const [y, m, d] = until.split('-').map(Number);
-  const end = new Date(y, m - 1, d, 23, 59, 59);
-  return `${end.getUTCFullYear()}${pad(end.getUTCMonth() + 1)}${pad(end.getUTCDate())}T${pad(end.getUTCHours())}${pad(end.getUTCMinutes())}${pad(end.getUTCSeconds())}Z`;
+  return utcStamp(new Date(y, m - 1, d, 23, 59, 59));
 }
 
 export function toRRule(r: Repeat, allDay: boolean): string {
@@ -87,17 +89,21 @@ export function withCount(lines: string[], count: number): string[] {
   );
 }
 
-/** End a series just before an occurrence: rewrite UNTIL to the day before `beforeDay`. */
-export function endSeriesBefore(lines: string[], beforeDay: ISODate, allDay: boolean): string[] {
-  const [y, m, d] = beforeDay.split('-').map(Number);
-  const prev = toISODate(new Date(y, m - 1, d - 1));
+/**
+ * End a series just before one of its occurrences, given where the series
+ * put that occurrence (its original start): an all-day series the day
+ * before, a timed one a second before (UNTIL is inclusive). A timed cut is
+ * an instant, so it holds whatever time zone the series repeats in.
+ */
+export function endSeriesBefore(lines: string[], before: Date, allDay: boolean): string[] {
+  const until = allDay ? untilValue(addDays(toISODate(before), -1), true) : utcStamp(new Date(before.getTime() - 1000));
   return lines.map((l) => {
     if (!l.startsWith('RRULE:')) return l;
     const parts = l
       .slice(6)
       .split(';')
       .filter((p) => !p.startsWith('UNTIL=') && !p.startsWith('COUNT='));
-    parts.push(`UNTIL=${untilValue(prev, allDay)}`);
+    parts.push(`UNTIL=${until}`);
     return `RRULE:${parts.join(';')}`;
   });
 }

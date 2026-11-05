@@ -1,9 +1,9 @@
 import { useState } from 'preact/hooks';
-import { data, newId, saveEdited } from '../../data/store';
+import { data, newId, profileById, saveEdited } from '../../data/store';
 import { EVERYONE, type Reward } from '../../data/types';
 import { currentTime } from '../../lib/clock';
 import { Button, Chips, Field, Toggle } from '../../ui/controls';
-import { Sheet, toast } from '../../ui/overlays';
+import { Sheet, toast, useCloseWhenGone } from '../../ui/overlays';
 import { EmojiPicker } from '../../ui/pickers';
 import { ProfilePicker } from '../../ui/profile';
 import { archiveReward, editingReward } from './actions';
@@ -27,10 +27,14 @@ function RewardEditor({ reward, onClose }: { reward: Reward | null; onClose: () 
   const [pickEmoji, setPickEmoji] = useState(!reward);
   const [error, setError] = useState<string | null>(null);
   const cost = costText ? Number(costText) : NaN;
+  const stored = reward && data.rewards.value.find((r) => r.id === reward.id);
+  useCloseWhenGone(!!reward && (!stored || !!stored.archived), onClose, `"${reward?.title}" was deleted on another device.`);
 
   const save = () => {
+    // A profile deleted on another device while the editor was open is not saved back onto the reward.
+    const whoNow = who.filter((id) => id === EVERYONE || profileById.value.has(id));
     if (!title.trim()) return setError('Give the reward a title.');
-    if (who.length === 0) return setError('Choose who can redeem it.');
+    if (whoNow.length === 0) return setError('Choose who can redeem it.');
     const bad = validateCost(cost);
     if (bad) return setError(bad);
     // The stored reward, not the copy the editor opened with: a redemption meanwhile is kept.
@@ -40,7 +44,7 @@ function RewardEditor({ reward, onClose }: { reward: Reward | null; onClose: () 
       title: title.trim(),
       emoji,
       cost,
-      profiles: who.includes(EVERYONE) ? [] : who,
+      profiles: whoNow.includes(EVERYONE) ? [] : whoNow,
       renews,
       redeemedBy: base?.redeemedBy ?? {},
       order: reward?.order ?? Math.max(0, ...data.rewards.value.map((r) => r.order)) + 1,

@@ -65,6 +65,17 @@ const inHistory = (o: Occurrence, day: ISODate) => {
   return o.date >= first && day >= first;
 };
 
+/**
+ * The occurrence is still on `day` as the store has it. A popover or the
+ * "Who did it?" dialog can outlive it: the task deleted, its assignee taken
+ * off or its schedule changed on another device.
+ */
+export const stillOn = (o: Occurrence, day: ISODate) =>
+  (day === today.value ? todayOccurrences.value : occurrencesFor(day)).some((x) => x.id === o.id);
+
+/** A check-off or skip is written only for a current occurrence, in loaded history. */
+const canMark = (o: Occurrence, day: ISODate) => inHistory(o, day) && stillOn(o, day);
+
 function ledgerEntry(
   profileId: string,
   delta: number,
@@ -78,11 +89,12 @@ function ledgerEntry(
 
 /**
  * Check off an occurrence while viewing `day`. `by` is who did it (the
- * claimer for Up for Grabs). Null when it is already done.
+ * claimer for Up for Grabs). Null when it is already done, is no longer on
+ * the day, or `by` is no longer a profile.
  */
 export function completeTask(o: Occurrence, by: string, day: ISODate): Promise<void> | null {
   if (by === UP_FOR_GRABS) throw new Error('completeTask: an Up for Grabs chore needs a claimer');
-  if (statesById.value.get(o.id)?.status === 'done' || !inHistory(o, day)) return null;
+  if (statesById.value.get(o.id)?.status === 'done' || !canMark(o, day) || !profileById.value.has(by)) return null;
   const task = taskOf(o.task.id, o.task);
   return exclusive([o.id], () => {
     const b = batch();
@@ -141,10 +153,10 @@ export function uncompleteTask(o: Occurrence): Promise<void> | null {
 /**
  * Skip an occurrence while viewing `day`. A repeat-after-done chore counts
  * the skip like a completion (without stars), so it comes round again.
- * Null when it is already done or skipped.
+ * Null when it is already done or skipped, or is no longer on the day.
  */
 export function skipTask(o: Occurrence, day: ISODate): Promise<void> | null {
-  if (statesById.value.has(o.id) || !inHistory(o, day)) return null;
+  if (statesById.value.has(o.id) || !canMark(o, day)) return null;
   const task = taskOf(o.task.id, o.task);
   return exclusive([o.id], () => {
     const at = madeAt(day, currentTime());

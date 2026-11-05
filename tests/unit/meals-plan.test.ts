@@ -8,6 +8,7 @@ import {
   mealOccurrences,
   nextCellOrder,
   nextOccurrenceAfter,
+  undoOps,
   weekDays,
   weekOf,
   type MealOp,
@@ -154,6 +155,36 @@ describe('editOccurrence', () => {
   it('turning the repeat off for every time leaves one meal on the day being edited', () => {
     const after = apply([fridays], editOccurrence(fridays, '2026-11-20', 'all', { repeat: undefined }, ids()));
     expect(datesOf(after, '2026-11-01', '2026-11-30')).toEqual(['20:Pizza']);
+  });
+
+  it('patches the entry with only what changes, never rewriting it whole', () => {
+    // Another device's change to a field the edit does not touch (here the order) survives.
+    const ops = editOccurrence(fridays, '2026-11-20', 'all', { title: 'Tacos', notes: undefined }, ids());
+    expect(ops).toEqual([
+      { op: 'patch', id: 's', data: { title: 'Tacos', notes: undefined, date: '2026-11-06', repeat: fridays.repeat } },
+    ]);
+    expect(editOccurrence(entry({}), '2026-11-04', 'one', { title: 'Tacos' }, ids())).toEqual([
+      { op: 'patch', id: 'e', data: { title: 'Tacos' } },
+    ]);
+    expect(editOccurrence(fridays, '2026-11-06', 'following', { title: 'Tacos' }, ids())).toEqual([
+      { op: 'patch', id: 's', data: { title: 'Tacos', date: '2026-11-06', repeat: fridays.repeat } },
+    ]);
+    for (const scope of ['one', 'following', 'all'] as const)
+      for (const o of editOccurrence(fridays, '2026-11-13', scope, { title: 'Tacos' }, ids()))
+        if (o.op === 'put') expect(o.entry.id).not.toBe('s');
+  });
+
+  it('undoes only what the edit changed', () => {
+    const noted = { ...fridays, notes: 'Extra cheese' };
+    const ops = editOccurrence(noted, '2026-11-13', 'one', { title: 'Tacos' }, ids());
+    const edited = apply([noted], ops);
+    // Meanwhile another device renames the series.
+    const renamed = edited.map((e) => (e.id === 's' ? { ...e, title: 'Pizza night' } : e));
+    const back = apply(renamed, undoOps(noted, ops));
+    expect(back.map((e) => e.id)).toEqual(['s']);
+    expect(back[0]).toEqual({ ...noted, title: 'Pizza night' });
+    // A removed entry comes back whole.
+    expect(apply([], undoOps(noted, editOccurrence(noted, '2026-11-06', 'following', null, ids())))).toEqual([noted]);
   });
 
   it('respects until when continuing a series', () => {
