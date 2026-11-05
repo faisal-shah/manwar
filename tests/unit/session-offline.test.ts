@@ -95,7 +95,9 @@ describe('session start', () => {
     }
     // With nothing remembered for the user, it waits and asks again rather than signing out.
     opened.length = 0;
-    await auth.listener!(user('u3', Object.assign(new Error('Firebase: Error (auth/internal-error).'), { code: 'auth/internal-error' })));
+    await auth.listener!(
+      user('u3', Object.assign(new Error('Firebase: Error (auth/internal-error).'), { code: 'auth/internal-error' })),
+    );
     expect(opened).toEqual([]);
     expect(session.value.state).toBe('waiting');
   });

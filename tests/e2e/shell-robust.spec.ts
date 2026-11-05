@@ -271,7 +271,9 @@ test('a reload inside the sleep window (an update at night) keeps the backlight 
   await expect
     .poll(async () => {
       const res = await fetch(`${FS}/households/demo-${name}/settings/main`, { headers: { Authorization: 'Bearer owner' } });
-      const body = (await res.json()) as { fields?: { sleep?: { mapValue: { fields: { enabled?: { booleanValue: boolean } } } } } };
+      const body = (await res.json()) as {
+        fields?: { sleep?: { mapValue: { fields: { enabled?: { booleanValue: boolean } } } } };
+      };
       return body.fields?.sleep?.mapValue.fields.enabled?.booleanValue ?? false;
     })
     .toBe(true);
