@@ -1,7 +1,6 @@
-import { useEffect, useRef } from 'preact/hooks';
 import { Check, RefreshCw } from 'lucide-preact';
 import { demoMode } from '../../config';
-import { calendars, defaultCalendarId, refresh, sync, syncNow, writableCalendars } from '../../calendar/engine';
+import { calendars, defaultCalendarId, sync, syncNow, writableCalendars } from '../../calendar/engine';
 import type { CalendarInfo } from '../../calendar/types';
 import { asParent } from '../../core/lock';
 import { hiddenChange } from '../../data/settings';
@@ -22,25 +21,11 @@ function access(c: CalendarInfo): string {
   return c.primary ? `Primary calendar · ${role}` : role;
 }
 
-/** Hidden calendars are not fetched, so showing or hiding one re-syncs. */
-function useResyncOnVisibilityChange(hidden: string[]) {
-  const key = hidden.join('\n');
-  const first = useRef(true);
-  useEffect(() => {
-    if (first.current) {
-      first.current = false;
-      return;
-    }
-    void refresh();
-  }, [key]);
-}
-
 export function GooglePage() {
   const s = settings.value;
   const st = sync.value;
   const hidden = s.hiddenCalendars;
   const target = defaultCalendarId();
-  useResyncOnVisibilityChange(hidden);
 
   const problem = googleProblem.value;
   const status = problem ? (

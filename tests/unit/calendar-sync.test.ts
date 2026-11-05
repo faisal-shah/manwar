@@ -185,4 +185,24 @@ describe('calendar sync across a change of account', () => {
     expect(storage.has('manwar.events.v1')).toBe(false);
     quota.chars = Infinity;
   });
+
+  it('takes a calendar hidden on another tablet off the wall at once, and fetches one shown again', async () => {
+    const asked: string[] = [];
+    source.listCalendars = async () => [cal('ours@gmail.com'), cal('school@group.calendar.google.com')];
+    source.listEvents = async (id) => {
+      asked.push(id);
+      return [ev(id, `${id.split('@')[0]}-event`)];
+    };
+    await engine.refresh();
+    expect(ids().sort()).toEqual(['ours-event', 'school-event']);
+    // The settings snapshot from the other tablet arrives.
+    asked.length = 0;
+    store.settings.value = { ...store.settings.value, hiddenCalendars: ['school@group.calendar.google.com'] };
+    expect(ids()).toEqual(['ours-event']);
+    expect(asked).toEqual([]);
+    store.settings.value = { ...store.settings.value, hiddenCalendars: [] };
+    await settle();
+    expect(asked.sort()).toEqual(['ours@gmail.com', 'school@group.calendar.google.com']);
+    expect(ids().sort()).toEqual(['ours-event', 'school-event']);
+  });
 });

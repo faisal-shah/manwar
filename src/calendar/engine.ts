@@ -308,6 +308,19 @@ export function startCalendarSync(): void {
     if (next !== win && next === 'always') void refresh();
     win = next;
   });
+  // A calendar hidden on any tablet leaves the wall at once; one shown again is fetched.
+  let hidden = settings.peek().hiddenCalendars;
+  effect(() => {
+    const next = settings.value.hiddenCalendars;
+    if (sameIds(next, hidden)) return;
+    const shownAgain = hidden.some((id) => !next.includes(id));
+    hidden = next;
+    signalBatch(() => {
+      events.value = events.value.filter((e) => !next.includes(e.calendarId));
+      farCountdowns.value = farCountdowns.value.filter((e) => !next.includes(e.calendarId));
+    });
+    if (shownAgain) void refresh();
+  });
 }
 
 /* ---------- Event metadata (profiles, countdowns) ---------- */

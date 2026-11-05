@@ -105,7 +105,9 @@ flowchart LR
   document they mean to change. `refresh()` called during a fetch gets one
   more fetch after it (each Google request gives up after 30 seconds, so a
   dead connection cannot stall the queue or a save awaiting it), and a
-  calendar that fails keeps its last events. The fetched window counts as
+  calendar that fails keeps its last events. A calendar hidden in Settings
+  (on any tablet: the engine follows `hiddenCalendars`) leaves the wall at
+  once, and one shown again is fetched. The fetched window counts as
   loaded even when a calendar failed in it (the next poll asks that one
   again), so page turns inside it do not refetch everything.
   Events with no meta are **unassigned** and listed in `unassigned` (the
