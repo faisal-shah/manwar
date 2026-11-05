@@ -1,7 +1,7 @@
 import { batch as signalBatch, computed, effect, signal } from '@preact/signals';
 import { demoMode } from '../config';
 import { data, householdId, patch, profileById, put, remove as removeDoc, settings, upsert } from '../data/store';
-import { EVERYONE, type EventMeta, type ISODate } from '../data/types';
+import { EVERYONE, NOBODY, type EventMeta, type ISODate } from '../data/types';
 import { addDays, addMonths, dateAt, diffDays, toISODate } from '../lib/date';
 import { currentTime, today } from '../lib/clock';
 import { fakeSource } from './fake';
@@ -416,6 +416,17 @@ export const unassigned = computed(() => {
   return out;
 });
 
+/**
+ * How the triage queue assigns an event: for the whole series, unless the
+ * series has people and only this occurrence has no one (its own document
+ * says NOBODY), when this occurrence alone.
+ */
+export function triageScope(ev: CalEvent): 'series' | 'instance' {
+  const series = metaDocs(ev).series;
+  const known = profileById.value;
+  return series?.profiles.some((p) => p === EVERYONE || known.has(p)) ? 'instance' : 'series';
+}
+
 type MetaFields = Partial<Pick<EventMeta, 'profiles' | 'countdown' | 'emoji'>>;
 
 /**
@@ -595,10 +606,10 @@ export async function updateEvent(
       updatedAt: currentTime(),
     });
   } else if (ev.seriesId && scope === 'this') {
-    // The occurrence keeps only what differs from its series.
+    // The occurrence keeps only what differs from its series; no one, where the series has people, is NOBODY.
     const series = metaDocs(ev).series;
     putOwn(ev, {
-      profiles: sameIds(profileIds, series?.profiles ?? []) ? [] : profileIds,
+      profiles: sameIds(profileIds, series?.profiles ?? []) ? [] : profileIds.length ? profileIds : [NOBODY],
       countdown: countdown === !!series?.countdown ? undefined : countdown,
     });
   } else {

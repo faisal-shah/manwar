@@ -1,10 +1,10 @@
 import { useState } from 'preact/hooks';
-import { arrayRemove, deleteField } from 'firebase/firestore';
+import { arrayRemove, arrayUnion, deleteField } from 'firebase/firestore';
 import { ArrowLeft, ChevronDown, ChevronRight, ChevronUp, Plus, Trash2 } from 'lucide-preact';
 import { asParent } from '../../core/lock';
 import { profileShownChange } from '../../data/settings';
 import { batch, data, newId, patch, profileById, profiles, put, saveSettings, settings } from '../../data/store';
-import type { Profile } from '../../data/types';
+import { NOBODY, type Profile } from '../../data/types';
 import { currentTime } from '../../lib/clock';
 import { fromISODate, monthShort } from '../../lib/date';
 import { Button, Field, IconButton } from '../../ui/controls';
@@ -92,9 +92,14 @@ function applyDelete(p: Profile): void {
   b.remove('profiles', p.id);
   void b.commit();
   const at = currentTime();
-  for (let i = 0; i < plan.eventMeta.length; i += BATCH_LIMIT) {
+  // Two writes per document at most, so half a batch of documents per batch.
+  for (let i = 0; i < plan.eventMeta.length; i += BATCH_LIMIT / 2) {
     const mb = batch();
-    plan.eventMeta.slice(i, i + BATCH_LIMIT).forEach(({ id }) => mb.patch('eventMeta', id, { profiles: without, updatedAt: at }));
+    for (const { id, profiles: rest } of plan.eventMeta.slice(i, i + BATCH_LIMIT / 2)) {
+      mb.patch('eventMeta', id, { profiles: without, updatedAt: at });
+      // Left with nobody: marked so, which an assignment made elsewhere meanwhile outranks (NOBODY beside a profile is ignored).
+      if (rest.includes(NOBODY)) mb.patch('eventMeta', id, { profiles: arrayUnion(NOBODY) as never });
+    }
     void mb.commit();
   }
   if (settings.value.filter.hiddenProfiles.includes(p.id)) void saveSettings(profileShownChange(p.id, true));

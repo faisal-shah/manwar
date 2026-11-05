@@ -215,7 +215,11 @@ export interface Message {
  */
 export interface EventMeta {
   id: string;
-  /** Assigned profiles; [EVERYONE] for the whole family. Absent entry = unassigned (triage). */
+  /**
+   * Assigned profiles; [EVERYONE] for the whole family. Absent entry =
+   * unassigned (triage). An occurrence's own document with [] follows its
+   * series; [NOBODY] is assigned to no one, whatever the series has.
+   */
   profiles: string[];
   countdown?: boolean;
   emoji?: string;
@@ -223,6 +227,13 @@ export interface EventMeta {
 }
 
 export const EVERYONE = '*';
+/**
+ * Event profiles meaning "no one": an occurrence whose people were taken
+ * away (their profile deleted, or cleared in the editor) waits in triage
+ * instead of falling back to its series' people. Never a profile id, so
+ * the views skip it like a deleted profile.
+ */
+export const NOBODY = '-';
 
 export type TabId = 'home' | 'calendar' | 'lists' | 'tasks' | 'rewards' | 'meals' | 'recipes';
 export type CalendarView = 'schedule' | 'day' | 'week' | 'month';

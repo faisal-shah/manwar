@@ -70,6 +70,26 @@ test('adds, edits, reorders and deletes a profile', async ({ page }) => {
   await expect(page.locator('.profile-row', { hasText: 'Zaid' })).toHaveCount(0);
 });
 
+test('deleting a profile sends the events only it had to the unassigned queue', async ({ page }) => {
+  test.setTimeout(90_000);
+  await open(page);
+  const badgeOf = (p: Page) => p.locator('.rail button', { hasText: 'Calendar' }).locator('.badge');
+  // The demo has three unassigned events (once its seed has landed); Nap, Swim lesson and the birthday are Hashim's alone.
+  await expect(badgeOf(page)).toHaveText('3', { timeout: 40_000 });
+  await openSettings(page, 'Profiles');
+  await page.getByRole('button', { name: 'Edit Hashim' }).click();
+  await page.getByRole('button', { name: 'Delete', exact: true }).click();
+  await expect(page.locator('.modal')).toContainText('3 events assigned only to Hashim! will wait in the unassigned queue');
+  await page.getByRole('button', { name: 'Delete profile' }).click();
+  await expect(badgeOf(page)).toHaveText('6');
+  // The server took the writes: another tablet on the household (its own memory cache) shows the same.
+  const other = await page.context().newPage();
+  await other.goto(page.url());
+  await expect(other.locator('.shell')).toBeVisible({ timeout: 20_000 });
+  await expect(badgeOf(other)).toHaveText('6', { timeout: 30_000 });
+  await other.close();
+});
+
 test('a PIN locks settings changes until a parent enters it, and can be removed', async ({ page }) => {
   await open(page);
   await rail(page, 'Home').click();

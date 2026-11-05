@@ -1,7 +1,7 @@
 import { signal } from '@preact/signals';
 import { useState } from 'preact/hooks';
 import { Repeat } from 'lucide-preact';
-import { unassigned } from '../../calendar/engine';
+import { triageScope, unassigned } from '../../calendar/engine';
 import { eventKey, type CalEvent } from '../../calendar/types';
 import { Button, Empty } from '../../ui/controls';
 import { Sheet, toast } from '../../ui/overlays';
@@ -50,6 +50,8 @@ export function TriageSheet({ onClose }: { onClose: () => void }) {
 
 function TriageRow({ ev }: { ev: CalEvent }) {
   const [sel, setSel] = useState<string[]>([]);
+  // One occurrence of a series that has people is assigned on its own, as a one-off.
+  const scope = triageScope(ev);
   return (
     <article class="triage-row" data-triage={seriesOf(ev)}>
       <div class="triage-info">
@@ -58,7 +60,7 @@ function TriageRow({ ev }: { ev: CalEvent }) {
         </h3>
         <span>
           {whenLabel(ev)}
-          {ev.seriesId && (
+          {ev.seriesId && scope === 'series' && (
             <span class="triage-repeat">
               <Repeat size="1.6rem" /> repeats
             </span>
@@ -75,7 +77,7 @@ function TriageRow({ ev }: { ev: CalEvent }) {
           variant="primary"
           disabled={!sel.length}
           onClick={() =>
-            void assignFlow(ev, sel, 'series').then(() => {
+            void assignFlow(ev, sel, scope).then(() => {
               if (!unassigned.value.some((x) => seriesOf(x) === seriesOf(ev))) toast(`Assigned "${ev.title}"`);
             })
           }

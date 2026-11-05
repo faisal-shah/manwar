@@ -1,4 +1,4 @@
-import type { EventMeta, Reward, TabId, Task } from '../../data/types';
+import { NOBODY, type EventMeta, type Reward, type TabId, type Task } from '../../data/types';
 
 /* ---------- Tabs ---------- */
 
@@ -49,7 +49,7 @@ export interface ProfileDeletePlan {
   archiveRewards: string[];
   /** Rewards limited to several profiles: the profile is taken off. */
   unassignRewards: { id: string; profiles: string[] }[];
-  /** Event assignments: the profile is taken off (events left with nobody go back to triage). */
+  /** Event assignments: the profile is taken off; one left with nobody gets [NOBODY] and waits in triage. */
   eventMeta: { id: string; profiles: string[] }[];
 }
 
@@ -76,7 +76,10 @@ export function planProfileDelete(
     else if (!r.archived) plan.archiveRewards.push(r.id);
   }
   for (const m of eventMeta) {
-    if (m.profiles.includes(id)) plan.eventMeta.push({ id: m.id, profiles: m.profiles.filter((p) => p !== id) });
+    if (!m.profiles.includes(id)) continue;
+    const rest = m.profiles.filter((p) => p !== id && p !== NOBODY);
+    // Left with nobody: NOBODY, so an occurrence goes to triage rather than to its series' people.
+    plan.eventMeta.push({ id: m.id, profiles: rest.length ? rest : [NOBODY] });
   }
   return plan;
 }
@@ -91,7 +94,7 @@ export function describeProfileDelete(name: string, plan: ProfileDeletePlan): st
   if (shared) parts.push(`${name} is taken off ${plural(shared, 'shared task or reward', 'shared tasks and rewards')}.`);
   if (plan.archiveRewards.length)
     parts.push(`${plural(plan.archiveRewards.length, 'reward')} only ${name} could redeem will be archived.`);
-  const alone = plan.eventMeta.filter((m) => m.profiles.length === 0).length;
+  const alone = plan.eventMeta.filter((m) => m.profiles.includes(NOBODY)).length;
   if (plan.eventMeta.length)
     parts.push(
       `${name} is removed from ${plural(plan.eventMeta.length, 'event')}` +

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { EventMeta, Reward, Task } from '../../src/data/types';
+import { NOBODY, type EventMeta, type Reward, type Task } from '../../src/data/types';
 import {
   canHideTab,
   describeProfileDelete,
@@ -87,9 +87,9 @@ describe('deleting a profile', () => {
     expect(plan.unassignTasks).toEqual([{ id: 'shared', assignees: ['mom'] }]);
     expect(plan.unassignRewards).toEqual([{ id: 'ours', profiles: ['mom'] }]);
   });
-  it('removes it from event assignments, leaving solo events unassigned', () => {
+  it('removes it from event assignments, marking solo events as no one’s (so an occurrence does not fall back to its series)', () => {
     expect(plan.eventMeta).toEqual([
-      { id: 'e1', profiles: [] },
+      { id: 'e1', profiles: [NOBODY] },
       { id: 'e2', profiles: ['mom'] },
     ]);
   });

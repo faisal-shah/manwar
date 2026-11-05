@@ -97,7 +97,10 @@ flowchart LR
   minutes, and joins each
   event with `EventMeta` (Firestore `eventMeta`, keyed by
   `metaKey(calendarId, seriesId ?? id)`). An occurrence's own document
-  overrides its series' document field by field (empty `profiles` = inherit);
+  overrides its series' document field by field (empty `profiles` = inherit,
+  `[NOBODY]` = no one: what a profile delete or an editor cleared to nobody
+  leaves, so the occurrence waits in triage, which assigns it alone
+  (`triageScope`) instead of the series);
   write through `assign`/`setCountdown`/`updateEvent`, which touch only the
   document they mean to change. `refresh()` called during a fetch gets one
   more fetch after it (each Google request gives up after 30 seconds, so a

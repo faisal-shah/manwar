@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CalEvent, CalendarInfo, CalendarSource } from '../../src/calendar/types';
-import type { EventMeta, Profile } from '../../src/data/types';
+import { NOBODY, type EventMeta, type Profile } from '../../src/data/types';
 
 /**
  * Calendar engine against an in-memory store and a scripted calendar
@@ -228,6 +228,35 @@ describe('triage queue', () => {
     engine.events.value = [a, b, c];
     store.data.eventMeta.value = [meta(a.id, ['hashim'])];
     expect(engine.unassigned.value.map((e) => e.id)).toEqual([b.id]);
+  });
+
+  it('sends an occurrence whose only person was deleted to triage, not to its series’ people', () => {
+    const [a, b] = [swim(1), swim(8)];
+    engine.events.value = [a, b];
+    // Swim is Asiyah's; this one lesson was Hashim's, whose profile is deleted (the delete marks it NOBODY).
+    store.data.eventMeta.value = [meta('swim', ['asiyah']), meta(a.id, [NOBODY])];
+    expect(engine.profilesOf(a)).toBeNull();
+    expect(engine.unassigned.value.map((e) => e.id)).toEqual([a.id]);
+    // Assigned from triage, it is this lesson alone: the series keeps Asiyah.
+    expect(engine.triageScope(a)).toBe('instance');
+    engine.assign(a, ['asiyah', 'hashim'], engine.triageScope(a));
+    expect(engine.profilesOf(a)).toEqual(['asiyah', 'hashim']);
+    expect(engine.profilesOf(b)).toEqual(['asiyah']);
+    // A series with nobody is assigned as a whole.
+    store.data.eventMeta.value = [];
+    expect(engine.triageScope(a)).toBe('series');
+  });
+
+  it('keeps an occurrence cleared in the editor with no one, not its series’ people', async () => {
+    const a = swim(3);
+    engine.events.value = [a];
+    source.update = async () => ({});
+    source.listCalendars = async () => [CAL];
+    source.listEvents = async () => [a];
+    store.data.eventMeta.value = [meta('swim', ['asiyah'])];
+    await engine.updateEvent(a, { title: a.title, allDay: false, start: a.start, end: a.end, keepRecurrence: true }, 'this', []);
+    expect(engine.profilesOf(a)).toBeNull();
+    expect(metaDoc(a.id)?.profiles).toEqual([NOBODY]);
   });
 
   it('lists each unassigned series once, by its next occurrence', () => {
