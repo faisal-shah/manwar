@@ -71,8 +71,10 @@ has been idle for a few minutes.
 3. Open the app, tap **Connect Google account** and sign in with the Google
    account whose calendars the wall should show (a shared family account
    works well). Google warns that the app is unverified: choose
-   **Advanced → Go to Manwar**, then allow calendar access. Each Google
-   account gets its own household: its own people, tasks, lists and meals.
+   **Advanced → Go to Manwar**, then allow calendar access (leave both
+   calendar permissions ticked; the wall refuses a connection without them).
+   Each Google account gets its own household: its own people, tasks, lists
+   and meals.
 4. In Settings, add the family's profiles, pick the weather location and set a
    parental PIN.
 

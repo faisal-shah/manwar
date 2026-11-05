@@ -1,12 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  REQUIRED_SCOPES,
-  householdIdFor,
-  isAllowedAccount,
-  missingScopes,
-  normalizeEmail,
-  parseAccountList,
-} from './policy.js';
+import { REQUIRED_SCOPES, householdIdFor, isAllowedAccount, missingScopes, normalizeEmail, parseAccountList } from './policy.js';
 
 describe('policy', () => {
   it('derives a household id from the Google subject id', () => {
