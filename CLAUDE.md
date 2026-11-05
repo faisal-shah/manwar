@@ -193,7 +193,10 @@ flowchart LR
   newest `LEDGER_LIVE` entries; the star history sheet reads older pages on
   Show older (`rewards/history-state.ts`, shown without Undo). Balances never
   depend on the window. Two devices completing the same occurrence in the
-  same instant can still both award (the balance is an increment).
+  same instant can still both award (the balance is an increment); so can
+  a phone that checks off offline what another device checked off before
+  it reconnects. The star history then shows both entries, and Undo on
+  one takes its stars back.
 - **Parental lock** (`core/lock.ts`): with a PIN set, only checking off tasks
   is open; wrap every other mutation in `asParent(() => ...)` or
   `await requireParent()`; an editor asks again on Save, since the lock can
@@ -264,9 +267,47 @@ sequenceDiagram
 - **Back gesture** (`ui/back.ts`): on the phone each open overlay
   (`useOverlay` calls `useBack`) or inner view holds one history entry;
   Back closes the top one, and a view closed another way gives its entry
-  back. Use `useBack(onClose, true)` in any phone view that should close
-  on Back. In e2e, wait for the page's own `history.back()` to land before
+  back. A browser fixes the entry `history.back()` lands on when it is
+  called, so an entry opened while one of ours is on its way (details
+  giving way to the editor) is pushed once it has landed. Use
+  `useBack(onClose, true)` in any phone view that should close on Back.
+  In e2e, wait for the page's own `history.back()` to land before
   `page.goBack()` (Playwright's goBack targets an entry).
+- **Double taps on the phone** (`ui/overlays.tsx`): a full-width sheet and
+  a popover laid out as a bottom sheet cover the spot that opened them,
+  so they drop the rest of that double tap inside them, as dialogs do; an
+  overlay that closes takes the rest of its double tap with it
+  (`swallowRestOfTap`, the very next tap only), or it would press what was
+  under (the tab bar, another task's circle). Call `swallowRestOfTap()`
+  for any tap that puts another screen under the finger (Today's rows
+  opening Tasks, Give closing its form). The tab bar is
+  `data-tap-through`: it loses only a real double tap's second tap
+  (`detail` 2). In e2e, wait half a second after opening a sheet before
+  tapping in it where the tap that opened it was.
+- **Today** (`phone/today/`): the wall's running timer and the note it
+  shows, what is next (`nextUp`, `today/logic.ts`: today's all-day events
+  and the timed ones not over, and tomorrow's once no timed event is left
+  today), each person's progress (`todayProgress`; a tap opens their
+  tasks), tonight's dinner from the meal plan (category `dinner`, with
+  Ingredients for a recipe) and the countdowns. The header says Today and
+  no button on it names a tab, so a test that opens a tab by name finds
+  only the tab.
+- **Tasks** (`phone/tasks/`): one person's today, or the Up for Grabs
+  chores with the ones done and who did them, through the wall's
+  `TaskCard`, `ColumnHead`, details, claim dialog, editor and
+  celebrations (`features/tasks`; every rule and write is the wall's).
+  The person picked is kept on the phone (`tasksFor`,
+  `manwar.phoneTasksFor.v1`); the one shown falls back to the first while
+  it is gone (`shownPerson`). The header's + opens the editor for that
+  person or as Up for Grabs (`editTask('new', forList)`, `draftForList`).
+  At midnight the tab moves to the new day and closes details or a claim
+  about the old one.
+- **Stars and rewards** (More, `phone/stars/`): balances and the rewards to
+  add and edit. A person's stars open in a sheet where the wall opens its
+  star history (`historyFor`: `StarsHost` takes `HistoryHost`'s place on
+  the phone, the Tasks tab's star pill included): Give and Remove with a
+  note (`Adjust`), the rewards they can redeem (`redeem`), the history
+  with Undo (`HistoryList`), and the reward editor and redeemed dialog.
 - **Shared with the wall through Firestore**: the timer (`timers/wall`,
   `features/timer/state.ts`; stopping stamps `stoppedAt`, and the wall's
   sleep hold is derived from the document) and the screen
