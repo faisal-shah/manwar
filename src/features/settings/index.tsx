@@ -1,6 +1,17 @@
 import type { ComponentType, FunctionComponent } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
-import { CalendarDays, CalendarSync, CloudSun, Info, ListChecks, Lock, Monitor, Smartphone, Users, Utensils } from 'lucide-preact';
+import {
+  CalendarDays,
+  CalendarSync,
+  CloudSun,
+  Info,
+  ListChecks,
+  Lock,
+  Monitor,
+  Smartphone,
+  Users,
+  Utensils,
+} from 'lucide-preact';
 import { settingsPage } from '../../app/nav';
 import { requireParent, unlocked } from '../../core/lock';
 import { Sheet } from '../../ui/overlays';
