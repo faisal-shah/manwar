@@ -1,4 +1,4 @@
-import { batch as signalBatch, computed, signal, type Signal } from '@preact/signals';
+import { batch as signalBatch, computed, effect, signal, type Signal } from '@preact/signals';
 import {
   collection,
   deleteField,
@@ -22,7 +22,7 @@ import {
 import { errorMessage } from './errors';
 import { db } from './firebase';
 import { addDays } from '../lib/date';
-import { currentTime } from '../lib/clock';
+import { currentTime, today } from '../lib/clock';
 import { toISODate } from '../lib/date';
 import { HISTORY_DAYS } from '../tasks/engine';
 import { DEFAULT_SETTINGS, mergeSettings } from './settings';
@@ -101,8 +101,11 @@ export const profileById = computed(() => new Map(profiles.value.map((p) => [p.i
  */
 export const LEDGER_LIVE = 1000;
 
-/** Live listeners by collection ('settings' for the settings document). */
-const listeners = new Map<string, Unsubscribe>();
+/**
+ * Open subscriptions by listener (a collection, or 'settings' for the
+ * settings document); more than one only while a new one replaces another.
+ */
+const listeners = new Map<string, Set<Unsubscribe>>();
 /** Collections (and 'settings') whose latest snapshot came from the server, not only the local cache. */
 const fromServer = new Set<CollectionName | 'settings'>();
 export const confirmedByServer = (name: CollectionName | 'settings') => fromServer.has(name);
@@ -137,26 +140,62 @@ export const docRef = (name: CollectionName, id: string) => doc(db, 'households'
 export const settingsRef = () => doc(db, 'households', hid(), 'settings', 'main');
 
 /**
+ * Opens one subscription. Its snapshot handler starts with `current()`,
+ * which is false for a subscription another has replaced: that snapshot is
+ * dropped.
+ */
+type Open = (current: () => boolean, onError: (e: FirestoreError) => void) => Unsubscribe;
+
+/**
  * Keep one listener alive. Firestore ends a listener for good on an error
  * (permission denied, quota), which would leave the wall loading forever or
  * silently stale; it is reported and opened again after LISTEN_RETRY_MS.
+ * The returned function opens it again with a fresh query (the task
+ * states' window moves at the day change): the old subscription stays until
+ * the new one delivers, so the store never shows less in between, and the
+ * new one's first snapshot is whole (the cache holds what the old one had).
  */
-function listen(key: string, open: (onError: (e: FirestoreError) => void) => Unsubscribe): void {
+function listen(key: string, open: Open): () => void {
   const gen = generation;
+  const subs = new Set<Unsubscribe>();
+  listeners.set(key, subs);
+  let latest = 0;
   const start = () => {
-    listeners.set(
-      key,
-      open((e) => {
+    const n = ++latest;
+    /** The subscriptions this one replaces once it delivers. */
+    let replaces = [...subs];
+    let live = true;
+    const close = () => {
+      live = false;
+      unsubscribe();
+      subs.delete(close);
+    };
+    const unsubscribe = open(
+      () => {
+        if (!live) return false;
+        replaces.forEach((u) => u());
+        replaces = [];
+        return true;
+      },
+      (e) => {
+        close();
         console.warn(`store: ${key} listener failed`, e);
         setFailed(key, errorMessage(e));
         setTimeout(() => {
-          if (generation === gen) start();
+          if (generation === gen && n === latest) start();
         }, LISTEN_RETRY_MS);
-      }),
+      },
     );
+    subs.add(close);
   };
   start();
+  return () => {
+    if (generation === gen) start();
+  };
 }
+
+/** Stops following the day for the open household's task states query. */
+let stopDayWatch: (() => void) | null = null;
 
 /** Start listening to a household. Called by the session once signed in. */
 export function openHousehold(id: string): void {
@@ -168,17 +207,19 @@ export function openHousehold(id: string): void {
     pending.delete(name);
     if (pending.size === 0) ready.value = true;
   };
+  const reopen = new Map<CollectionName, () => void>();
   for (const name of NAMES) {
-    listen(name, (onError) => {
+    const again = listen(name, (current, onError) => {
       let q: Query = colRef(name);
       // Bounded history for the two collections that grow without limit. Task states reach as far
-      // back as the task views do, plus a margin; the window moves on each listen.
-      const since = toISODate(new Date(currentTime() - (HISTORY_DAYS + 2) * 86_400_000));
+      // back as the task views do, plus a margin, from the day the query opens.
+      const since = addDays(today.peek(), -(HISTORY_DAYS + 2));
       if (name === 'taskStates') q = query(q, where('date', '>=', since));
       if (name === 'ledger') q = query(q, orderBy('at', 'desc'), limit(LEDGER_LIVE));
       return onSnapshot(
         q,
         (snap) => {
+          if (!current()) return;
           noteSource(name, snap.metadata.fromCache);
           data[name].value = snap.docs.map((d) => d.data()) as never;
           arrived(name);
@@ -186,11 +227,13 @@ export function openHousehold(id: string): void {
         onError,
       );
     });
+    reopen.set(name, again);
   }
-  listen('settings', (onError) =>
+  listen('settings', (current, onError) =>
     onSnapshot(
       settingsRef(),
       (snap) => {
+        if (!current()) return;
         noteSource('settings', snap.metadata.fromCache);
         settings.value = mergeSettings(snap.exists() ? snap.data() : {});
         if (snap.exists() || !snap.metadata.fromCache) settingsLoaded.value = true;
@@ -199,11 +242,21 @@ export function openHousehold(id: string): void {
       onError,
     ),
   );
+  // The task states' window moves with today, so a wall that runs for weeks does not hold a growing history.
+  let day = today.peek();
+  stopDayWatch = effect(() => {
+    const next = today.value;
+    if (next === day) return;
+    day = next;
+    reopen.get('taskStates')!();
+  });
 }
 
 export function closeHousehold(): void {
   generation++;
-  listeners.forEach((u) => u());
+  stopDayWatch?.();
+  stopDayWatch = null;
+  listeners.forEach((subs) => [...subs].forEach((u) => u()));
   listeners.clear();
   fromServer.clear();
   failed.value = new Map();

@@ -9,6 +9,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 interface Sub {
   path: string;
+  /** The value of a where('date', '>=', ...) on the query. */
+  since?: string;
   next: (snap: unknown) => void;
   error: (e: unknown) => void;
   closed: boolean;
@@ -23,8 +25,8 @@ vi.mock('firebase/firestore', () => {
   return {
     collection: ref,
     doc: ref,
-    query: (q: object) => q,
-    where: () => ({}),
+    query: (q: object, ...constraints: { since?: string }[]) => ({ ...q, since: constraints.find((c) => c.since)?.since }),
+    where: (_field: string, _op: string, since: string) => ({ since }),
     orderBy: () => ({}),
     limit: () => ({}),
     increment: (n: number) => n,
@@ -36,15 +38,17 @@ vi.mock('firebase/firestore', () => {
       inSync.push(cb);
       return () => {};
     },
-    onSnapshot: (q: { path: string }, next: Sub['next'], error: Sub['error']) => {
-      const sub: Sub = { path: q.path, next, error, closed: false };
+    onSnapshot: (q: { path: string; since?: string }, next: Sub['next'], error: Sub['error']) => {
+      const sub: Sub = { path: q.path, since: q.since, next, error, closed: false };
       subs.push(sub);
       return () => (sub.closed = true);
     },
   };
 });
 
-const { closeHousehold, loadError, openHousehold, ready, settings, whenShown } = await import('../../src/data/store');
+const { closeHousehold, data, loadError, openHousehold, ready, settings, whenShown } = await import('../../src/data/store');
+const { nowMs, today } = await import('../../src/lib/clock');
+const { addDays } = await import('../../src/lib/date');
 
 const live = () => subs.filter((s) => !s.closed);
 const empty = { docs: [], metadata: { fromCache: false } };
@@ -121,6 +125,36 @@ describe('store listeners', () => {
     expect(later).toHaveBeenCalledOnce();
     deliver(live().find((s) => s.path.endsWith('/taskStates'))!);
     expect(later).toHaveBeenCalledOnce();
+  });
+
+  it('moves the task states window at the day change without showing less in between', () => {
+    openHousehold('h1');
+    live().forEach(deliver);
+    const statesSub = () => live().filter((s) => s.path.endsWith('/taskStates'));
+    const [first] = statesSub();
+    const t0 = today.value;
+    expect(first.since).toBe(addDays(t0, -62));
+    const doc = (id: string) => ({ data: () => ({ id }) });
+    first.next({ docs: [doc('a'), doc('b')], metadata: { fromCache: false } });
+
+    // Midnight on a wall that never reloads.
+    vi.setSystemTime(Date.now() + 86_400_000);
+    nowMs.value = Date.now();
+    const [old, moved] = statesSub();
+    expect([old, moved?.since]).toEqual([first, addDays(t0, -61)]);
+    // Until the new query answers, the old one still shows the states.
+    expect(data.taskStates.value.map((s) => s.id)).toEqual(['a', 'b']);
+    old.next({ docs: [doc('a'), doc('b'), doc('c')], metadata: { fromCache: false } });
+    expect(data.taskStates.value).toHaveLength(3);
+    moved.next({ docs: [doc('b'), doc('c')], metadata: { fromCache: true } });
+    expect(data.taskStates.value.map((s) => s.id)).toEqual(['b', 'c']);
+    expect(statesSub()).toEqual([moved]);
+    // A snapshot the old one had in flight is dropped.
+    old.next({ docs: [doc('a')], metadata: { fromCache: false } });
+    expect(data.taskStates.value.map((s) => s.id)).toEqual(['b', 'c']);
+    closeHousehold();
+    nowMs.value = Date.now() + 86_400_000;
+    expect(live()).toHaveLength(0);
   });
 
   it('drops a pending retry when the same household is opened again (signed out and back in)', () => {

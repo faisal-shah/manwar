@@ -161,7 +161,10 @@ flowchart LR
   written only for an occurrence still on that day (`stillOn`: not for a
   task deleted or reassigned on another tablet while its popover was open).
   `HISTORY_DAYS` bounds the task views, late carry-over, the writes and the
-  store's `taskStates` query. The ledger listener holds the household's
+  store's `taskStates` query, which moves with today: at the day change the
+  store opens the new query and closes the old one once the new one has
+  delivered (`listen()` returns the reopen), so nothing the views need
+  drops out in between. The ledger listener holds the household's
   newest `LEDGER_LIVE` entries; the star history sheet reads older pages on
   Show older (`rewards/history-state.ts`, shown without Undo). Balances never
   depend on the window. Two devices completing the same occurrence in the
