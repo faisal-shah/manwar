@@ -83,6 +83,9 @@ export const profiles = computed(() => [...data.profiles.value].sort((a, b) => a
 export const profileById = computed(() => new Map(profiles.value.map((p) => [p.id, p])));
 
 let unsubs: Unsubscribe[] = [];
+/** Collections whose latest snapshot came from the server, not only the local cache. */
+const fromServer = new Set<CollectionName>();
+export const confirmedByServer = (name: CollectionName) => fromServer.has(name);
 
 function hid(): string {
   const h = householdId.value;
@@ -111,6 +114,8 @@ export function openHousehold(id: string): void {
     if (name === 'ledger') q = query(q, orderBy('at', 'desc'), limit(1000));
     unsubs.push(
       onSnapshot(q, (snap) => {
+        if (snap.metadata.fromCache) fromServer.delete(name);
+        else fromServer.add(name);
         data[name].value = snap.docs.map((d) => d.data()) as never;
         arrived(name);
       }),
@@ -127,6 +132,7 @@ export function openHousehold(id: string): void {
 export function closeHousehold(): void {
   unsubs.forEach((u) => u());
   unsubs = [];
+  fromServer.clear();
   signalBatch(() => {
     for (const name of NAMES) data[name].value = [];
     settings.value = DEFAULT_SETTINGS;

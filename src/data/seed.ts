@@ -3,7 +3,7 @@ import { metaKey } from '../calendar/engine';
 import { currentTime } from '../lib/clock';
 import { addDays, toISODate } from '../lib/date';
 import { getDocsFromServer, limit, query } from 'firebase/firestore';
-import { batch, colRef, data, householdId, newId, saveSettings } from './store';
+import { batch, colRef, confirmedByServer, data, householdId, newId, saveSettings } from './store';
 import {
   EVERYONE,
   type List,
@@ -46,10 +46,12 @@ const RETRY_MS = 20_000;
 
 /**
  * The local cache can be empty while the household is not (an offline start
- * with a cold cache); only the server can say this is a first run. Null when
- * it cannot be reached.
+ * with a cold cache); only the server can say this is a first run. Usually
+ * the empty snapshots already came from it; otherwise ask. Null when it
+ * cannot be reached.
  */
 async function emptyOnServer(): Promise<boolean | null> {
+  if (confirmedByServer('profiles') && confirmedByServer('lists')) return true;
   try {
     const one = (name: 'profiles' | 'lists') => getDocsFromServer(query(colRef(name), limit(1)));
     const [p, l] = await Promise.all([one('profiles'), one('lists')]);
