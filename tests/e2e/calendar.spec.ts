@@ -230,7 +230,10 @@ async function addEvent(page: Page, title: string, date: string, start: string, 
 }
 
 test('an end time set past midnight and back again keeps the event on its day', async ({ page }) => {
+  test.setTimeout(90_000);
   const errors = await open(page);
+  // The profile to pick comes with the demo family.
+  await expect(page.locator('.cal-prog').first()).toBeVisible({ timeout: 45_000 });
   await page.locator('.fab').click();
   const sheet = page.locator('.sheet');
   await sheet.locator('input[name="title"]').fill('Late call');
@@ -251,7 +254,10 @@ test('an end time set past midnight and back again keeps the event on its day', 
 });
 
 test('deleting a moved occurrence and the ones after it removes the moved one too', async ({ page }) => {
+  test.setTimeout(90_000);
   const errors = await open(page);
+  // The editor saves only an assigned event: wait for the demo family (and its assignments) to arrive.
+  await expect(page.locator('.cal-prog').first()).toBeVisible({ timeout: 45_000 });
   await pickView(page, 'Day');
   const day = (n: number) => page.locator('.cal-mini-day', { hasText: new RegExp(`^${n}$`) }).first();
   const lesson = (d: string) => page.locator(`[data-event="family@demo::swim_${d}"]`);
