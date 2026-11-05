@@ -139,7 +139,9 @@ flowchart LR
 - **Parental lock** (`core/lock.ts`): with a PIN set, only checking off tasks
   is open; wrap every other mutation in `asParent(() => ...)` or
   `await requireParent()`; an editor asks again on Save, since the lock can
-  relock behind an open sheet. Repeated wrong PINs pause the pad
+  relock behind an open sheet. Unchecking is open too, except when the
+  stars it takes back were spent since (the balance no longer covers them):
+  then it asks for the PIN (`tasks/actions.ts`). Repeated wrong PINs pause the pad
   (`core/pin.ts`, in memory). The Calendar filter is a view preference and
   stays open.
 - **Display** (`core/display.ts`): night window switches to the dark theme
@@ -223,6 +225,18 @@ generated from it: `node scripts/icons/render.mjs` after any brand change.
 
 - Preact 11: element attribute types are `import type { ButtonHTMLAttributes } from 'preact'`, not `JSX.HTMLAttributes`.
 - Firestore field paths cannot contain `*`; `lastDoneKey()` maps Up for Grabs to `any`.
+- Text the family types (names, titles, list items, recipe lines, messages)
+  may be Arabic: render it in a `<bdi>` (or `dir="auto"` on its own block),
+  or its punctuation and leading numbers land on the wrong side.
+- Column rows that scroll sideways (`.pcols`, `.tp-cards`) snap. A vertical
+  scroller inside one contains the y axis only (`overscroll-behavior-y`), or
+  a sideways swipe on the cards never pages the row; `useStartInView`
+  (`tasks/DayView.tsx`) keeps a row at its start when a column is put in
+  front (Up for Grabs appearing), which the browser would otherwise re-snap
+  past.
+- Up and Down buttons on a reorderable list move with their row: route taps
+  through `moveTarget` (`settings/logic.ts`) so a quick run of taps on one
+  spot keeps moving the row it started with.
 - Overlays (`Sheet`, `Modal`, `Popover`, the calendar `Menu`) portal to
   `document.body` and register through `useOverlay(onClose)`: its `scrim`
   handler lets the second tap of the double tap that opened the overlay
