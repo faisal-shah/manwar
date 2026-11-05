@@ -6,7 +6,7 @@ import type { LedgerEntry, LedgerReason } from '../../data/types';
 import { currentTime } from '../../lib/clock';
 import { adjustStars, ledgerFor, undoLedgerEntry } from '../../tasks/state';
 import { Button, Chips } from '../../ui/controls';
-import { Sheet, toast } from '../../ui/overlays';
+import { Sheet, swallowRestOfTap, toast } from '../../ui/overlays';
 import { Avatar } from '../../ui/profile';
 import { historyFor, loadOlderLedger, moreLedger, olderLedger } from './history-state';
 import { MAX_REWARD_COST, REASON_LABEL, formatStars, relativeTime, undoable } from './logic';
@@ -205,7 +205,14 @@ export function Adjust({
             : `Enter a whole number from 1 to ${max.toLocaleString()}.`}
       </p>
       <div class="row" style={{ justifyContent: 'flex-end' }}>
-        <Button variant="ghost" onClick={onDone}>
+        <Button
+          variant="ghost"
+          onClick={() => {
+            // The form closes and the history moves up under the finger.
+            swallowRestOfTap();
+            onDone();
+          }}
+        >
           Cancel
         </Button>
         <Button
@@ -213,6 +220,7 @@ export function Adjust({
           disabled={!valid}
           onClick={() =>
             void asParent(() => {
+              swallowRestOfTap();
               void adjustStars(profileId, kind === 'give' ? amount : -amount, note.trim() || undefined);
               toast(`${kind === 'give' ? 'Gave' : 'Removed'} ${plural(amount, 'star')}`);
               onDone();
