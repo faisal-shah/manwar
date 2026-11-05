@@ -15,19 +15,36 @@ export interface HistoryLike {
 }
 
 export function createBackStack(h: HistoryLike) {
-  const stack: { close: () => void }[] = [];
+  const stack: { close: () => void; pushed: boolean }[] = [];
   /** popstate events still to come from our own history.back() calls. */
   let ours = 0;
+  /*
+   * A browser picks the entry history.back() goes to when it is called, not
+   * when it lands: an entry pushed in between (one overlay closing as the
+   * next opens: details giving way to the editor) would be skipped over and
+   * left ahead, and every later Back would be one entry short. So entries
+   * are pushed only while none of our backs is on its way.
+   */
+  const sync = () => {
+    if (ours > 0) return;
+    stack.forEach((e, i) => {
+      if (e.pushed) return;
+      e.pushed = true;
+      h.push(i + 1);
+    });
+  };
   return {
     /** Hold an entry until the returned release is called; Back calls `close` instead. */
     open(close: () => void): () => void {
-      const entry = { close };
+      const entry = { close, pushed: false };
       stack.push(entry);
-      h.push(stack.length);
+      sync();
       return () => {
         const i = stack.indexOf(entry);
         if (i < 0) return;
         stack.splice(i, 1);
+        // Released before its entry was pushed: there is nothing to give back.
+        if (!entry.pushed) return;
         ours++;
         h.back();
       };
@@ -36,6 +53,7 @@ export function createBackStack(h: HistoryLike) {
     popped(): void {
       if (ours > 0) {
         ours--;
+        sync();
         return;
       }
       stack.pop()?.close();

@@ -87,4 +87,83 @@ describe('back stack', () => {
     expect(s.depth).toBe(0);
     expect(f.length).toBe(1);
   });
+
+  it('keeps an entry opened while another is being given back (details giving way to the editor)', () => {
+    const f = browserHistory();
+    const s = createBackStack(f.h);
+    f.listen(() => s.popped());
+    const closed: string[] = [];
+    s.open(() => closed.push('tab'));
+    const details = s.open(() => closed.push('details'));
+    expect(f.state).toBe(2);
+    // In one tick: the details close (their entry is given back) and the editor opens.
+    details();
+    const editor = s.open(() => closed.push('editor'));
+    f.flush();
+    expect(f.state).toBe(2);
+    // The editor saves and gives its entry back: the tab's entry is current again.
+    editor();
+    f.flush();
+    expect(f.state).toBe(1);
+    expect(s.depth).toBe(1);
+    // So the next Back closes the tab's view, and the one after leaves.
+    f.pressBack();
+    expect(closed).toEqual(['tab']);
+    expect(f.state).toBe(0);
+  });
+
+  it('pushes nothing for an entry released before its turn came', () => {
+    const f = browserHistory();
+    const s = createBackStack(f.h);
+    f.listen(() => s.popped());
+    const a = s.open(() => {});
+    a();
+    const b = s.open(() => {});
+    b();
+    f.flush();
+    expect(f.state).toBe(0);
+    expect(f.length).toBe(2);
+    expect(s.depth).toBe(0);
+  });
 });
+
+/**
+ * A browser history as Chrome keeps it: a list of entries and the current
+ * one. pushState drops the entries ahead and adds one; back() picks its
+ * target (the entry before the current one) when called, and lands later.
+ */
+function browserHistory() {
+  const entries = [0];
+  let index = 0;
+  const pending: (() => void)[] = [];
+  let onPop: () => void = () => {};
+  return {
+    h: {
+      push: (depth: number) => {
+        entries.splice(index + 1);
+        entries.push(depth);
+        index++;
+      },
+      back: () => {
+        const target = index - 1;
+        pending.push(() => {
+          index = target;
+          onPop();
+        });
+      },
+    },
+    listen: (fn: () => void) => (onPop = fn),
+    pressBack: () => {
+      index--;
+      onPop();
+    },
+    flush: () => pending.splice(0).forEach((f) => f()),
+    /** The depth stored in the current entry's state. */
+    get state() {
+      return entries[index];
+    },
+    get length() {
+      return entries.length;
+    },
+  };
+}
