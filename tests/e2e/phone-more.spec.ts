@@ -1,5 +1,5 @@
 import { expect as baseExpect, test, type Page } from '@playwright/test';
-import { FS, newContext, OWNER, phone, wall } from './phone-helpers';
+import { FS, newContext, OWNER, pairPhone, phone, wall } from './phone-helpers';
 
 /*
  * The phone's More rows that act on the wall: a note, the timer, the screen,
@@ -332,6 +332,46 @@ test('a double tap on a More row opens it without pressing what lands under the 
   expect(await stored(hh, 'commands/display')).toBeNull();
   await expect(p.page.getByText('Nothing asked from a phone yet.')).toBeVisible();
   await expect(w.page.locator('.timer-layer')).toHaveCount(0);
+  expect([...w.errors, ...p.errors]).toEqual([]);
+});
+
+/**
+ * A double tap on More's `row` at a spot that, once the row's view is open, is on `target` in it: the view is
+ * opened once to find that spot, and the spot is inside both.
+ */
+async function doubleTapOnto(p: Page, row: string, target: ReturnType<Page['locator']>) {
+  const menuRow = p.locator('.ph-menu button', { hasText: row });
+  const r = (await menuRow.boundingBox())!;
+  await menuRow.click();
+  const t = (await target.boundingBox())!;
+  await p.locator('.ph-back').click();
+  await expect(p.locator('.ph-head h1')).toHaveText('More');
+  const top = Math.max(r.y, t.y);
+  const bottom = Math.min(r.y + r.height, t.y + t.height);
+  expect(bottom - top, `${row}: the row and what opens under it overlap`).toBeGreaterThan(4);
+  await p.waitForTimeout(500);
+  const x = t.x + t.width / 2;
+  const y = (top + bottom) / 2;
+  await p.mouse.click(x, y);
+  await p.waitForTimeout(120);
+  await p.mouse.click(x, y);
+  await expect(p.locator('.ph-head h1')).toHaveText(row);
+  await p.waitForTimeout(800);
+}
+
+test('a double tap on This phone or Stars and rewards presses nothing in the view it opens', async ({ browser }) => {
+  const hh = name('guarded');
+  const w = await wall(browser, hh);
+  const p = await pairPhone(browser, w.page, hh);
+  await p.page.locator('.ph-nav').getByRole('button', { name: 'More' }).click();
+  await doubleTapOnto(p.page, 'This phone', p.page.getByRole('button', { name: 'Use the wall layout here' }));
+  // Still the phone, and still on This phone: the second tap did not switch the layout.
+  await expect(p.page.locator('html')).toHaveAttribute('data-layout', 'phone');
+  expect(await p.page.evaluate(() => localStorage.getItem('manwar.layout.v1'))).toBe('phone');
+  await p.page.locator('.ph-back').click();
+  await doubleTapOnto(p.page, 'Stars and rewards', p.page.locator('.psv-person').first());
+  // No person's stars opened over the view.
+  await expect(p.page.getByRole('dialog')).toHaveCount(0);
   expect([...w.errors, ...p.errors]).toEqual([]);
 });
 

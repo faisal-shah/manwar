@@ -70,8 +70,8 @@ describe('back stack', () => {
   it('closes the top overlay on Back, one per press', () => {
     const { f, s } = setup();
     const closed: string[] = [];
-    s.open(() => closed.push('sheet'));
-    s.open(() => closed.push('confirm'));
+    s.open('overlay', () => closed.push('sheet'));
+    s.open('overlay', () => closed.push('confirm'));
     f.settle();
     expect(f.depth).toBe(2);
     f.pressBack();
@@ -85,8 +85,8 @@ describe('back stack', () => {
   it('gives the entry back when an overlay closes another way, without taking that for a Back', () => {
     const { f, s } = setup();
     const closed: string[] = [];
-    s.open(() => closed.push('sheet'));
-    const releaseConfirm = s.open(() => closed.push('confirm'));
+    s.open('overlay', () => closed.push('sheet'));
+    const releaseConfirm = s.open('overlay', () => closed.push('confirm'));
     f.settle();
     releaseConfirm();
     f.settle();
@@ -100,7 +100,7 @@ describe('back stack', () => {
   it('does nothing when an overlay closed by Back releases its entry as it unmounts', () => {
     const { f, s } = setup();
     let release = () => {};
-    release = s.open(() => release());
+    release = s.open('overlay', () => release());
     f.settle();
     f.pressBack();
     f.settle();
@@ -110,9 +110,9 @@ describe('back stack', () => {
 
   it('keeps the history and the stack the same depth through mixed closes', () => {
     const { f, s } = setup();
-    const a = s.open(() => a());
-    const b = s.open(() => b());
-    const c = s.open(() => c());
+    const a = s.open('overlay', () => a());
+    const b = s.open('overlay', () => b());
+    const c = s.open('overlay', () => c());
     f.settle();
     b();
     f.settle();
@@ -127,12 +127,12 @@ describe('back stack', () => {
   it('keeps one entry when a view closes and another opens at once (a sheet swapped for the editor)', () => {
     const { f, s } = setup();
     const closed: string[] = [];
-    s.open(() => closed.push('tab'));
-    const sheet = s.open(() => closed.push('sheet'));
+    s.open('tab', () => closed.push('tab'));
+    const sheet = s.open('overlay', () => closed.push('sheet'));
     f.settle();
     expect(f.depth).toBe(2);
     sheet();
-    s.open(() => closed.push('editor'));
+    s.open('overlay', () => closed.push('editor'));
     f.settle();
     expect(f.depth).toBe(2);
     f.pressBack();
@@ -145,13 +145,13 @@ describe('back stack', () => {
   it('opens nothing over its own traversal still on its way, and catches up when it lands', () => {
     const { f, s } = setup();
     const closed: string[] = [];
-    s.open(() => closed.push('tab'));
-    const sheet = s.open(() => closed.push('sheet'));
+    s.open('tab', () => closed.push('tab'));
+    const sheet = s.open('overlay', () => closed.push('sheet'));
     f.settle();
     sheet();
     f.tick();
     // The traversal giving the sheet's entry back has not landed when the editor opens (in a later task).
-    s.open(() => closed.push('editor'));
+    s.open('overlay', () => closed.push('editor'));
     f.tick();
     f.land();
     f.settle();
@@ -168,7 +168,7 @@ describe('back stack', () => {
     // The page reloads at depth 2 with nothing open.
     const reloaded = createBackStack(f.h, { later: f.later, held: 2 });
     f.listen(() => reloaded.popped());
-    s.open(() => {});
+    s.open('overlay', () => {});
     f.settle();
     expect(f.depth).toBe(0);
     expect(reloaded.depth).toBe(0);
@@ -177,13 +177,13 @@ describe('back stack', () => {
   it('keeps an entry opened while another is being given back (details giving way to the editor)', () => {
     const { f, s } = setup();
     const closed: string[] = [];
-    s.open(() => closed.push('tab'));
-    const details = s.open(() => closed.push('details'));
+    s.open('tab', () => closed.push('tab'));
+    const details = s.open('overlay', () => closed.push('details'));
     f.settle();
     expect(f.depth).toBe(2);
     // In one task: the details close (their entry is given back) and the editor opens.
     details();
-    const editor = s.open(() => closed.push('editor'));
+    const editor = s.open('overlay', () => closed.push('editor'));
     f.settle();
     expect(f.depth).toBe(2);
     // The editor saves and gives its entry back: the tab's entry is current again.
@@ -199,9 +199,9 @@ describe('back stack', () => {
 
   it('pushes nothing for an entry released before its turn came', () => {
     const { f, s } = setup();
-    const a = s.open(() => {});
+    const a = s.open('overlay', () => {});
     a();
-    const b = s.open(() => {});
+    const b = s.open('overlay', () => {});
     b();
     f.settle();
     expect(f.depth).toBe(0);
@@ -212,12 +212,12 @@ describe('back stack', () => {
   it('moves nothing when one overlay closes as another opens (a menu item that opens a sheet)', () => {
     const { f, s } = setup();
     const closed: string[] = [];
-    s.open(() => closed.push('shell'));
-    s.open(() => closed.push('list'));
-    const menu = s.open(() => closed.push('menu'));
+    s.open('tab', () => closed.push('shell'));
+    s.open('view', () => closed.push('list'));
+    const menu = s.open('overlay', () => closed.push('menu'));
     f.settle();
     menu();
-    s.open(() => closed.push('editor'));
+    s.open('overlay', () => closed.push('editor'));
     f.settle();
     expect(f.depth).toBe(3);
     f.pressBack();
@@ -230,14 +230,14 @@ describe('back stack', () => {
   it('keeps one entry per holder when the next overlay opens after the close is given back', () => {
     const { f, s } = setup();
     const closed: string[] = [];
-    s.open(() => closed.push('shell'));
-    s.open(() => closed.push('list'));
-    const menu = s.open(() => closed.push('menu'));
+    s.open('tab', () => closed.push('shell'));
+    s.open('view', () => closed.push('list'));
+    const menu = s.open('overlay', () => closed.push('menu'));
     f.settle();
     menu();
     // The menu's close is reconciled, then the sheet opens a microtask later (after the PIN check), before the traversal lands.
     f.tick();
-    s.open(() => closed.push('editor'));
+    s.open('overlay', () => closed.push('editor'));
     f.settle();
     expect(f.depth).toBe(3);
     f.pressBack();
@@ -247,13 +247,60 @@ describe('back stack', () => {
     expect(f.depth).toBe(0);
   });
 
+  it("closes a tab's inner view before the shell's entry, though the view took its entry first", () => {
+    // Coming back to Lists with a list open: the list's layout effect (a child) runs before the shell's.
+    const { f, s } = setup();
+    const closed: string[] = [];
+    s.open('view', () => closed.push('list'));
+    s.open('tab', () => closed.push('shell'));
+    f.settle();
+    expect(f.depth).toBe(2);
+    f.pressBack();
+    expect(closed).toEqual(['list']);
+    f.pressBack();
+    expect(closed).toEqual(['list', 'shell']);
+    expect(f.depth).toBe(0);
+  });
+
+  it('keeps overlays above views and views above the shell, in any order of opening', () => {
+    // Today's first-task link: the Tasks tab and its editor open in one render, the editor's entry first.
+    const { f, s } = setup();
+    const closed: string[] = [];
+    s.open('overlay', () => closed.push('editor'));
+    s.open('view', () => closed.push('view'));
+    s.open('tab', () => closed.push('shell'));
+    s.open('overlay', () => closed.push('confirm'));
+    f.settle();
+    expect(f.depth).toBe(4);
+    for (let i = 0; i < 4; i++) f.pressBack();
+    expect(closed).toEqual(['confirm', 'editor', 'view', 'shell']);
+    expect(f.depth).toBe(0);
+  });
+
+  it('a view opened while an overlay is open goes under it', () => {
+    const { f, s } = setup();
+    const closed: string[] = [];
+    s.open('tab', () => closed.push('shell'));
+    s.open('overlay', () => closed.push('sheet'));
+    // The list editor makes a list and opens it (onCreated) before the editor's close lands.
+    s.open('view', () => closed.push('list'));
+    f.settle();
+    expect(f.depth).toBe(3);
+    f.pressBack();
+    expect(closed).toEqual(['sheet']);
+    f.pressBack();
+    f.pressBack();
+    expect(closed).toEqual(['sheet', 'list', 'shell']);
+    expect(f.depth).toBe(0);
+  });
+
   it('after a reload, opens nothing until its trip back over the old entries has landed', () => {
     const f = fakeHistory();
     f.h.push(1);
     f.h.push(2);
     const s = createBackStack(f.h, { later: f.later, held: 2 });
     f.listen(() => s.popped());
-    s.open(() => {});
+    s.open('overlay', () => {});
     f.tick();
     expect(f.depth).toBe(2);
     f.settle();

@@ -23,7 +23,7 @@ export function PhoneApp() {
 function PhoneShell() {
   const page = PHONE_PAGES.find((p) => p.id === phoneTab.value) ?? PHONE_PAGES[0];
   // Back from another tab returns to Today, as phone apps do; from Today it leaves the app.
-  useBack(() => goPhone('today'), page.id !== 'today');
+  useBack('tab', () => goPhone('today'), page.id !== 'today');
   const back = page.back?.() ?? null;
   return (
     <div class="ph">
@@ -49,7 +49,8 @@ function PhoneShell() {
               key={p.id}
               class={p.id === page.id ? 'on' : ''}
               aria-current={p.id === page.id ? 'page' : undefined}
-              onClick={() => goPhone(p.id)}
+              // The tab shown goes to its top, as a phone's tab bar does.
+              onClick={() => (p.id === page.id ? back?.() : goPhone(p.id))}
             >
               <p.icon size="2.4rem" strokeWidth={p.id === page.id ? 2.2 : 1.8} />
               {p.label}

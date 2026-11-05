@@ -160,15 +160,15 @@ test('Back on the PIN pad or a confirmation cancels it and keeps the screen', as
   expect(errors()).toEqual([]);
 });
 
-test('a reload with a sheet open comes back on Today, and Back still works after', async ({ browser }) => {
+test('a reload with a sheet open comes back on its tab without the sheet, and Back still works after', async ({ browser }) => {
   const { p, errors } = await wallAndPhone(browser, 'reload', { tab: 'Tasks' });
   const page = p.page;
   await phoneCard(page, 'Breakfast').locator('.tk-body').click();
   await page.getByRole('button', { name: 'Edit task' }).click();
   await expect(page.getByRole('dialog', { name: 'Edit task' })).toBeVisible();
   await page.reload();
-  await expect(page.locator('.ph-head h1')).toHaveText('Today');
-  await phoneTab(page, 'Tasks');
+  await expect(page.locator('.ph-head h1')).toHaveText('Tasks');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
   await phoneCard(page, 'Breakfast').locator('.tk-body').click();
   await expect(page.getByTestId('task-details')).toBeVisible();
   await expect.poll(() => page.evaluate(() => (history.state as { manwarBack?: number } | null)?.manwarBack)).toBe(2);

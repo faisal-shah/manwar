@@ -54,7 +54,7 @@ function useVisitRows(): VisitRow[] {
 
 /** Calendar > To assign: the events nobody is assigned to, with a chip per person to assign each in one tap. */
 export function ToAssign() {
-  useBack(() => (calView.value = 'agenda'), true);
+  useBack('view', () => (calView.value = 'agenda'), true);
   // It opens where its button was: the rest of a double tap on that must not open or assign the first event.
   const guard = useOpeningTapGuard();
   const rows = useVisitRows();

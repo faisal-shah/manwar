@@ -7,7 +7,17 @@ import { useLayoutEffect, useRef } from 'preact/hooks';
  * gives its entry back with a history traversal, and the popstate that
  * causes is not taken for a Back. The wall (Fully Kiosk) has no back gesture
  * and pushes nothing.
+ *
+ * Entries sit in level order, whatever order they were taken in: the shell's
+ * (a tab other than Today), then a tab's inner view (an open list, a More
+ * row), then overlays. Preact runs a child's layout effects before its
+ * parent's, so a tab coming back with its inner view open takes the view's
+ * entry before the shell's; Back must still close the view first.
  */
+
+/** What holds an entry, bottom to top. */
+export type BackLevel = 'tab' | 'view' | 'overlay';
+const RANK: Record<BackLevel, number> = { tab: 0, view: 1, overlay: 2 };
 
 export interface HistoryLike {
   /** Add an entry: `depth` entries are now held above the app's own. */
@@ -26,7 +36,7 @@ export function createBackStack(
   } = {},
 ) {
   const later = opts.later ?? queueMicrotask;
-  const stack: { close: () => void }[] = [];
+  const stack: { rank: number; close: () => void }[] = [];
   /** Entries pushed and not gone back over. */
   let held = opts.held ?? 0;
   /** popstate events still to come from our own traversals. */
@@ -61,10 +71,16 @@ export function createBackStack(
   if (held > 0) reconcile();
 
   return {
-    /** Hold an entry until the returned release is called; Back calls `close` instead. */
-    open(close: () => void): () => void {
-      const entry = { close };
-      stack.push(entry);
+    /**
+     * Hold an entry until the returned release is called; Back calls `close`
+     * instead. It goes above the entries of its level and the ones below,
+     * under any of a higher level.
+     */
+    open(level: BackLevel, close: () => void): () => void {
+      const entry = { rank: RANK[level], close };
+      let at = stack.length;
+      while (at > 0 && stack[at - 1].rank > entry.rank) at--;
+      stack.splice(at, 0, entry);
       soon();
       return () => {
         const i = stack.indexOf(entry);
@@ -117,14 +133,15 @@ export function startBack(): void {
 
 /**
  * While mounted and `active`, the phone's Back calls `onBack` (the latest one
- * passed). The entry is taken as the view mounts (a layout effect) and pushed
- * before the next task, so a Back pressed right after opening it closes it.
+ * passed), in `level`'s turn. The entry is taken as the view mounts (a layout
+ * effect) and pushed before the next task, so a Back pressed right after
+ * opening it closes it.
  */
-export function useBack(onBack: () => void, active: boolean): void {
+export function useBack(level: BackLevel, onBack: () => void, active: boolean): void {
   const latest = useRef(onBack);
   latest.current = onBack;
   useLayoutEffect(() => {
     if (!active) return;
-    return phoneStack().open(() => latest.current());
+    return phoneStack().open(level, () => latest.current());
   }, [active]);
 }

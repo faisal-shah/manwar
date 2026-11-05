@@ -15,7 +15,6 @@ import { CategoryBadge } from '../../features/meals/ui';
 import { today } from '../../lib/clock';
 import { dayShort, formatLongDate, fromISODate, weekdayOf } from '../../lib/date';
 import { Button, Empty, IconButton } from '../../ui/controls';
-import { useOpeningTapGuard } from '../../ui/overlays';
 import type { MoreItem } from '../more/items';
 import { mealsOn, planCategory, weekByDay, type PlannedMeal } from './logic';
 
@@ -94,7 +93,6 @@ function Tonight() {
  * phone shows only a few days at once, and today should be one of them).
  */
 function MealsView() {
-  const guard = useOpeningTapGuard();
   const [earlierOpen, setEarlierOpen] = useState(false);
   const cats = visibleCategories.value;
   const days = weekByDay(data.meals.value, weekStartDate.value, cats);
@@ -108,7 +106,7 @@ function MealsView() {
     setEarlierOpen(false);
   };
   return (
-    <div class="ph-stack" {...guard}>
+    <div class="ph-stack">
       <Tonight />
       <div class="pm-weeknav">
         <IconButton label="Previous week" onClick={() => changeWeek(weekOffset.value - 1)}>

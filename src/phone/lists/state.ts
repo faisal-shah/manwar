@@ -3,11 +3,14 @@ import { asParent } from '../../core/lock';
 import type { List } from '../../data/types';
 import { listEditor } from '../../features/lists/ListCard';
 import { clearDone, lists, restoreItems } from '../../features/lists/state';
+import { stored } from '../../lib/stored';
 import { plural } from '../../lib/text';
 import { toast } from '../../ui/overlays';
 
-/** The list open on the phone's Lists tab; null shows every list. */
-export const openListId = signal<string | null>(null);
+const isIdOrNull = (v: unknown): v is string | null => v === null || typeof v === 'string';
+
+/** The list open on the phone's Lists tab; null shows every list. Kept while another tab shows, and for the session (nav.ts). */
+export const openListId = stored<string | null>('manwar.phone.openList.v1', null, isIdOrNull, 'session');
 export const openList = computed(() => lists.value.find((l) => l.id === openListId.value) ?? null);
 
 /** The open list's Add section field is up and focused (its menu's Add section). */

@@ -7,6 +7,7 @@ import { settings } from '../../data/store';
 import type { CalendarView, ISODate } from '../../data/types';
 import { today } from '../../lib/clock';
 import { addDays } from '../../lib/date';
+import { stored } from '../../lib/stored';
 import { focusForView, pageFocus, periodTitle, viewPeriod, type NavSettings, type Period } from './layout';
 
 /* ---------- Navigation ---------- */
@@ -82,29 +83,6 @@ export const navTitle = (nav: CalNav) => periodTitle(nav.view.value, periodOf(na
 export const todayPressed = signal(0);
 
 /* ---------- Per-device preferences ---------- */
-
-/** A signal kept in this device's localStorage under `key` (a stored value `valid` refuses reads as `fallback`). */
-export function stored<T>(key: string, fallback: T, valid: (v: unknown) => v is T): Signal<T> {
-  let initial = fallback;
-  try {
-    const raw = localStorage.getItem(key);
-    if (raw !== null) {
-      const v: unknown = JSON.parse(raw);
-      if (valid(v)) initial = v;
-    }
-  } catch {
-    /* storage unavailable: use the default */
-  }
-  const s = signal(initial);
-  s.subscribe((v) => {
-    try {
-      localStorage.setItem(key, JSON.stringify(v));
-    } catch {
-      /* ignore */
-    }
-  });
-  return s;
-}
 
 const isView = (v: unknown): v is CalendarView => VIEWS.some((x) => x.value === v);
 const isHour = (v: unknown): v is number => typeof v === 'number' && v >= HOUR_MIN && v <= HOUR_MAX;

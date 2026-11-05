@@ -29,6 +29,8 @@ async function openStars(page: Page) {
   await phoneTab(page, 'More');
   await page.getByRole('button', { name: /Stars and rewards/ }).click();
   await expect(page.locator('.ph-head h1')).toHaveText('Stars and rewards');
+  // The view drops a tap within the double-tap time of the one that opened it, near that spot (the first person's row).
+  await page.waitForTimeout(500);
 }
 
 const row = (page: Page, id: string) => page.locator(`.psv-person[data-person="${id}"]`);

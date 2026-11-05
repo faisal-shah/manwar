@@ -332,15 +332,15 @@ test("the phone's Back closes the item editor, then the list, then Lists", async
   expect(p.errors).toEqual([]);
 });
 
-test('after a reload with a list open, Back still steps through the views', async ({ browser }) => {
+test('after a reload with a list open, the list is open again and Back still steps through the views', async ({ browser }) => {
   const hh = name('reload');
   await wall(browser, hh);
   const p = await phone(browser, hh);
   await openList(p.page, 'Grocery List');
   await p.page.reload();
   await expect(p.page.locator('.ph-nav')).toBeVisible({ timeout: 30_000 });
-  // The entries the last page pushed are given up, and the new ones made after that.
-  await openList(p.page, 'Grocery List');
+  // The entries the last page pushed are given up, and the list and its tab take new ones.
+  await expect(p.page.locator('.ph-head h1')).toContainText('Grocery List');
   await back(p.page, 2);
   await expect(p.page.locator('.ph-head h1')).toHaveText('Lists');
   await back(p.page, 1);

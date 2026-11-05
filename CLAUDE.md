@@ -313,17 +313,33 @@ sequenceDiagram
   bottom tab bar. Tabs are `PhonePage`s (`phone/nav.ts`) listed in
   `phone/pages.ts`, each in `src/phone/<tab>/`; More's rows are
   `MoreItem`s in `phone/more/index.tsx`. An inner view sets the header's
-  back arrow through `PhonePage.back`.
+  back arrow through `PhonePage.back`, which a tap on the tab shown also
+  runs (the tab goes to its top). Lists keeps its open list and More its
+  view while another tab shows; Calendar comes back on today's agenda
+  (leaving it resets `agendaStart` and `calView`), so Today's See all
+  always opens the agenda. The tab and those inner views (`phoneTab`,
+  `openListId`, `moreView`, `calView`) are kept in sessionStorage
+  (`stored(..., 'session')`, `lib/stored.ts`), so the update reload after
+  two idle minutes, or a phone bringing back a tab it put away, opens
+  where the parent was; overlays and the agenda's day are not kept, and
+  only ids are (no household data at rest), so a list deleted while the
+  page was away closes with a toast that names no title.
 - **Back gesture** (`ui/back.ts`): on the phone each open overlay
   (`useOverlay` calls `useBack`) or inner view holds one history entry;
   Back closes the top one, and a view closed another way gives its entry
-  back. The stack brings the browser's entries to its depth once per task
-  (a microtask), so a view closed and another opened together (Edit
+  back. Entries keep level order whatever order they were taken in
+  (`BackLevel`: the shell's 'tab', a tab's inner 'view', then 'overlay'),
+  since Preact runs a child's layout effects before its parent's: a tab
+  coming back with its list open takes the list's entry first, and Back
+  must still close the list before leaving the tab. The stack brings the
+  browser's entries to its depth once per task (a microtask), so a view
+  closed and another opened together (Edit
   swapping the event sheet for the editor) share one entry, and it pushes
   nothing while its own traversal is on the way: Chrome applies a push
   made then and traverses past it. It starts with the phone
   (`startBack`), going back over the entries a reload left. Use
-  `useBack(onClose, true)` in any phone view that should close on Back.
+  `useBack('view', onClose, true)` in any phone inner view that should
+  close on Back.
   In e2e, wait for `history.state.manwarBack` to reach the expected depth
   before `page.goBack()` (Playwright's goBack targets an entry).
 - **Double taps on the phone** (`ui/overlays.tsx`): phone sheets fade
@@ -333,7 +349,8 @@ sequenceDiagram
   the rest of that double tap inside them, as dialogs do (`useOverlay`'s
   `content`); a view that opens in place of what was tapped spreads
   `useOpeningTapGuard()` on its root (it drops the pointerdown, mousedown
-  and click, so no field under the second tap takes focus either). An
+  and click, so no field under the second tap takes focus either; every
+  More row's view gets it from `MoreView`'s wrapper). An
   overlay that a tap closes takes
   the rest of that double tap with it (`swallowRestOfTap`, the very next
   tap only; not when Back or something else closed it), or it would press

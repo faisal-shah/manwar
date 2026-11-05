@@ -698,7 +698,9 @@ test('at midnight the agenda moves on, keeps the day looked at in place, and + f
   expect(p.errors).toEqual([]);
 });
 
-test('a reload with a sheet open starts clean, and Back still walks out one step at a time', async ({ browser }) => {
+test('a reload with a sheet open comes back on the agenda without it, and Back still walks out one step at a time', async ({
+  browser,
+}) => {
   const { p } = await pair(browser, 'reload');
   const page = p.page;
   await page.locator(`[data-event="${READING}"]`).click();
@@ -707,9 +709,9 @@ test('a reload with a sheet open starts clean, and Back still walks out one step
   await backDepth(page, 2);
   await page.reload();
   await expect(page.locator('.ph-nav')).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator('.ph-head h1')).toHaveText('November');
   await expect(page.locator('.sheet, .ev-detail')).toHaveCount(0);
-  await backDepth(page, 0);
-  await calTab(page).click();
+  await backDepth(page, 1);
   await page.locator(`[data-event="${READING}"]`).click();
   await expect(page.locator('.ev-detail')).toBeVisible();
   await backDepth(page, 2);

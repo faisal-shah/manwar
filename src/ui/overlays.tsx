@@ -119,7 +119,7 @@ export function useOverlay(onClose: () => void): { scrim: (e: MouseEvent) => voi
   const close = useRef(onClose);
   close.current = onClose;
   // On the phone, Back closes it.
-  useBack(onClose, isPhone);
+  useBack('overlay', onClose, isPhone);
   useEffect(() => {
     onScreen.add(close);
     return () => void onScreen.delete(close);

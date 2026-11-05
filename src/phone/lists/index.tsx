@@ -62,7 +62,7 @@ function Overview() {
 
 /** One list, full screen: Add item at the top, its sections, the Done group at the bottom. */
 function ListView({ list }: { list: List }) {
-  useBack(closeList, true);
+  useBack('view', closeList, true);
   const guard = useOpeningTapGuard();
   const view = groupItems(list, itemsByList.value.get(list.id) ?? [], settling.value);
   return (
@@ -82,9 +82,12 @@ function ListView({ list }: { list: List }) {
  * The open list as this tab last showed it. A list just made here is not in
  * the store for a moment, so the open list is gone only once it was there;
  * kept outside the tab, so a list deleted while another tab showed is
- * noticed on coming back.
+ * noticed on coming back. The list a reload reopened (state.ts) counts as
+ * shown, so one deleted while the page was away is noticed too; only its id
+ * was kept (a phone keeps no household data at rest), so its word has no
+ * title.
  */
-const lastShown = { id: null as string | null, title: '' };
+const lastShown = { id: openListId.peek(), title: '' };
 
 function ListsBody() {
   const id = openListId.value;
@@ -99,7 +102,9 @@ function ListsBody() {
   useCloseWhenGone(
     gone,
     closeList,
-    gone && !editing && !deletedOnThisDevice(id) ? `${lastShown.title} was deleted on another device.` : undefined,
+    gone && !editing && !deletedOnThisDevice(id)
+      ? `${lastShown.title || 'The list you had open'} was deleted on another device.`
+      : undefined,
   );
   const ed = listEditor.value;
   return (

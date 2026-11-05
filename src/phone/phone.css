@@ -101,6 +101,11 @@ html[data-layout='phone'] {
   justify-content: center;
 }
 
+/* A More row's view: only there to catch the rest of the tap that opened it, so it lays out nothing. */
+.ph-view {
+  display: contents;
+}
+
 /* Building blocks for the tabs. */
 .ph-stack {
   display: flex;

@@ -1,9 +1,16 @@
 import { signal } from '@preact/signals';
 import type { ISODate } from '../../data/types';
-import { stored } from '../../features/calendar/state';
+import { stored } from '../../lib/stored';
 
-/** The Calendar tab's view: the agenda, or the events waiting to be assigned. */
-export const calView = signal<'agenda' | 'assign'>('agenda');
+type CalView = 'agenda' | 'assign';
+
+/** The Calendar tab's view: the agenda, or the events waiting to be assigned (kept for the session, nav.ts). */
+export const calView = stored<CalView>(
+  'manwar.phone.calView.v1',
+  'agenda',
+  (v): v is CalView => v === 'agenda' || v === 'assign',
+  'session',
+);
 
 /** The day the agenda starts on (Go to date); null follows today. */
 export const agendaStart = signal<ISODate | null>(null);

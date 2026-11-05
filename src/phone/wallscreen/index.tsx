@@ -7,7 +7,7 @@ import { pairedDevice } from '../../data/session';
 import { data, settings } from '../../data/store';
 import { nowMs, today } from '../../lib/clock';
 import { dateAt, formatTime } from '../../lib/date';
-import { toast, useOpeningTapGuard } from '../../ui/overlays';
+import { toast } from '../../ui/overlays';
 import type { MoreItem } from '../more/items';
 import { describeCommand, wallAsleepGuess } from './logic';
 
@@ -39,14 +39,13 @@ const hhmm = (t: string) => formatTime(dateAt(today.value, t), settings.value.ti
 
 /** More > Wall screen: Sleep now and Wake up for the wall, and what was last asked. */
 function WallScreen() {
-  const guard = useOpeningTapGuard();
   const cmd = command.value;
   const fmt = settings.value.timeFormat;
   const asleep = wallSeemsAsleep.value;
   const sleep = settings.value.sleep;
   const until = formatTime(new Date(sleepNowEnd(sleep, nowMs.value)), fmt);
   return (
-    <div class="ph-stack" {...guard}>
+    <div class="ph-stack">
       <section class={`ph-card pws-state${asleep ? ' asleep' : ''}`} aria-live="polite">
         <span class="pws-icon" aria-hidden="true">
           {asleep ? <Moon size="3rem" /> : <Sun size="3rem" />}

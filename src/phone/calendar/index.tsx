@@ -16,10 +16,11 @@ import './calendar.css';
 
 /** The tab's body: the agenda or To assign, and the calendar's sheets (event details, the editor). */
 function CalendarBody() {
-  // Coming back to the tab starts at today again.
+  // Coming back to the tab (Today's See all, its events) starts on the agenda at today again.
   useEffect(
     () => () => {
       agendaStart.value = null;
+      calView.value = 'agenda';
     },
     [],
   );
