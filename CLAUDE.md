@@ -109,7 +109,8 @@ flowchart LR
 - **Display** (`core/display.ts`): night window switches to the dark theme
   and dims (Fully Kiosk), sleep window blanks the screen, a tap wakes it and
   it stays awake until 3 minutes pass without a touch. "Sleep now" is kept in
-  localStorage so a reload at night does not light the screen.
+  localStorage and the backlight is not touched until the settings load, so
+  a reload at night does not light the screen.
 - **Activity** (`core/activity.ts`): the one source of "someone is using the
   wall" (pointer, key and input events; the on-screen keyboard sends no
   pointer events). Idle return, relock, sleep and the update check read it.

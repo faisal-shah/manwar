@@ -6,6 +6,7 @@ import { expect, test, type Page } from '@playwright/test';
  */
 
 const NOW = 'now=2026-11-04T11:44';
+const FS = 'http://127.0.0.1:8080/v1/projects/demo-manwar/databases/(default)/documents';
 const RUN = Date.now().toString(36);
 let seq = 0;
 const household = () => `e2e-shell-${RUN}-${++seq}`;
@@ -221,6 +222,35 @@ test('Sleep now survives a reload of the page', async ({ page }) => {
   await page.reload();
   await expect(page.locator('.shell')).toBeVisible({ timeout: 20_000 });
   await expect(page.locator('.sleep-screen')).toHaveCount(0);
+});
+
+test('a reload inside the sleep window (an update at night) keeps the backlight off', async ({ page }) => {
+  // Fully Kiosk's brightness call, recorded.
+  await page.addInitScript(() => {
+    const w = window as unknown as { __brightness: number[]; fully: object };
+    w.__brightness = [];
+    w.fully = { setScreenBrightness: (v: number) => w.__brightness.push(v), turnScreenOn: () => {} };
+  });
+  const name = await open(page);
+  await rail(page, 'Sleep').click();
+  await page.locator('.modal .set-switch').click();
+  await page.getByRole('textbox', { name: 'From' }).fill('11:00');
+  await page.getByRole('textbox', { name: 'To' }).fill('13:00');
+  await page.getByRole('button', { name: 'Save' }).click();
+  // The demo cache is in memory: the reload reads the window from the emulator.
+  await expect
+    .poll(async () => {
+      const res = await fetch(`${FS}/households/demo-${name}/settings/main`, { headers: { Authorization: 'Bearer owner' } });
+      const body = (await res.json()) as { fields?: { sleep?: { mapValue: { fields: { enabled?: { booleanValue: boolean } } } } } };
+      return body.fields?.sleep?.mapValue.fields.enabled?.booleanValue ?? false;
+    })
+    .toBe(true);
+
+  await page.reload();
+  await expect(page.locator('.shell')).toBeVisible({ timeout: 20_000 });
+  await expect(page.locator('.sleep-screen')).toBeVisible();
+  const levels = await page.evaluate(() => (window as unknown as { __brightness: number[] }).__brightness);
+  expect(levels).toEqual([0]);
 });
 
 test('a Google connection that needs a reconnect shows on the wall and leads to Settings', async ({ page }) => {
