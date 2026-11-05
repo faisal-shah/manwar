@@ -3,6 +3,9 @@
 .pt {
   display: flex;
   flex-direction: column;
+  /* Landscape: a readable column, not rows the width of the screen. */
+  max-width: 64rem;
+  margin: 0 auto;
 }
 
 /* Whose tasks: a row of chips that scrolls sideways, kept at the top while the list scrolls. */
@@ -138,19 +141,21 @@
  */
 html[data-layout='phone'] .tk-claim {
   min-width: 0;
-  grid-template-columns: repeat(auto-fill, minmax(9.6rem, 1fr));
-  gap: 0.8rem;
+  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+  gap: 0.6rem;
 }
 html[data-layout='phone'] .tk-claim button {
+  gap: 0.6rem;
   min-height: 4.8rem;
-  padding: 1.2rem 0.4rem;
+  padding: 1rem 0.4rem;
+  border-radius: 1.6rem;
   font-size: 1.5rem;
   overflow-wrap: anywhere;
 }
 html[data-layout='phone'] .tk-claim .avatar {
-  width: 6rem !important;
-  height: 6rem !important;
-  font-size: 3rem !important;
+  width: 4.8rem !important;
+  height: 4.8rem !important;
+  font-size: 2.4rem !important;
 }
 html[data-layout='phone'] .tk-pop-rows .tk-late {
   margin-left: 0.6rem;
@@ -176,4 +181,33 @@ html[data-layout='phone'] .tk-ed .seg button {
   min-height: 4.4rem;
   padding: 0.4rem 0.8rem;
   line-height: 1.15;
+}
+
+/*
+ * The task and reward editors' footers: Delete, Cancel and Save share the
+ * width (wrapping when the text is large), and an error takes its own row
+ * above them instead of squeezing them.
+ */
+html[data-layout='phone'] .sheet-foot {
+  flex-wrap: wrap;
+}
+html[data-layout='phone'] .sheet-foot .tk-ed-error {
+  order: -1;
+  flex: 1 1 100%;
+  text-align: start;
+}
+html[data-layout='phone'] .sheet-foot:has(> .btn-danger) > .btn {
+  flex: 1 1 auto;
+  padding: 0 1.4rem;
+}
+
+/* The PIN pad (it guards task and star changes on a phone signed in as the wall): three keys that fit any width. */
+html[data-layout='phone'] .pin-keys {
+  grid-template-columns: repeat(3, minmax(0, 8rem));
+  gap: 1rem 1.4rem;
+}
+html[data-layout='phone'] .pin-keys button {
+  height: auto;
+  aspect-ratio: 1;
+  min-height: 4.8rem;
 }

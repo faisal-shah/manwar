@@ -275,8 +275,8 @@ function DinnerCard() {
                 <span class="pd-meal-emoji" aria-hidden="true">
                   {emoji ?? '🍽️'}
                 </span>
-                <span class="pd-meal-title" dir="auto">
-                  {m.title}
+                <span class="pd-meal-title">
+                  <bdi>{m.title}</bdi>
                 </span>
                 {recipe && recipe.ingredients.length > 0 && (
                   <button type="button" class="btn btn-sm" onClick={() => openIngredients(recipe)}>

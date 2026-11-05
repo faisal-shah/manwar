@@ -1,5 +1,9 @@
 /* The phone's Today tab (class prefix pd-). Sizes in the phone's rem (10px at its default text size). */
 
+.pd {
+  max-width: 64rem;
+  margin: 0 auto;
+}
 .pd-date {
   margin: -0.8rem 0.2rem -0.2rem;
   color: var(--text-2);

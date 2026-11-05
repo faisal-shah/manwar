@@ -18,7 +18,7 @@ function StarsView() {
   const people = profiles.value;
   const rewards = data.rewards.value.filter((r) => !r.archived).sort((a, b) => a.order - b.order || a.cost - b.cost);
   return (
-    <div class="ph-stack">
+    <div class="ph-stack psv">
       <section class="ph-card" aria-label="Stars">
         <h2 class="ph-card-title">Stars</h2>
         {people.length === 0 ? (
@@ -62,8 +62,8 @@ function StarsView() {
                     {r.emoji ?? '🎁'}
                   </span>
                   <span class="ps-reward-text">
-                    <span class="ps-reward-title" dir="auto">
-                      {r.title}
+                    <span class="ps-reward-title">
+                      <bdi>{r.title}</bdi>
                     </span>
                     <span class="ps-reward-sub">
                       {plural(r.cost, 'star')}

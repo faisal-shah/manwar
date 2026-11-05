@@ -100,8 +100,8 @@ function RewardRow({ v, p }: { v: RewardView; p: Profile }) {
           {r.emoji ?? '🎁'}
         </span>
         <span class="ps-reward-text">
-          <span class="ps-reward-title" dir="auto">
-            {r.title}
+          <span class="ps-reward-title">
+            <bdi>{r.title}</bdi>
           </span>
           <span class="ps-reward-sub">
             {done
