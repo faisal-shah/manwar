@@ -18,6 +18,44 @@ async function open(page: Page, name: string, tab: string) {
   await page.locator('.rail button', { hasText: tab }).click();
 }
 
+/*
+ * Documents written straight into the emulator before the page opens (the
+ * owner token bypasses the rules). A household that already has a list is
+ * not given the demo family, so `fresh` is a real first run: one empty
+ * Grocery List and nothing else.
+ */
+const FIRESTORE = 'http://127.0.0.1:8080/v1/projects/demo-manwar/databases/(default)/documents';
+type Plain = string | number | boolean | Plain[] | { [k: string]: Plain };
+const enc = (v: Plain): object =>
+  typeof v === 'string'
+    ? { stringValue: v }
+    : typeof v === 'boolean'
+      ? { booleanValue: v }
+      : typeof v === 'number'
+        ? { integerValue: String(v) }
+        : Array.isArray(v)
+          ? { arrayValue: { values: v.map(enc) } }
+          : { mapValue: { fields: Object.fromEntries(Object.entries(v).map(([k, x]) => [k, enc(x)])) } };
+async function seedDoc(name: string, collection: string, doc: { id: string } & Record<string, Plain>) {
+  const res = await fetch(`${FIRESTORE}/households/demo-e2e-meals-${RUN}-${name}/${collection}/${doc.id}`, {
+    method: 'PATCH',
+    headers: { Authorization: 'Bearer owner', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fields: Object.fromEntries(Object.entries(doc).map(([k, x]) => [k, enc(x)])) }),
+  });
+  expect(res.ok).toBe(true);
+}
+const fresh = (name: string) =>
+  seedDoc(name, 'lists', {
+    id: 'grocery',
+    title: 'Grocery List',
+    kind: 'grocery',
+    emoji: '🛒',
+    sections: [],
+    isDefaultGrocery: true,
+    order: 0,
+    createdAt: 1,
+  });
+
 const groceryCard = (page: Page) => page.locator('.list-card', { has: page.locator('.lc-title', { hasText: 'Grocery List' }) });
 
 test.afterEach(() => expect(errors).toEqual([]));
@@ -155,4 +193,197 @@ test('a planned meal opens its recipe', async ({ page }) => {
   await page.locator('.popover').getByRole('button', { name: 'Open recipe' }).click();
   await expect(page.locator('.rail button.on')).toContainText('Recipes');
   await expect(page.locator('.recipe-card .rc-title')).toHaveText('Chicken biryani');
+});
+
+test('the item editor keeps a move made before Save', async ({ page }) => {
+  await open(page, 'item-move-save', 'Lists');
+  const produce = groceryCard(page).locator('.ls-group', { has: page.locator('.ls-title', { hasText: 'Produce' }) });
+  await produce.locator('.li-text', { hasText: 'Spinach' }).click();
+  const pop = page.locator('.popover .item-editor');
+  await pop.getByRole('button', { name: 'Move up' }).click();
+  await expect(produce.locator('.li-text > span:first-child')).toHaveText(['Spinach', 'Bananas', 'Onions']);
+  await pop.getByLabel('Quantity').fill('1 bag');
+  await pop.getByRole('button', { name: 'Save' }).click();
+  await expect(produce.locator('.li-row', { hasText: 'Spinach' }).locator('.li-qty')).toHaveText('1 bag');
+  await expect(produce.locator('.li-text > span:first-child')).toHaveText(['Spinach', 'Bananas', 'Onions']);
+});
+
+test('grocery items made of emoji, or starting with a percentage, are added as typed', async ({ page }) => {
+  await open(page, 'emoji-items', 'Lists');
+  const card = groceryCard(page);
+  const field = card.getByLabel('Add item to Grocery List');
+  for (const text of ['🍎', '🍌', '2% milk']) {
+    await field.fill(text);
+    await field.press('Enter');
+    await expect(card.locator('.li-text > span:first-child', { hasText: text })).toHaveCount(1);
+  }
+  await expect(page.locator('.toast')).toHaveCount(0);
+  await expect(card.locator('.lc-count')).toHaveText('10');
+});
+
+test('unchecking an item while it settles shows it unchecked at once', async ({ page }) => {
+  await open(page, 'settle-uncheck', 'Lists');
+  const box = groceryCard(page).locator('.li-row', { hasText: 'Bananas' }).getByRole('checkbox');
+  await box.click();
+  await expect(box).toHaveAttribute('aria-checked', 'true');
+  await box.click();
+  // The settle delay is 700 ms; the box must not keep showing a check through it.
+  await expect(box).toHaveAttribute('aria-checked', 'false', { timeout: 250 });
+  await expect(groceryCard(page).locator('.lc-count')).toHaveText('7');
+});
+
+test("a toast's Add ingredients opens the modal on whatever tab is showing", async ({ page }) => {
+  await open(page, 'toast-elsewhere', 'Meals');
+  await page.locator('[data-cell="2026-11-07|lunch"]').click();
+  await page.getByRole('dialog', { name: 'Plan meal' }).locator('.pick-row', { hasText: 'Spaghetti' }).click();
+  await page.locator('.rail button', { hasText: 'Lists' }).click();
+  await page.locator('.toast').getByRole('button', { name: 'Add ingredients' }).click();
+  const modal = page.getByRole('dialog', { name: 'Add to Grocery List?' });
+  await expect(modal).toBeVisible();
+  await modal.getByRole('button', { name: 'Add 5 items' }).click();
+  await expect(groceryCard(page).locator('.li-row', { hasText: 'Marinara' })).toHaveCount(1);
+  await page.locator('.rail button', { hasText: 'Meals' }).click();
+  await expect(modal).toBeHidden();
+});
+
+test('a meal tapped on the calendar opens the Meals tab at its week', async ({ page }) => {
+  await seedDoc('cal-meal-week', 'meals', {
+    id: 'later',
+    date: '2026-11-10',
+    category: 'dinner',
+    title: 'Fish tacos',
+    order: 0,
+    createdAt: 1,
+  });
+  await open(page, 'cal-meal-week', 'Calendar');
+  await page.getByRole('button', { name: 'Next', exact: true }).click();
+  await page.locator('.cal-meal', { hasText: 'Fish tacos' }).click();
+  await expect(page.locator('.rail button.on')).toContainText('Meals');
+  await expect(page.locator('[data-cell="2026-11-10|dinner"] .mg-entry')).toContainText('Fish tacos');
+  await expect(page.locator('.topbar')).toContainText('Nov 8 - 14');
+});
+
+test('renaming a recipe renames the meals planned from it, not ones retitled by hand', async ({ page }) => {
+  await open(page, 'recipe-rename', 'Meals');
+  // Retitle one of the two planned biryanis by hand.
+  await page.locator('[data-cell="2026-11-07|dinner"] .mg-entry').click();
+  await page.locator('.popover').getByRole('button', { name: 'Edit meal' }).click();
+  const sheet = page.getByRole('dialog', { name: 'Edit meal' });
+  await sheet.getByPlaceholder('Tacos').fill('Leftover biryani');
+  await sheet.getByRole('button', { name: 'Save' }).click();
+
+  await page.locator('.rail button', { hasText: 'Recipes' }).click();
+  await page.locator('.rl-row', { hasText: 'Chicken biryani' }).click();
+  await page.getByRole('button', { name: 'Edit recipe' }).click();
+  const editor = page.getByRole('dialog', { name: 'Edit recipe' });
+  await editor.getByPlaceholder('Chicken biryani').fill('Hyderabadi biryani');
+  await editor.getByRole('button', { name: 'Save' }).click();
+
+  await page.locator('.rail button', { hasText: 'Meals' }).click();
+  await expect(page.locator('[data-cell="2026-11-04|dinner"] .mg-entry')).toContainText('Hyderabadi biryani');
+  await expect(page.locator('[data-cell="2026-11-07|dinner"] .mg-entry')).toContainText('Leftover biryani');
+});
+
+test('a first-run household plans a typed meal and adds its pasted ingredients after deleting its only list', async ({
+  page,
+}) => {
+  await fresh('first-run');
+  await open(page, 'first-run', 'Lists');
+  await page.getByRole('button', { name: 'Grocery List menu' }).click();
+  await page.getByRole('button', { name: 'Delete list' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Delete' }).click();
+  await expect(page.locator('.tab-body')).toContainText('No lists yet.');
+
+  await page.locator('.rail button', { hasText: 'Meals' }).click();
+  await page.locator('[data-cell="2026-11-05|dinner"]').click();
+  // No recipes yet: the sheet opens on New entry, the only way to plan.
+  const sheet = page.getByRole('dialog', { name: 'Plan meal' });
+  await expect(sheet.getByRole('tab', { name: 'New entry' })).toHaveAttribute('aria-selected', 'true');
+  await sheet.getByPlaceholder('Tacos').fill('Pancakes');
+  await sheet.getByRole('switch', { name: 'Save to recipes' }).click();
+  await sheet.getByPlaceholder(/1 lb ground beef/).fill('Ingredients:\n1. 2 cups flour\n2. 3 eggs\n• 2% milk\n');
+  await sheet.getByRole('button', { name: 'Plan meal' }).click();
+  await page.locator('.toast').getByRole('button', { name: 'Add ingredients' }).click();
+  const modal = page.getByRole('dialog', { name: 'Add to Grocery List?' });
+  await expect(modal.locator('.im-text')).toHaveText(['2 cups flour', '3 eggs', '2% milk']);
+  await modal.getByRole('button', { name: 'Add 3 items' }).click();
+
+  await page.locator('.rail button', { hasText: 'Lists' }).click();
+  const card = groceryCard(page);
+  await expect(card.locator('.li-text > span:first-child')).toHaveText(['Flour', 'Eggs', '2% milk']);
+  await expect(card.locator('.li-qty')).toHaveText(['2 cups', '3']);
+});
+
+test('deleting the grocery list never sends ingredients to a to-do list', async ({ page }) => {
+  await open(page, 'default-handoff', 'Lists');
+  await page.getByRole('button', { name: 'Grocery List menu' }).click();
+  await page.getByRole('button', { name: 'Delete list' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Delete' }).click();
+  await page.locator('.fab').click();
+  const editor = page.getByRole('dialog', { name: 'New list' });
+  await editor.getByPlaceholder('Grocery List').fill('Groceries');
+  await editor.getByRole('tab', { name: 'Grocery' }).click();
+  await editor.getByRole('button', { name: 'Add list' }).click();
+  await page.locator('.rail button', { hasText: 'Recipes' }).click();
+  await page.locator('.rl-row', { hasText: 'Pancakes' }).click();
+  await page.getByRole('button', { name: 'Add to grocery list' }).click();
+  await expect(page.getByRole('dialog', { name: 'Add to Groceries?' })).toBeVisible();
+});
+
+test('a crowded meal cell keeps its + clear of the meals and scrolls them', async ({ page }) => {
+  for (let i = 0; i < 5; i++)
+    await seedDoc('crowded', 'meals', {
+      id: `m${i}`,
+      date: '2026-11-03',
+      category: 'dinner',
+      title: `Dish number ${i + 1}`,
+      order: i,
+      createdAt: 1,
+    });
+  await open(page, 'crowded', 'Meals');
+  const cell = page.locator('[data-cell="2026-11-03|dinner"]');
+  await expect(cell.locator('.mg-entry')).toHaveCount(5);
+  const list = (await cell.locator('.mg-list').boundingBox())!;
+  const add = (await cell.locator('.mg-add').boundingBox())!;
+  expect(add.y).toBeGreaterThanOrEqual(list.y + list.height - 1);
+  expect(await cell.locator('.mg-list').evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true);
+  await cell.locator('.mg-list').evaluate((el) => (el.scrollTop = el.scrollHeight));
+  await cell.locator('.mg-entry', { hasText: 'Dish number 5' }).click();
+  await expect(page.locator('.popover .mp-title')).toHaveText('Dish number 5');
+});
+
+test('the recipe view wraps long unbroken names, ingredients and source addresses', async ({ page }) => {
+  const long = 'Supercalifragilisticexpialidocious'.repeat(3);
+  await open(page, 'recipe-wrap', 'Recipes');
+  await page.locator('.fab').click();
+  const sheet = page.getByRole('dialog', { name: 'New recipe' });
+  await sheet.getByPlaceholder('Chicken biryani').fill(long);
+  await sheet.getByPlaceholder(/2 lb chicken thighs/).fill(`For the sauce:\n2 cups ${long}`);
+  await sheet.getByPlaceholder('One step per line, or a paragraph').fill(`Stir the ${long} well.`);
+  await sheet.getByPlaceholder('https://').fill(`https://example.com/${long}/${long}`);
+  await sheet.getByRole('button', { name: 'Add recipe' }).click();
+  const card = page.locator('.recipe-card');
+  await expect(card.locator('.rc-title')).toHaveText(long);
+  expect(await card.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(1);
+  // A line ending in a colon is a heading, not an ingredient.
+  await expect(card.locator('.rc-ingredients li.rc-ing-head')).toHaveText('For the sauce');
+});
+
+test('a meal category named with an emoji shows the whole emoji in its badge', async ({ page }) => {
+  await open(page, 'emoji-category', 'Meals');
+  await page.getByRole('button', { name: 'Filter' }).click();
+  await page.getByRole('button', { name: 'Edit Snack' }).click();
+  await page.getByLabel('Rename Snack').fill('🍿 Treats');
+  await page.getByLabel('Rename Snack').press('Enter');
+  await expect(page.locator('.mg-cat', { hasText: 'Treats' }).locator('.cat-badge')).toHaveText('🍿');
+});
+
+test('the item editor stays on screen when the keyboard shrinks the page', async ({ page }) => {
+  await open(page, 'keyboard', 'Lists');
+  await groceryCard(page).locator('.li-text', { hasText: 'Pita bread' }).click();
+  const pop = page.locator('.popover');
+  await expect(pop).toBeVisible();
+  await page.setViewportSize({ width: 1600, height: 560 });
+  await expect(pop.getByLabel('Item')).toBeInViewport();
+  await expect(pop.getByRole('button', { name: 'Save' })).toBeInViewport();
 });
