@@ -127,6 +127,7 @@ describe('google calendar: reading events', () => {
       undefined,
     ]);
     expect(ev.key).toBe(`${CAL}::dentist1`);
+    expect([ev.timeZone, ev.endTimeZone]).toEqual(['America/Los_Angeles', 'America/Los_Angeles']);
   });
 
   it('maps all-day dates to local midnights with an exclusive end', async () => {
@@ -700,6 +701,8 @@ describe('google calendar: writing events', () => {
       key: `${CAL}::call`,
       start: new Date('2026-11-07T16:00:00Z'),
       end: new Date('2026-11-07T16:30:00Z'),
+      timeZone: 'Europe/London',
+      endTimeZone: 'Europe/London',
     };
     const draft: EventDraft = {
       title: 'Call with Nani',
@@ -714,10 +717,18 @@ describe('google calendar: writing events', () => {
     it('a timed event keeps its own time zone and its reminders', async () => {
       routes.push((c) => (c.method === 'PATCH' ? { body: { id: 'call' } } : undefined));
       await googleSource.update(london, draft, 'all');
-      expect(calls[0].body.start).toEqual({ date: null, dateTime: '2026-11-07T16:00:00.000Z' });
-      expect(calls[0].body.end).toEqual({ date: null, dateTime: '2026-11-07T16:30:00.000Z' });
+      expect(calls[0].body.start).toEqual({ date: null, dateTime: '2026-11-07T16:00:00.000Z', timeZone: 'Europe/London' });
+      expect(calls[0].body.end).toEqual({ date: null, dateTime: '2026-11-07T16:30:00.000Z', timeZone: 'Europe/London' });
       expect(calls[0].body).not.toHaveProperty('reminders');
       expect(calls[0].body).not.toHaveProperty('recurrence');
+    });
+
+    it('a one-off event without a zone that starts to repeat gets the tablet\'s', async () => {
+      routes.push((c) => (c.method === 'PATCH' ? { body: { id: 'call' } } : undefined));
+      const plain = { ...london, timeZone: undefined, endTimeZone: undefined };
+      await googleSource.update(plain, { ...draft, keepRecurrence: false, repeat: { every: 1, unit: 'week' } }, 'all');
+      expect(calls[0].body.start.timeZone).toBe('America/Chicago');
+      expect(calls[0].body.recurrence).toEqual(['RRULE:FREQ=WEEKLY']);
     });
 
     it('a changed reminder replaces the reminders', async () => {
@@ -745,7 +756,7 @@ describe('google calendar: writing events', () => {
       const later = (d: Date) => new Date(d.getTime() + 30 * 60_000);
       await googleSource.update(occ, { ...draft, start: later(occ.start), end: later(occ.end) }, 'all');
       const patch = calls.find((c) => c.method === 'PATCH')!.body;
-      expect(patch.start).toEqual({ date: null, dateTime: '2026-10-31T16:30:00.000Z' });
+      expect(patch.start).toEqual({ date: null, dateTime: '2026-10-31T16:30:00.000Z', timeZone: 'Europe/London' });
     });
   });
 

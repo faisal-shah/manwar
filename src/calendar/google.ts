@@ -124,26 +124,31 @@ function toCalEvent(calendarId: string, g: GEvent, role: AccessRole): CalEvent {
       g.locked !== true &&
       (!g.organizer || g.organizer.self === true || g.guestsCanModify === true),
     reminderMinutes: popup,
+    timeZone: g.start.timeZone || undefined,
+    endTimeZone: g.end.timeZone || undefined,
   };
 }
 
-/** Time zones for a timed start and end. One left out keeps the event's own (PATCH merges). */
+/** Time zones to write with a timed start and end. */
 interface Zones {
-  start?: string;
-  end?: string;
+  start: string;
+  end: string;
 }
-const deviceZones = (): Zones => ({ start: zone(), end: zone() });
 
 /**
- * Zones for a change to an event that may be timed already: its own stay (a
- * weekly call set in London time keeps following London's clock changes, a
- * flight keeps its arrival zone), and only one that was all-day takes the
- * tablet's.
+ * Zones for a change to an event: a timed one keeps its own (a weekly call
+ * set in London time keeps following London's clock changes, a flight keeps
+ * its arrival zone); an all-day one, or one without a zone, takes the
+ * tablet's. Always written, since a recurrence needs one.
  */
-const keepZones = (wasAllDay: boolean): Zones => (wasAllDay ? deviceZones() : {});
+function zonesOf(wasAllDay: boolean, start?: string | null, end?: string | null): Zones {
+  const tablet = zone();
+  if (wasAllDay) return { start: tablet, end: tablet };
+  return { start: start || tablet, end: end || start || tablet };
+}
 
 function draftBody(d: EventDraft, zones: Zones): Partial<GEvent> {
-  const timed = (at: Date, timeZone?: string): GTime => ({ date: null, dateTime: at.toISOString(), ...(timeZone && { timeZone }) });
+  const timed = (at: Date, timeZone: string): GTime => ({ date: null, dateTime: at.toISOString(), timeZone });
   const body: Partial<GEvent> = {
     summary: d.title,
     description: d.description ?? '',
@@ -283,7 +288,7 @@ export const googleSource: CalendarSource = {
   async insert(calendarId, id, draft) {
     const cal = encodeURIComponent(calendarId);
     // A new event is in the tablet's time zone.
-    const body = draftBody(draft, deviceZones());
+    const body = draftBody(draft, zonesOf(true));
     try {
       await call<GEvent>(`/calendars/${cal}/events`, { method: 'POST', body: JSON.stringify({ ...body, id }) });
     } catch (e) {
@@ -296,20 +301,21 @@ export const googleSource: CalendarSource = {
   async update(ev, draft, scope) {
     const cal = encodeURIComponent(ev.calendarId);
     if (!ev.seriesId || scope === 'this') {
-      const body = draftBody({ ...draft, keepRecurrence: ev.seriesId ? true : draft.keepRecurrence }, keepZones(ev.allDay));
+      const body = draftBody(
+        { ...draft, keepRecurrence: ev.seriesId ? true : draft.keepRecurrence },
+        zonesOf(ev.allDay, ev.timeZone, ev.endTimeZone),
+      );
       await call(`/calendars/${cal}/events/${encodeURIComponent(ev.id)}`, { method: 'PATCH', body: JSON.stringify(body) });
       return {};
     }
     const master = await call<GEvent>(`/calendars/${cal}/events/${encodeURIComponent(ev.seriesId)}`);
     const masterStart = parseTime(master.start).at;
     const seriesAllDay = !master.start.dateTime;
+    const zones = zonesOf(seriesAllDay, master.start.timeZone, master.end.timeZone);
     const cut = seriesStart(ev);
     if (scope === 'following' && toISODate(masterStart) < toISODate(cut)) {
       // Start a new series here, then end the old one just before this occurrence.
       const lines = master.recurrence ?? [];
-      const zones = seriesAllDay
-        ? deviceZones()
-        : { start: master.start.timeZone ?? zone(), end: master.end.timeZone ?? master.start.timeZone ?? zone() };
       const body = { ...carried(master), ...draftBody({ ...draft, keepRecurrence: false }, zones) };
       if (draft.keepRecurrence) {
         // A COUNT rule continues with the occurrences it has left, not a fresh COUNT.
@@ -343,7 +349,7 @@ export const googleSource: CalendarSource = {
     }
     await call(`/calendars/${cal}/events/${encodeURIComponent(ev.seriesId)}`, {
       method: 'PATCH',
-      body: JSON.stringify(draftBody(moved, keepZones(seriesAllDay))),
+      body: JSON.stringify(draftBody(moved, zones)),
     });
     return {};
   },

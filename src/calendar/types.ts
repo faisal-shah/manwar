@@ -38,6 +38,9 @@ export interface CalEvent {
   editable: boolean;
   /** Minutes-before popup reminder, if the event overrides the calendar default. */
   reminderMinutes?: number | null;
+  /** Timed events: the time zones Google keeps the start and end in, when set (edits keep them). */
+  timeZone?: string;
+  endTimeZone?: string;
 }
 
 /** What the editor produces. */
