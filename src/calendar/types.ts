@@ -56,6 +56,7 @@ export interface EventDraft {
   /** Keep the series' original RRULE lines when the repeat was not edited. */
   keepRecurrence?: boolean;
   location?: string;
+  /** Notes: '' clears them; left out, the event keeps its own (they may not have been loaded). */
   description?: string;
   reminderMinutes?: number | null;
   /**

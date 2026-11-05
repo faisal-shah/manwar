@@ -673,6 +673,7 @@ describe('google calendar: writing events', () => {
                 reminders,
                 guestsCanModify: true,
                 hangoutLink: 'https://meet.google.com/abc-defg-hij',
+                description: 'WhatsApp video, Nani calls',
               }),
             }
           : undefined,
@@ -697,6 +698,7 @@ describe('google calendar: writing events', () => {
       const post = calls.find((c) => c.method === 'POST')!.body;
       expect(post).toMatchObject({
         summary: 'Call with Nani and Nana',
+        description: 'WhatsApp video, Nani calls',
         colorId: '5',
         attendees,
         reminders,
@@ -957,7 +959,6 @@ describe('google calendar: writing events', () => {
       expect(calls[0].body).toEqual({
         id: 'new1',
         summary: 'Piano',
-        description: '',
         location: '',
         start: { date: null, dateTime: '2026-11-09T22:15:00.000Z', timeZone: 'America/Chicago' },
         end: { date: null, dateTime: '2026-11-09T22:45:00.000Z', timeZone: 'America/Chicago' },
@@ -971,7 +972,6 @@ describe('google calendar: writing events', () => {
       expect(sent()).toEqual(['PATCH /piano_20261111T220000Z']);
       expect(calls[0].body).toEqual({
         summary: 'Piano',
-        description: '',
         location: '',
         start: { date: null, dateTime: '2026-11-11T22:15:00.000Z', timeZone: 'America/Chicago' },
         end: { date: null, dateTime: '2026-11-11T22:45:00.000Z', timeZone: 'America/Chicago' },

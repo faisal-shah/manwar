@@ -185,6 +185,13 @@ describe('event notes', () => {
     expect(f.notes).toBe(plainText(html));
     expect(draftFromForm({ ...f, title: 'Field trip!' }, false).description).toBe(html);
     expect(draftFromForm({ ...f, notes: 'Only water' }, false).description).toBe('Only water');
-    expect(draftFromForm({ ...f, notes: '  ' }, false).description).toBeUndefined();
+    // Cleared notes clear the event's.
+    expect(draftFromForm({ ...f, notes: '  ' }, false).description).toBe('');
+  });
+  it('leaves notes out when the event was read without any', () => {
+    // Saved from an offline snapshot too big to keep notes: empty notes must not wipe the real ones.
+    const bare = formFromEvent({ ...ev, description: undefined }, ['asiyah'], false);
+    expect(draftFromForm({ ...bare, title: 'Field trip!' }, false).description).toBeUndefined();
+    expect(draftFromForm({ ...bare, notes: 'Bring water' }, false).description).toBe('Bring water');
   });
 });

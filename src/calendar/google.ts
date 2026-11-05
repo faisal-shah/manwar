@@ -179,7 +179,7 @@ function draftBody(d: EventDraft, zones: Zones): Partial<GEvent> {
   const timed = (at: Date, timeZone: string): GTime => ({ date: null, dateTime: at.toISOString(), timeZone });
   const body: Partial<GEvent> = {
     summary: d.title,
-    description: d.description ?? '',
+    ...(d.description !== undefined && { description: d.description }),
     location: d.location ?? '',
     // PATCH merges nested objects: clear the other kind of time, or a timed <-> all-day change is rejected.
     start: d.allDay ? { date: d.firstDay ?? toISODate(d.start), dateTime: null, timeZone: null } : timed(d.start, zones.start),
@@ -202,6 +202,7 @@ function draftBody(d: EventDraft, zones: Zones): Partial<GEvent> {
  * stay invited, the color, reminders and visibility stay.
  */
 const CARRIED = [
+  'description',
   'colorId',
   'transparency',
   'visibility',

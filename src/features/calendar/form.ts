@@ -97,7 +97,10 @@ export function draftFromForm(f: Form, keepRecurrence: boolean): EventDraft {
     repeat: f.repeat,
     keepRecurrence,
     location: f.location.trim() || undefined,
-    description: f.description && f.notes === f.description.shown ? f.description.raw : f.notes.trim() || undefined,
+    // Untouched notes go back as they came; cleared ones are cleared. Empty notes on an event read without
+    // any (an offline snapshot too big to keep them) are left out, so they cannot wipe notes not loaded.
+    description:
+      f.description && f.notes === f.description.shown ? f.description.raw : f.notes.trim() || (f.description ? '' : undefined),
     reminderMinutes,
     keepReminders: f.loadedReminder !== undefined && f.reminder === f.loadedReminder,
   };
