@@ -5,14 +5,13 @@ import { settings } from '../../../data/store';
 import type { ISODate } from '../../../data/types';
 import { now, today } from '../../../lib/clock';
 import { dateRange, diffDays, formatTime, isWeekend } from '../../../lib/date';
-import { layoutLanes, packRows, periodHasToday } from '../layout';
+import { layoutLanes, packRows, periodHasToday, segmentOn } from '../layout';
 import {
   fillStyle,
   isPast,
   isUnassigned,
   itemsByDay,
   nowMinute,
-  segmentOn,
   timeLabel,
   type DayItems,
   type MealItem,

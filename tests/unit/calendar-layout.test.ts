@@ -10,6 +10,7 @@ import {
   pageFocus,
   periodTitle,
   rangeLabel,
+  segmentOn,
   viewPeriod,
   type NavSettings,
 } from '../../src/features/calendar/layout';
@@ -76,6 +77,27 @@ describe('layoutLanes', () => {
         { id: 'b', s: 60, e: 90 },
       ]),
     ).toEqual({ b: [0, 2], a: [1, 2] });
+  });
+});
+
+describe('segmentOn', () => {
+  // US clocks go back from 2:00 CDT to 1:00 CST on Nov 1, 2026, and forward on Mar 8, 2026 (tests run in Chicago).
+  const seg = (start: string, end: string, day: string) => segmentOn({ start: new Date(start), end: new Date(end) }, day);
+  it('places events by the wall clock, clipped to the day', () => {
+    expect(seg('2026-11-04T09:30', '2026-11-04T10:15', '2026-11-04')).toEqual({ startMin: 570, endMin: 615 });
+    expect(seg('2026-11-04T22:00', '2026-11-05T02:00', '2026-11-04')).toEqual({ startMin: 1320, endMin: 1440 });
+    expect(seg('2026-11-04T22:00', '2026-11-05T02:00', '2026-11-05')).toEqual({ startMin: 0, endMin: 120 });
+    // After the clocks go back or forward, later events sit at their clock times.
+    expect(seg('2026-11-01T09:00:00-06:00', '2026-11-01T10:00:00-06:00', '2026-11-01')).toEqual({ startMin: 540, endMin: 600 });
+    expect(seg('2026-03-08T09:00:00-05:00', '2026-03-08T10:00:00-05:00', '2026-03-08')).toEqual({ startMin: 540, endMin: 600 });
+  });
+  it('draws an event ending in the repeated hour for as long as it lasts', () => {
+    // 1:30 AM CDT for 45 minutes ends at 1:15 AM CST.
+    expect(seg('2026-11-01T01:30:00-05:00', '2026-11-01T01:15:00-06:00', '2026-11-01')).toEqual({ startMin: 90, endMin: 135 });
+    // 1:00 AM CDT for an hour ends at 1:00 AM CST.
+    expect(seg('2026-11-01T01:00:00-05:00', '2026-11-01T01:00:00-06:00', '2026-11-01')).toEqual({ startMin: 60, endMin: 120 });
+    // A zero-length event stays zero-length (the views give it a minimum height).
+    expect(seg('2026-11-01T01:30:00-05:00', '2026-11-01T01:30:00-05:00', '2026-11-01')).toEqual({ startMin: 90, endMin: 90 });
   });
 });
 

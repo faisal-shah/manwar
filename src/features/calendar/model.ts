@@ -6,7 +6,6 @@ import { nowMs } from '../../lib/clock';
 import { EVERYONE, type ISODate, type MealCategory, type MealEntry, type Profile } from '../../data/types';
 import {
   addDays,
-  dateAt,
   dayShort,
   formatHeaderDate,
   formatLongDate,
@@ -164,19 +163,4 @@ export function countdownEmoji(ev: CalEvent): string | undefined {
     [/visit/, '🏡'],
   ];
   return guesses.find(([re]) => re.test(t))?.[1];
-}
-
-/** Minutes after midnight on `day` where a timed segment starts and ends (clipped to the day). */
-export function segmentOn(ev: CalEvent, day: ISODate): { startMin: number; endMin: number } {
-  const dayStart = dateAt(day).getTime();
-  const dayEnd = dateAt(addDays(day, 1)).getTime();
-  const s = Math.max(ev.start.getTime(), dayStart);
-  const e = Math.min(ev.end.getTime(), dayEnd);
-  // Minutes from local midnight, DST-safe by using wall-clock fields.
-  const toMin = (t: number, isEnd: boolean) => {
-    if (isEnd && t >= dayEnd) return 24 * 60;
-    const d = new Date(t);
-    return toISODate(d) === day ? d.getHours() * 60 + d.getMinutes() : 0;
-  };
-  return { startMin: toMin(s, false), endMin: toMin(e, true) };
 }
