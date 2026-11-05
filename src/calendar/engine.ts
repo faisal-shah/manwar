@@ -80,7 +80,7 @@ interface Snapshot {
   from: ISODate;
   to: ISODate;
   at: number;
-  /** When each calendar's events were fetched (a snapshot from before this was kept has only `at`). */
+  /** When each calendar's events were fetched; a calendar that never answered is missing. */
   syncedAt?: Record<string, number>;
 }
 
@@ -140,7 +140,11 @@ function loadSnapshot(household: string) {
       end: new Date(e.end),
       originalStart: e.originalStart === undefined ? undefined : new Date(e.originalStart),
     }));
-    for (const c of s.calendars) syncedAt.set(c.id, s.syncedAt?.[c.id] ?? s.at);
+    // A calendar missing from syncedAt never answered; a snapshot from before syncedAt was kept has only `at`.
+    for (const c of s.calendars) {
+      const at = s.syncedAt ? s.syncedAt[c.id] : s.at;
+      if (at !== undefined) syncedAt.set(c.id, at);
+    }
     sync.value = { ...sync.value, lastSync: s.at };
   } catch {
     /* corrupt snapshot: ignore */

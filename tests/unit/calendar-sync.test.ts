@@ -167,6 +167,34 @@ describe('calendar sync across a change of account', () => {
     expect(engine.sync.value.error).toBe('Failed to fetch');
   });
 
+  it('remembers a calendar that never loaded as never loaded, after a reload', async () => {
+    const at = Date.now() - 3_600_000;
+    // School failed in every fetch before the reload; ours last answered an hour ago.
+    storage.set(
+      'manwar.events.v1',
+      JSON.stringify({
+        household: 'gOurs',
+        calendars: [cal('ours@gmail.com'), cal('school@group.calendar.google.com')],
+        events: [],
+        from: '2026-01-01',
+        to: '2027-01-01',
+        at,
+        syncedAt: { 'ours@gmail.com': at },
+      }),
+    );
+    store.householdId.value = null;
+    await settle();
+    source.listCalendars = async () => {
+      throw new Error('Failed to fetch');
+    };
+    store.householdId.value = 'gOurs';
+    await settle();
+    expect(engine.sync.value.failing).toEqual([
+      { name: 'ours@gmail.com', at },
+      { name: 'school@group.calendar.google.com', at: null },
+    ]);
+  });
+
   it('keeps a snapshot that fits: without notes when they are too big, none rather than an old one', async () => {
     // A calendar with long invitations in its notes.
     const notes = '<p>Join Zoom Meeting https://us02web.zoom.us/j/81234567890</p>'.repeat(60);
