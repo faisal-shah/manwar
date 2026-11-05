@@ -104,7 +104,8 @@
 
 /* One list, full screen: the body under the header scrolls, the Add item field stays on top. */
 html[data-layout='phone'] .ph-body:has(> .phl-card) {
-  padding: 0;
+  /* Clear of a landscape notch: the list reaches the screen edges otherwise. */
+  padding: 0 env(safe-area-inset-right, 0px) 0 env(safe-area-inset-left, 0px);
   overflow: hidden;
 }
 html[data-layout='phone'] .list-card.phl-card {
@@ -120,7 +121,7 @@ html[data-layout='phone'] .phl-card .li-add {
   background: var(--surface-solid);
 }
 html[data-layout='phone'] .phl-card .lc-body {
-  padding: 0.4rem 1.2rem calc(2.4rem + env(safe-area-inset-bottom, 0px));
+  padding: 0.4rem 1.2rem 2.4rem;
   overscroll-behavior-y: contain;
 }
 html[data-layout='phone'] .phl-card .ls-title {

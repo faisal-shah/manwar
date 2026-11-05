@@ -110,7 +110,7 @@ function ListsBody() {
   );
 }
 
-/** The header's right side: New list on the lists, the open count and the list's menu on one list. */
+/** The header's right side: New list on the lists, the list's menu on one list. */
 function ListsAction() {
   const list = openList.value;
   if (!list)
