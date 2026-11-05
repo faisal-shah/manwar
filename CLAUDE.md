@@ -129,10 +129,13 @@ flowchart LR
   event had some or the editor gave some (`''` clears), every timed write names
   the event's own zones (the tablet's for new or formerly all-day events),
   All events leaves the series times out when they were not changed, a
-  changed repeat replaces only the RRULE line (EXDATEs stay), and This and
-  following copies guests, color and reminders to the new series and cuts
-  the old one at the occurrence's `originalStart` (where the series had it,
-  not where it was moved to). A 401 drops the cached token and retries once;
+  changed repeat replaces only the RRULE line (EXDATEs stay), EXDATEs move
+  with a series (or a new This and following series) whose time or day
+  changes (`shiftExdates`), and This and following copies guests, color and
+  reminders to the new series and cuts the old one at the occurrence's
+  `originalStart` (where the series had it, not where it was moved to); a
+  COUNT rule continues with what is left, counting the old series'
+  instances by `originalStartTime`. A 401 drops the cached token and retries once;
   requests give up after 30 seconds.
 - **Rate limits**: a 429, or a 403 whose reason is `rateLimitExceeded` or
   `userRateLimitExceeded`, is `RateLimited` (with Retry-After when the

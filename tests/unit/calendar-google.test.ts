@@ -571,6 +571,14 @@ describe('google calendar: writing events', () => {
         end: { dateTime: '2026-10-31T10:15:00-05:00', timeZone: 'America/Chicago' },
       });
 
+    /** The series' instances as Google lists them with showDeleted: Oct 31 to Nov 28, Nov 7 deleted. */
+    const swimInstances = ['2026-10-31', '2026-11-07', '2026-11-14', '2026-11-21', '2026-11-28'].map((day) => ({
+      id: `swim_${day.replace(/-/g, '')}T153000Z`,
+      status: day === '2026-11-07' ? 'cancelled' : 'confirmed',
+      recurringEventId: 'swim',
+      originalStartTime: { dateTime: `${day}T09:30:00-06:00`, timeZone: 'America/Chicago' },
+    }));
+
     it('continues a COUNT rule with the occurrences it has left', async () => {
       routes.push((c) =>
         c.method === 'GET' && c.path === `/calendars/${CAL}/events/swim`
@@ -578,11 +586,7 @@ describe('google calendar: writing events', () => {
           : undefined,
       );
       // Oct 31, Nov 7 (cancelled), Nov 14 come before Nov 21.
-      routes.push((c) =>
-        c.path === `/calendars/${CAL}/events/swim/instances`
-          ? { body: { items: [{ id: 'a' }, { id: 'b', status: 'cancelled' }, { id: 'c' }] } }
-          : undefined,
-      );
+      routes.push((c) => (c.path === `/calendars/${CAL}/events/swim/instances` ? { body: { items: swimInstances } } : undefined));
       routes.push((c) => (c.method === 'POST' ? { body: { id: 'swim2' } } : undefined));
       routes.push((c) => (c.method === 'PATCH' ? { body: { id: 'swim' } } : undefined));
       expect(await googleSource.update(occ, draft, 'following')).toEqual({ newSeriesId: 'swim2' });
@@ -590,10 +594,8 @@ describe('google calendar: writing events', () => {
       expect(post.body.recurrence).toEqual(['RRULE:FREQ=WEEKLY;COUNT=7']);
       const patch = calls.find((c) => c.method === 'PATCH')!;
       expect(patch.body.recurrence).toEqual(['RRULE:FREQ=WEEKLY;UNTIL=20261121T152959Z']);
-      expect(calls.find((c) => c.path.endsWith('/instances'))!.query).toMatchObject({
-        showDeleted: 'true',
-        timeMax: '2026-11-21T15:30:00.000Z',
-      });
+      // All of a COUNT series' instances, deleted ones too, counted by where the series had them.
+      expect(calls.find((c) => c.path.endsWith('/instances'))!.query).toEqual({ showDeleted: 'true', maxResults: '2500' });
     });
 
     it('keeps an UNTIL rule as it is', async () => {
@@ -633,15 +635,13 @@ describe('google calendar: writing events', () => {
     };
 
     it('splits a moved occurrence where the series had it', async () => {
+      routes.push((c) => (c.path.endsWith('/instances') ? { body: { items: swimInstances } } : undefined));
       routes.push((c) => (c.method === 'GET' ? { body: master(['RRULE:FREQ=WEEKLY;COUNT=10']) } : undefined));
-      routes.push((c) =>
-        c.path.endsWith('/instances') ? { body: { items: [{ id: 'a' }, { id: 'b' }, { id: 'c' }] } } : undefined,
-      );
       routes.push((c) => (c.method === 'POST' ? { body: { id: 'swim2' } } : undefined));
       routes.push((c) => (c.method === 'PATCH' ? { body: { id: 'swim' } } : undefined));
       await googleSource.update(moved, { ...draft, start: moved.start, end: moved.end }, 'following');
       expect(calls.find((c) => c.method === 'PATCH')!.body.recurrence).toEqual(['RRULE:FREQ=WEEKLY;UNTIL=20261121T152959Z']);
-      expect(calls.find((c) => c.path.endsWith('/instances'))!.query.timeMax).toBe('2026-11-21T15:30:00.000Z');
+      expect(calls.find((c) => c.method === 'POST')!.body.recurrence).toEqual(['RRULE:FREQ=WEEKLY;COUNT=7']);
     });
 
     it('deletes a moved occurrence and the rest from where the series had it', async () => {
@@ -1137,5 +1137,137 @@ describe('google calendar: rate limits', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('google calendar: series edits and the occurrences changed elsewhere', () => {
+  // Weekly swim lesson on Saturdays at 9:30 (Chicago), from Oct 31.
+  const master = (recurrence: string[], allDay = false) =>
+    base({
+      id: 'swim',
+      summary: 'Swim lesson',
+      recurrence,
+      start: allDay ? { date: '2026-10-31' } : { dateTime: '2026-10-31T09:30:00-05:00', timeZone: 'America/Chicago' },
+      end: allDay ? { date: '2026-11-01' } : { dateTime: '2026-10-31T10:15:00-05:00', timeZone: 'America/Chicago' },
+    });
+  const occ: CalEvent = {
+    key: `${CAL}::swim_20261121T153000Z`,
+    calendarId: CAL,
+    id: 'swim_20261121T153000Z',
+    seriesId: 'swim',
+    originalStart: new Date('2026-11-21T09:30'),
+    title: 'Swim lesson',
+    allDay: false,
+    start: new Date('2026-11-21T09:30'),
+    end: new Date('2026-11-21T10:15'),
+    editable: true,
+    timeZone: 'America/Chicago',
+    endTimeZone: 'America/Chicago',
+  };
+  const patched = () => calls.find((c) => c.method === 'PATCH')!.body;
+
+  it('moves the dates deleted on other clients with a series whose time changes', async () => {
+    // Two lessons deleted on an iPhone (local time, as CalDAV writes them) and one in UTC.
+    routes.push((c) =>
+      c.method === 'GET'
+        ? {
+            body: master([
+              'RRULE:FREQ=WEEKLY;BYDAY=SA',
+              'EXDATE;TZID=America/Chicago:20261107T093000,20261114T093000',
+              'EXDATE:20261205T153000Z',
+            ]),
+          }
+        : undefined,
+    );
+    routes.push((c) => (c.method === 'PATCH' ? { body: { id: 'swim' } } : undefined));
+    // All lessons from 9:30 to 10:00.
+    const later: EventDraft = {
+      title: 'Swim lesson',
+      allDay: false,
+      start: new Date('2026-11-21T10:00'),
+      end: new Date('2026-11-21T10:45'),
+      keepRecurrence: true,
+    };
+    await googleSource.update(occ, later, 'all');
+    expect(patched().recurrence).toEqual([
+      'RRULE:FREQ=WEEKLY;BYDAY=SA',
+      'EXDATE;TZID=America/Chicago:20261107T100000,20261114T100000',
+      'EXDATE:20261205T160000Z',
+    ]);
+  });
+
+  it('moves them by days with an all-day series moved to another day', async () => {
+    const day: CalEvent = {
+      ...occ,
+      id: 'swim_20261121',
+      key: `${CAL}::swim_20261121`,
+      allDay: true,
+      originalStart: new Date(2026, 10, 21),
+      start: new Date(2026, 10, 21),
+      end: new Date(2026, 10, 22),
+      timeZone: undefined,
+      endTimeZone: undefined,
+    };
+    routes.push((c) =>
+      c.method === 'GET' ? { body: master(['RRULE:FREQ=WEEKLY', 'EXDATE;VALUE=DATE:20261114'], true) } : undefined,
+    );
+    routes.push((c) => (c.method === 'PATCH' ? { body: { id: 'swim' } } : undefined));
+    const sunday: EventDraft = {
+      title: 'Swim lesson',
+      allDay: true,
+      start: new Date(2026, 10, 22),
+      end: new Date(2026, 10, 23),
+      firstDay: '2026-11-22',
+      lastDay: '2026-11-22',
+      keepRecurrence: true,
+    };
+    await googleSource.update(day, sunday, 'all');
+    expect(patched().recurrence).toEqual(['RRULE:FREQ=WEEKLY', 'EXDATE;VALUE=DATE:20261115']);
+  });
+
+  it('counts what a COUNT rule has used by where the series had each occurrence', async () => {
+    // COUNT=10 from Oct 31; the Nov 28 lesson was moved to Friday Nov 20, before the split at Nov 21.
+    const inst = (orig: string, start = orig, status = 'confirmed') =>
+      base({
+        id: `swim_${orig.replace(/-/g, '')}T153000Z`,
+        recurringEventId: 'swim',
+        status,
+        originalStartTime: { dateTime: `${orig}T09:30:00-06:00`, timeZone: 'America/Chicago' },
+        start: { dateTime: `${start}T09:30:00-06:00` },
+        end: { dateTime: `${start}T10:15:00-06:00` },
+      });
+    const all = [
+      inst('2026-10-31'),
+      inst('2026-11-07', '2026-11-07', 'cancelled'),
+      inst('2026-11-14'),
+      inst('2026-11-28', '2026-11-20'),
+      inst('2026-11-21'),
+      inst('2026-12-05'),
+    ];
+    routes.push((c) =>
+      c.method === 'GET' && c.path === `/calendars/${CAL}/events/swim`
+        ? { body: master(['RRULE:FREQ=WEEKLY;COUNT=10']) }
+        : undefined,
+    );
+    // Google filters instances by where they are now.
+    routes.push((c) =>
+      c.path.endsWith('/instances')
+        ? {
+            body: {
+              items: all.filter(
+                (i) =>
+                  !c.query.timeMax ||
+                  new Date((i as unknown as { start: { dateTime: string } }).start.dateTime) < new Date(c.query.timeMax),
+              ),
+            },
+          }
+        : undefined,
+    );
+    routes.push((c) => (c.method === 'POST' ? { body: { id: 'swim2' } } : undefined));
+    routes.push((c) => (c.method === 'PATCH' ? { body: { id: 'swim' } } : undefined));
+    const draft: EventDraft = { title: 'Swim lesson', allDay: false, start: occ.start, end: occ.end, keepRecurrence: true };
+    await googleSource.update(occ, { ...draft, title: 'Swimming' }, 'following');
+    // Oct 31, Nov 7 (deleted, still counted) and Nov 14 are before the split: seven are left.
+    expect(calls.find((c) => c.method === 'POST')!.body.recurrence).toEqual(['RRULE:FREQ=WEEKLY;COUNT=7']);
   });
 });

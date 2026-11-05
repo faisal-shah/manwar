@@ -1,6 +1,6 @@
 import { dropGoogleToken, googleAccessToken } from '../data/session';
 import { addDays, diffDays, fromISODate, toISODate } from '../lib/date';
-import { endSeriesBefore, recurrenceCount, toRRule, withCount } from './rrule';
+import { endSeriesBefore, recurrenceCount, shiftExdates, toRRule, withCount, type SeriesShift } from './rrule';
 import {
   RateLimited,
   eventKey,
@@ -297,18 +297,31 @@ function keepExdates(body: Partial<GEvent>, lines: string[]): Partial<GEvent> {
 /** Where an occurrence sits in its series: its original start, which a moved occurrence no longer shows. */
 const seriesStart = (ev: CalEvent) => ev.originalStart ?? ev.start;
 
-/** Occurrences of a series starting before `before`, cancelled ones included (COUNT counts them too). */
+/** How far the edit moves a series' occurrence that was at `from`: by days (all-day) or by an instant. */
+const shiftOf = (from: Date, draft: EventDraft): SeriesShift =>
+  draft.allDay
+    ? { days: diffDays(toISODate(from), draft.firstDay ?? toISODate(draft.start)) }
+    : { ms: draft.start.getTime() - from.getTime() };
+
+/**
+ * Occurrences of a COUNT series the series put before `before`, cancelled
+ * ones included (COUNT counts them too). Counted by where the series had
+ * each one (originalStartTime), since Google filters instances by where
+ * they are now and one moved across the split would be counted on the
+ * wrong side; a COUNT series is finite, so all of its instances are read.
+ */
 async function instancesBefore(cal: string, seriesId: string, before: Date): Promise<number> {
   let n = 0;
   let pageToken: string | undefined;
   do {
-    const r = await call<{ items?: unknown[]; nextPageToken?: string }>(
+    const r = await call<{ items?: Partial<GEvent>[]; nextPageToken?: string }>(
       `/calendars/${cal}/events/${encodeURIComponent(seriesId)}/instances`,
-      {
-        query: { showDeleted: 'true', timeMax: before.toISOString(), maxResults: '2500', ...(pageToken ? { pageToken } : {}) },
-      },
+      { query: { showDeleted: 'true', maxResults: '2500', ...(pageToken ? { pageToken } : {}) } },
     );
-    n += r.items?.length ?? 0;
+    for (const i of r.items ?? []) {
+      const at = i.originalStartTime ?? i.start;
+      if ((at?.date || at?.dateTime) && parseTime(at).at < before) n++;
+    }
     pageToken = r.nextPageToken;
   } while (pageToken);
   return n;
@@ -446,6 +459,8 @@ export const googleSource: CalendarSource = {
         body.recurrence =
           count === null ? lines : withCount(lines, Math.max(1, count - (await instancesBefore(cal, ev.seriesId, cut))));
       }
+      // The new series repeats at the edited occurrence's time: the deleted dates it carries move with it.
+      if (body.recurrence && draft.allDay === seriesAllDay) body.recurrence = shiftExdates(body.recurrence, shiftOf(cut, draft));
       const created = await call<GEvent>(`/calendars/${cal}/events`, { method: 'POST', body: JSON.stringify(body) });
       try {
         await call(`/calendars/${cal}/events/${encodeURIComponent(ev.seriesId)}`, {
@@ -476,6 +491,10 @@ export const googleSource: CalendarSource = {
       // phone, whose times are not the series'.
       delete body.start;
       delete body.end;
+    } else if (draft.allDay === seriesAllDay) {
+      // The dates deleted on other clients move with the series, or they would come back at the new time.
+      const lines = body.recurrence ?? master.recurrence ?? [];
+      if (lines.some((l) => l.startsWith('EXDATE'))) body.recurrence = shiftExdates(lines, shiftOf(ev.start, draft));
     }
     await call(`/calendars/${cal}/events/${encodeURIComponent(ev.seriesId)}`, { method: 'PATCH', body: JSON.stringify(body) });
     return {};

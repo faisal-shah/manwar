@@ -89,6 +89,35 @@ export function withCount(lines: string[], count: number): string[] {
   );
 }
 
+/** How far a series' start moved: by an instant (timed) or by whole days (all-day). */
+export type SeriesShift = { ms: number } | { days: number };
+
+/**
+ * The EXDATE lines moved with a series whose start moved, so occurrences
+ * deleted on other clients stay deleted: a local value (TZID or floating)
+ * moves its wall-clock time, a UTC one its instant, a date by whole days.
+ * Values of the other kind (a date on a timed series) are left as they are.
+ */
+export function shiftExdates(lines: string[], by: SeriesShift): string[] {
+  return lines.map((l) => {
+    if (!l.startsWith('EXDATE')) return l;
+    const at = l.indexOf(':');
+    const values = l.slice(at + 1).split(',');
+    return `${l.slice(0, at)}:${values.map((v) => shiftValue(v.trim(), by)).join(',')}`;
+  });
+}
+
+function shiftValue(v: string, by: SeriesShift): string {
+  const m = /^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})(Z?))?$/.exec(v);
+  if (!m) return v;
+  const [, y, mo, d, h, mi, s, z] = m;
+  if (h === undefined) return 'days' in by ? addDays(`${y}-${mo}-${d}`, by.days).replace(/-/g, '') : v;
+  if (!('ms' in by)) return v;
+  // Wall-clock fields read as UTC: adding the shift moves a local time by the same amount.
+  const stamp = utcStamp(new Date(Date.UTC(+y, +mo - 1, +d, +h, +mi, +s) + by.ms));
+  return z ? stamp : stamp.slice(0, -1);
+}
+
 /**
  * End a series just before one of its occurrences, given where the series
  * put that occurrence (its original start): an all-day series the day
