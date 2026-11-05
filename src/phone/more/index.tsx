@@ -4,9 +4,10 @@ import { useBack } from '../../ui/back';
 import type { PhonePage } from '../nav';
 import type { MoreItem } from './items';
 import { ThisPhone } from './ThisPhone';
+import { starsItem } from '../stars';
 
 /** The More tab's rows, in order. */
-export const MORE_ITEMS: MoreItem[] = [{ id: 'phone', label: 'This phone', icon: Smartphone, View: ThisPhone }];
+export const MORE_ITEMS: MoreItem[] = [starsItem, { id: 'phone', label: 'This phone', icon: Smartphone, View: ThisPhone }];
 
 /** The open row's view, null for the list. */
 export const moreView = signal<string | null>(null);

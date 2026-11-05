@@ -33,12 +33,44 @@ const PAGE = 60;
 
 function StarHistory({ profileId, onClose }: { profileId: string; onClose: () => void }) {
   const p = profileById.value.get(profileId)!;
+  const [adjust, setAdjust] = useState<'give' | 'remove' | null>(null);
+  return (
+    <Sheet title={`${p.name}'s stars`} onClose={onClose}>
+      <div class="hist-head" style={{ '--c': p.color }}>
+        <Avatar profile={p} size={7.2} />
+        <div class="hist-balance">
+          <span class="serif">{p.stars.toLocaleString()}</span>
+          <span class="muted">{pluralWord(p.stars, 'star')}</span>
+        </div>
+        <div class="hist-actions">
+          <Button small onClick={() => askAdjust('give', setAdjust)}>
+            <Plus size="1.8rem" /> Give
+          </Button>
+          <Button small onClick={() => askAdjust('remove', setAdjust)}>
+            <Minus size="1.8rem" /> Remove
+          </Button>
+        </div>
+      </div>
+      {adjust && <Adjust key={adjust} kind={adjust} balance={p.stars} profileId={profileId} onDone={() => setAdjust(null)} />}
+      <HistoryList profileId={profileId} />
+    </Sheet>
+  );
+}
+
+/** Open the Give or Remove form (`open`) once a parent has entered the PIN. */
+export const askAdjust = (kind: 'give' | 'remove', open: (kind: 'give' | 'remove') => void) =>
+  void asParent(() => open(kind), kind === 'give' ? 'Enter the PIN to give stars.' : 'Enter the PIN to remove stars.');
+
+/**
+ * A profile's ledger entries, newest first, with Undo; Show older pages
+ * past the store's live window (those are shown without Undo).
+ */
+export function HistoryList({ profileId }: { profileId: string }) {
   const live = ledgerFor(profileId);
   const liveIds = new Set(live.map((e) => e.id));
   // Entries older than the store's live window, once asked for: shown after the live ones, without Undo.
   const older = olderLedger.value.filter((e) => e.profileId === profileId && !liveIds.has(e.id)).sort((a, b) => b.at - a.at);
   const entries = [...live, ...older];
-  const [adjust, setAdjust] = useState<'give' | 'remove' | null>(null);
   const [shown, setShown] = useState(PAGE);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const now = currentTime();
@@ -51,23 +83,7 @@ function StarHistory({ profileId, onClose }: { profileId: string; onClose: () =>
       .finally(() => setLoadingOlder(false));
   };
   return (
-    <Sheet title={`${p.name}'s stars`} onClose={onClose}>
-      <div class="hist-head" style={{ '--c': p.color }}>
-        <Avatar profile={p} size={7.2} />
-        <div class="hist-balance">
-          <span class="serif">{p.stars.toLocaleString()}</span>
-          <span class="muted">{pluralWord(p.stars, 'star')}</span>
-        </div>
-        <div class="hist-actions">
-          <Button small onClick={() => void asParent(() => setAdjust('give'), 'Enter the PIN to give stars.')}>
-            <Plus size="1.8rem" /> Give
-          </Button>
-          <Button small onClick={() => void asParent(() => setAdjust('remove'), 'Enter the PIN to remove stars.')}>
-            <Minus size="1.8rem" /> Remove
-          </Button>
-        </div>
-      </div>
-      {adjust && <Adjust key={adjust} kind={adjust} balance={p.stars} profileId={profileId} onDone={() => setAdjust(null)} />}
+    <>
       {entries.length === 0 ? (
         <p class="muted hist-empty">
           {moreLedger.value ? 'Nothing recent.' : 'No stars yet. Completed tasks and redeemed rewards show up here.'}
@@ -84,7 +100,7 @@ function StarHistory({ profileId, onClose }: { profileId: string; onClose: () =>
           {loadingOlder ? 'Loading…' : 'Show older'}
         </Button>
       )}
-    </Sheet>
+    </>
   );
 }
 
@@ -97,7 +113,9 @@ function Entry({ e, now, readOnly }: { e: LedgerEntry; now: number; readOnly: bo
         <Icon size="2rem" strokeWidth={2.2} />
       </span>
       <div class="hist-text">
-        <span class="hist-label">{e.label}</span>
+        <span class="hist-label" dir="auto">
+          {e.label}
+        </span>
         <span class="hist-sub">
           {sub}
           {e.undoneAt ? <span class="hist-tag">Undone</span> : null}
@@ -127,7 +145,8 @@ function Entry({ e, now, readOnly }: { e: LedgerEntry; now: number; readOnly: bo
   );
 }
 
-function Adjust({
+/** Give or Remove stars: an amount, an optional note, the balance it leaves. */
+export function Adjust({
   kind,
   balance,
   profileId,

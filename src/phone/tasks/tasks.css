@@ -1,0 +1,179 @@
+/* The phone's Tasks tab (class prefix pt-), around the wall's task cards. */
+
+.pt {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Whose tasks: a row of chips that scrolls sideways, kept at the top while the list scrolls. */
+.pt-chips {
+  position: sticky;
+  top: -0.4rem;
+  z-index: 2;
+  display: flex;
+  gap: 0.8rem;
+  margin: -0.4rem -1.6rem 0;
+  padding: 0.8rem 1.6rem 1rem;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  background: var(--bg-top);
+  /* Covers the body's top padding, so nothing scrolls into view above the chips. */
+  box-shadow: 0 -0.8rem 0 var(--bg-top);
+}
+.pt-chips::-webkit-scrollbar {
+  display: none;
+}
+.pt-chip {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  max-width: 18rem;
+  min-height: 5.6rem;
+  padding: 0.6rem 1.4rem 0.6rem 0.6rem;
+  border-radius: 99rem;
+  background: var(--surface-strong);
+  box-shadow: inset 0 0 0 1.5px var(--line);
+  text-align: start;
+}
+.pt-chip.on {
+  background: color-mix(in srgb, var(--c) 24%, var(--surface-solid));
+  box-shadow: inset 0 0 0 2px var(--c);
+}
+.pt-chip-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+.pt-chip-name {
+  font-size: 1.5rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pt-chip-count {
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* One person's list */
+.pt-list {
+  display: flex;
+  flex-direction: column;
+}
+.pt-list .pcol-head {
+  padding: 0.8rem 0 1.2rem;
+}
+.pt-list .pcol-name {
+  font-size: 2.6rem;
+}
+.pt-alldone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.8rem;
+  margin: 0 0 1.2rem;
+  padding: 1.2rem;
+  border-radius: 1.6rem;
+  background: color-mix(in srgb, var(--c) 16%, var(--surface-solid));
+  font-size: 1.8rem;
+  font-weight: 600;
+}
+.pt-alldone span {
+  font-size: 2.6rem;
+  line-height: 1;
+}
+.pt-hint {
+  margin: 0 0 1.2rem;
+}
+.pt-section + .pt-section,
+.pt-list > .tk-cards + .pt-section {
+  margin-top: 1.6rem;
+}
+.pt-section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  margin: 0 0.4rem 0.8rem;
+  font-size: 1.8rem;
+  font-weight: 400;
+}
+.pt-section-title .serif {
+  flex: 1;
+  font-size: 2.2rem;
+}
+.pt-section-count {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+.pt .tk-card {
+  background: color-mix(in srgb, var(--c) 14%, var(--surface-solid));
+}
+.pt .tk-card.done {
+  background: color-mix(in srgb, var(--c) 55%, var(--tint-base));
+}
+.pt .tk-title {
+  font-size: 1.8rem;
+}
+.pt .tk-body {
+  min-height: 6rem;
+}
+
+/* The header's + */
+.ph-add {
+  color: var(--accent);
+}
+
+/*
+ * The wall's task overlays on a narrow screen: the claim dialog's faces
+ * wrap, the details sheet keeps its tags apart, the editor's rows wrap
+ * whole (a toggle stays beside its label) and its segments share the width.
+ */
+html[data-layout='phone'] .tk-claim {
+  min-width: 0;
+  grid-template-columns: repeat(auto-fill, minmax(9.6rem, 1fr));
+  gap: 0.8rem;
+}
+html[data-layout='phone'] .tk-claim button {
+  min-height: 4.8rem;
+  padding: 1.2rem 0.4rem;
+  font-size: 1.5rem;
+  overflow-wrap: anywhere;
+}
+html[data-layout='phone'] .tk-claim .avatar {
+  width: 6rem !important;
+  height: 6rem !important;
+  font-size: 3rem !important;
+}
+html[data-layout='phone'] .tk-pop-rows .tk-late {
+  margin-left: 0.6rem;
+}
+html[data-layout='phone'] .tk-pop-head h2 {
+  font-size: 2.6rem;
+}
+html[data-layout='phone'] .tk-pop-actions .btn {
+  flex: 1;
+  min-width: 0;
+}
+html[data-layout='phone'] .tk-ed input[type='date'] {
+  flex: 1 1 100%;
+}
+html[data-layout='phone'] .tk-ed .seg {
+  display: flex;
+  align-self: stretch;
+}
+html[data-layout='phone'] .tk-ed .seg button {
+  flex: 1 1 0;
+  min-width: 0;
+  height: auto;
+  min-height: 4.4rem;
+  padding: 0.4rem 0.8rem;
+  line-height: 1.15;
+}
