@@ -254,6 +254,74 @@ test('a double tap on Sleep now sleeps, and a double tap that wakes the wall act
   await expect(circle).toHaveClass(/done/);
 });
 
+test('a double tap opens the calendar menus and Customize Home, and they stay open', async ({ page }) => {
+  await open(page);
+  const tapTwice = async (target: ReturnType<Page['locator']>) => {
+    const box = (await target.boundingBox())!;
+    await doubleTapAt(page, box.x + box.width / 2, box.y + box.height / 2);
+    await page.waitForTimeout(300);
+  };
+  await rail(page, 'Calendar').click();
+  await tapTwice(page.locator('.cal-view-btn'));
+  await expect(page.getByRole('dialog', { name: 'Calendar view' })).toBeVisible();
+  await page.mouse.click(800, 900);
+  await expect(page.getByRole('dialog', { name: 'Calendar view' })).toHaveCount(0);
+
+  await page.waitForTimeout(500);
+  await tapTwice(page.locator('.topbar').getByRole('button', { name: /Filter/ }));
+  await expect(page.getByRole('dialog', { name: 'Filter' })).toBeVisible();
+  await page.mouse.click(800, 900);
+
+  await rail(page, 'Home').click();
+  await tapTwice(page.getByRole('button', { name: 'Customize' }));
+  await expect(page.getByRole('dialog', { name: 'Customize Home' })).toBeVisible();
+});
+
+test('the rest of a double tap that opens the PIN pad presses no key on it', async ({ page }) => {
+  await open(page);
+  const key = (scope: ReturnType<Page['locator']>, d: string) =>
+    scope.locator('.pin-keys button', { hasText: new RegExp(`^${d}$`) });
+  await openSettings(page, 'Parental lock');
+  await page.getByRole('button', { name: /Set a PIN/ }).click();
+  const setup = page.locator('.pin-setup');
+  for (const d of '2468') await key(setup, d).click();
+  await expect(setup).toContainText('Enter the PIN again');
+  for (const d of '2468') await key(setup, d).click();
+  await page.getByRole('button', { name: 'Lock now' }).click();
+  await expect(page.locator('.sheet')).toHaveCount(0);
+
+  // A missed day in the week grid asks for the PIN; find one that the pad's keys cover.
+  await rail(page, 'Tasks').click();
+  await page.getByRole('tab', { name: 'Week' }).click();
+  await page.getByRole('tab', { name: 'Asiyah' }).click();
+  const missed = page.locator('.wk-dot.missed');
+  await missed.first().click();
+  const pad = page.locator('.modal', { hasText: 'Parent PIN' });
+  const keys = await pad.locator('.pin-keys button').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON()));
+  await pad.getByRole('button', { name: 'Cancel' }).click();
+  await expect(pad).toHaveCount(0);
+  const centers = await missed.evaluateAll((els) =>
+    els.map((e) => {
+      const r = e.getBoundingClientRect();
+      return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+    }),
+  );
+  // Keys are round: the dot must sit well inside one.
+  const inKey = (c: { x: number; y: number }) =>
+    keys.some((k) => Math.hypot(c.x - (k.left + k.right) / 2, c.y - (k.top + k.bottom) / 2) < k.width * 0.35);
+  const under = centers.find(inKey)!;
+  expect(under).toBeTruthy();
+
+  await page.waitForTimeout(600);
+  await doubleTapAt(page, under.x, under.y);
+  await expect(pad).toBeVisible();
+  await page.waitForTimeout(300);
+  await expect(pad.locator('.pin-dots span.on')).toHaveCount(0);
+  // The parent's PIN goes in as typed.
+  for (const d of '2468') await key(pad, d).click();
+  await expect(pad).toHaveCount(0);
+});
+
 test('a reload inside the sleep window (an update at night) keeps the backlight off', async ({ page }) => {
   // Fully Kiosk's brightness call, recorded.
   await page.addInitScript(() => {

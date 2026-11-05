@@ -163,12 +163,14 @@ generated from it: `node scripts/icons/render.mjs` after any brand change.
 
 - Preact 11: element attribute types are `import type { ButtonHTMLAttributes } from 'preact'`, not `JSX.HTMLAttributes`.
 - Firestore field paths cannot contain `*`; `lastDoneKey()` maps Up for Grabs to `any`.
-- Overlays (`Sheet`, `Modal`, `Popover`) portal to `document.body`. Their
-  scrims close through `useScrimClose`, which lets the second tap of the
-  double tap that opened them through; use it for any custom scrim. The
-  sleep screen does the same, and after a waking tap it stays a moment
-  (fading) to take the rest of that double tap. In e2e tests, close by
-  tapping away from the control that opened it.
+- Overlays (`Sheet`, `Modal`, `Popover`, the calendar `Menu`) portal to
+  `document.body` and use `useOverlay(onClose)`: its `scrim` handler lets
+  the second tap of the double tap that opened the overlay through, and a
+  centered dialog puts `content` on its box (onClickCapture) so that tap
+  presses nothing in it (a PIN key, OK). Use it for any custom overlay.
+  The sleep screen uses `useScrimClose` (the same rule) and, after a waking
+  tap, stays a moment (fading) to take the rest of that double tap. In e2e
+  tests, close by tapping away from the control that opened it.
 - The Google connection uses the Google Identity Services popup code flow
   (`redirect_uri` 'postmessage'), so only the page origin must be registered.
   Google returns a refresh token on the first consent only; `connectGoogle`
