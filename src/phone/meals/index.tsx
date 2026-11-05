@@ -96,7 +96,7 @@ function MealsView() {
   const pop = popover.value;
   const thisYear = fromISODate(today.value).getFullYear();
   return (
-    <div class="ph-stack" onClickCapture={guard}>
+    <div class="ph-stack" {...guard}>
       <Tonight />
       <div class="pm-weeknav">
         <IconButton label="Previous week" onClick={() => weekOffset.value--}>

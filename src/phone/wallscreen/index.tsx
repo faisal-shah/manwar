@@ -46,7 +46,7 @@ function WallScreen() {
   const sleep = settings.value.sleep;
   const until = formatTime(new Date(sleepNowEnd(sleep, nowMs.value)), fmt);
   return (
-    <div class="ph-stack" onClickCapture={guard}>
+    <div class="ph-stack" {...guard}>
       <section class={`ph-card pws-state${asleep ? ' asleep' : ''}`} aria-live="polite">
         <span class="pws-icon" aria-hidden="true">
           {asleep ? <Moon size="3rem" /> : <Sun size="3rem" />}

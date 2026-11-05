@@ -1,6 +1,6 @@
 import '../../features/lists/lists.css';
 import './lists.css';
-import { useRef, useState } from 'preact/hooks';
+import { useState } from 'preact/hooks';
 import { ChevronRight, Ellipsis, List as ListIcon, Plus, ShoppingCart } from 'lucide-preact';
 import { asParent } from '../../core/lock';
 import type { List } from '../../data/types';
@@ -66,7 +66,7 @@ function ListView({ list }: { list: List }) {
   const guard = useOpeningGuard();
   const view = groupItems(list, itemsByList.value.get(list.id) ?? [], settling.value);
   return (
-    <section class="list-card phl-card" style={{ '--c': listColor(list) }} aria-label={list.title} onClickCapture={guard}>
+    <section class="list-card phl-card" style={{ '--c': listColor(list) }} aria-label={list.title} {...guard}>
       <ListItems
         list={list}
         view={view}
@@ -78,18 +78,28 @@ function ListView({ list }: { list: List }) {
   );
 }
 
+/**
+ * The open list as this tab last showed it. A list just made here is not in
+ * the store for a moment, so the open list is gone only once it was there;
+ * kept outside the tab, so a list deleted while another tab showed is
+ * noticed on coming back.
+ */
+const lastShown = { id: null as string | null, title: '' };
+
 function ListsBody() {
   const id = openListId.value;
   const list = openList.value;
-  // A list deleted on another device closes; one deleted here (its menu, the editor) needs no word.
-  const title = useRef('');
-  if (list) title.current = list.title;
-  const gone = !!id && !list;
+  if (list) {
+    lastShown.id = list.id;
+    lastShown.title = list.title;
+  }
+  // A list deleted on another device closes with a word; one deleted here (its menu, the editor) needs none.
+  const gone = !!id && !list && lastShown.id === id;
   const editing = !!id && listEditor.value?.list?.id === id;
   useCloseWhenGone(
     gone,
     closeList,
-    gone && !editing && !deletedOnThisDevice(id) ? `${title.current} was deleted on another device.` : undefined,
+    gone && !editing && !deletedOnThisDevice(id) ? `${lastShown.title} was deleted on another device.` : undefined,
   );
   const ed = listEditor.value;
   return (

@@ -73,13 +73,19 @@ function dropOpeningTap(openingTap: (e: MouseEvent) => boolean, e: MouseEvent): 
 
 /**
  * For a phone view that takes the place of what was tapped to open it (a
- * More row, a list): on the view's box (onClickCapture), it drops the rest
- * of the opening double tap, which would otherwise press whatever the view
- * has under that spot (a preset, Sleep now, a check box).
+ * More row, a list): spread on the view's box, it drops the rest of the
+ * opening double tap, which would otherwise press whatever the view has
+ * under that spot (a preset, Sleep now, a check box) or focus a field there
+ * (raising the keyboard, or the PIN pad).
  */
-export function useOpeningGuard(): (e: MouseEvent) => void {
+export function useOpeningGuard(): {
+  onPointerDownCapture: (e: PointerEvent) => void;
+  onMouseDownCapture: (e: MouseEvent) => void;
+  onClickCapture: (e: MouseEvent) => void;
+} {
   const openingTap = useOpeningTap();
-  return (e) => dropOpeningTap(openingTap, e);
+  const drop = (e: MouseEvent) => dropOpeningTap(openingTap, e);
+  return { onPointerDownCapture: drop, onMouseDownCapture: drop, onClickCapture: drop };
 }
 
 /** Close every overlay on screen, as if tapped away (idle return): a PIN request among them is refused. */

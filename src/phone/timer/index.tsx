@@ -21,7 +21,7 @@ function TimerView() {
   const t = timer.value;
   const phase = timerPhase.value;
   return (
-    <div class="ph-stack" onClickCapture={guard}>
+    <div class="ph-stack" {...guard}>
       {/* Keyed by its start, so a timer started elsewhere in its place is a new view (and drops the tap that started it). */}
       {t && phase ? <Running key={t.startAt} t={t} phase={phase} /> : <StartTimer />}
       <p class="muted pt-note">The wall shows the timer full screen and chimes when it ends.</p>
@@ -40,7 +40,7 @@ function Running({ t, phase }: { t: WallTimer; phase: 'lead' | 'running' | 'done
   const by = senderName(t.startedBy);
   const ends = `${toISODate(new Date(t.endAt)) === today.value ? '' : 'tomorrow '}${formatTime(new Date(t.endAt), settings.value.timeFormat)}`;
   return (
-    <div class="ph-stack" onClickCapture={guard}>
+    <div class="ph-stack" {...guard}>
       <section class="ph-card pt-run" data-phase={phase}>
         <div class="pt-ring" style={{ '--left': fraction, '--pie': color }} role="timer" aria-live="off">
           <div class="pt-ring-inner">

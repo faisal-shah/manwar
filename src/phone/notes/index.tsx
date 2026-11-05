@@ -1,9 +1,10 @@
 import './notes.css';
+import { signal } from '@preact/signals';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { TargetedEvent } from 'preact';
 import { StickyNote } from 'lucide-preact';
 import { asParent } from '../../core/lock';
-import { profileById } from '../../data/store';
+import { profileById, profiles } from '../../data/store';
 import type { Message } from '../../data/types';
 import { MAX_MESSAGE_LENGTH, timeAgo } from '../../features/messages/logic';
 import { dismissMessage, pending, postMessage } from '../../features/messages/state';
@@ -32,10 +33,14 @@ function storeFrom(id: string | undefined): void {
   }
 }
 
+/** The note being written: kept when the view closes (Back mid-sentence), until it is posted or the page reloads. */
+const draft = signal('');
+
 /** More > Note to the wall: write a note that pops up on the wall; see and dismiss what it shows. */
 function NoteView() {
   const guard = useOpeningGuard();
-  const [text, setText] = useState('');
+  const text = draft.value;
+  const setText = (v: string) => (draft.value = v);
   const [chosen, setChosen] = useState<string | undefined>(loadFrom);
   // A remembered profile deleted since is no one.
   const from = chosen && profileById.value.has(chosen) ? chosen : undefined;
@@ -55,18 +60,21 @@ function NoteView() {
   // Newest first, as the wall shows them: the first is on screen, the rest come after it is dismissed.
   const notes = pending.value;
   return (
-    <div class="ph-stack" onClickCapture={guard}>
+    <div class="ph-stack" {...guard}>
       <section class="ph-card pn-compose">
-        <Field label="From">
-          <ProfilePicker
-            value={from ? [from] : []}
-            onChange={(ids) => {
-              const next = ids.find((id) => id !== from);
-              setChosen(next);
-              storeFrom(next);
-            }}
-          />
-        </Field>
+        {/* A household with nobody in it yet has no one to send it from. */}
+        {profiles.value.length > 0 && (
+          <Field label="From">
+            <ProfilePicker
+              value={from ? [from] : []}
+              onChange={(ids) => {
+                const next = ids.find((id) => id !== from);
+                setChosen(next);
+                storeFrom(next);
+              }}
+            />
+          </Field>
+        )}
         <Field label="Note">
           <textarea
             ref={field}
