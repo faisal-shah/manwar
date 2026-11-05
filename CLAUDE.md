@@ -80,7 +80,9 @@ flowchart LR
   written back. Writes start from the store's current document, not the
   copy an editor opened with. An editor or popover whose document is
   deleted elsewhere closes itself through `useCloseWhenGone`
-  (`ui/overlays.tsx`), with a toast for an editor.
+  (`ui/overlays.tsx`), with a toast for an editor, and refuses the PIN
+  pad, confirmation or choice it had open (they asked about what is gone);
+  an editor's save also treats an archived document as gone.
 - **Calendar events** live in the household's Google calendars. `calendar/engine.ts`
   fetches a window around today (six weeks back, four months ahead, widened
   to the days the latest view asked for with `ensureRange`), caches a snapshot
@@ -139,7 +141,8 @@ flowchart LR
 - **Parental lock** (`core/lock.ts`): with a PIN set, only checking off tasks
   is open; wrap every other mutation in `asParent(() => ...)` or
   `await requireParent()`; an editor asks again on Save, since the lock can
-  relock behind an open sheet. Repeated wrong PINs pause the pad
+  relock behind an open sheet. The pad blurs the focused field when it
+  opens, so the on-screen keyboard closes. Repeated wrong PINs pause the pad
   (`core/pin.ts`, in memory). The Calendar filter is a view preference and
   stays open.
 - **Display** (`core/display.ts`): night window switches to the dark theme
