@@ -158,10 +158,30 @@ export const metaKey = (calendarId: string, id: string) => encodeURIComponent(ev
 
 const metaById = computed(() => new Map(data.eventMeta.value.map((m) => [m.id, m])));
 
-/** Instance-level meta wins over series-level meta. */
-export function metaFor(ev: CalEvent): EventMeta | undefined {
+/** The event's own meta document (its instance key) and its series' document. */
+function metaDocs(ev: CalEvent): { own?: EventMeta; series?: EventMeta; ownKey: string; seriesKey: string | null } {
   const m = metaById.value;
-  return m.get(metaKey(ev.calendarId, ev.id)) ?? (ev.seriesId ? m.get(metaKey(ev.calendarId, ev.seriesId)) : undefined);
+  const ownKey = metaKey(ev.calendarId, ev.id);
+  const seriesKey = ev.seriesId ? metaKey(ev.calendarId, ev.seriesId) : null;
+  return { own: m.get(ownKey), series: seriesKey ? m.get(seriesKey) : undefined, ownKey, seriesKey };
+}
+
+/**
+ * The event's meta: series-level fields, overridden field by field by the
+ * occurrence's own document. An occurrence document overrides profiles only
+ * when it lists some (empty = inherit), and countdown/emoji only when set.
+ */
+export function metaFor(ev: CalEvent): EventMeta | undefined {
+  const { own, series } = metaDocs(ev);
+  if (!own || !series) return own ?? series;
+  return {
+    ...series,
+    id: own.id,
+    updatedAt: own.updatedAt,
+    profiles: own.profiles.length ? own.profiles : series.profiles,
+    ...(own.countdown != null && { countdown: own.countdown }),
+    ...(own.emoji != null && { emoji: own.emoji }),
+  };
 }
 
 /** Assigned profile ids ([EVERYONE] for the family), or null when unassigned. */
@@ -197,19 +217,21 @@ export function passesFilter(ev: CalEvent): boolean {
 export function eventsBetween(from: ISODate, to: ISODate): CalEvent[] {
   const a = dateAt(from).getTime();
   const b = dateAt(addDays(to, 1)).getTime();
-  return events.value.filter((e) => e.end.getTime() > a && e.start.getTime() < b && passesFilter(e));
+  return events.value.filter((e) => endMs(e) > a && e.start.getTime() < b && passesFilter(e));
 }
+
+/** End instant for overlap tests: a zero-length event counts as an instant long, so it lands on its start day. */
+const endMs = (e: CalEvent) => Math.max(e.end.getTime(), e.start.getTime() + 1);
 
 /** Events on one day, all-day first, then by start. */
 export function eventsOn(day: ISODate): CalEvent[] {
   return eventsBetween(day, day).sort((x, y) => Number(y.allDay) - Number(x.allDay) || x.start.getTime() - y.start.getTime());
 }
 
-/** ISO dates an event covers (all-day end is exclusive). */
+/** ISO dates an event covers (all-day end is exclusive; a zero-length event is on its start day). */
 export function daysOf(ev: CalEvent): ISODate[] {
   const first = toISODate(ev.start);
-  const lastInstant = new Date(ev.end.getTime() - 1);
-  const last = ev.allDay || toISODate(lastInstant) !== first ? toISODate(lastInstant) : first;
+  const last = toISODate(new Date(endMs(ev) - 1));
   const out: ISODate[] = [];
   for (let d = first; d <= last; d = addDays(d, 1)) out.push(d);
   return out;
@@ -217,7 +239,7 @@ export function daysOf(ev: CalEvent): ISODate[] {
 
 /**
  * Triage queue: upcoming events nobody is assigned to, one row per series
- * (its next occurrence), soonest first.
+ * (its next unassigned occurrence), soonest first.
  */
 export const unassigned = computed(() => {
   void data.eventMeta.value;
@@ -226,33 +248,52 @@ export const unassigned = computed(() => {
   const seen = new Set<string>();
   const out: CalEvent[] = [];
   for (const ev of events.value) {
-    if (ev.end.getTime() <= from || settings.value.hiddenCalendars.includes(ev.calendarId)) continue;
+    if (endMs(ev) <= from || settings.value.hiddenCalendars.includes(ev.calendarId) || profilesOf(ev)) continue;
     const series = eventKey(ev.calendarId, ev.seriesId ?? ev.id);
     if (seen.has(series)) continue;
     seen.add(series);
-    if (!profilesOf(ev)) out.push(ev);
+    out.push(ev);
   }
   return out;
 });
 
 /**
- * Assign profiles. 'series' writes the series-level entry (and clears this
- * occurrence's override); 'instance' writes an override for one occurrence.
+ * Write the occurrence's own document with `fields` changed (undefined
+ * clears a field). A document left with nothing of its own is removed, so
+ * the occurrence follows its series again.
  */
-export function assign(ev: CalEvent, profileIds: string[], scope: 'series' | 'instance' = 'series'): void {
-  const base = metaFor(ev);
-  const id = scope === 'series' && ev.seriesId ? metaKey(ev.calendarId, ev.seriesId) : metaKey(ev.calendarId, ev.id);
-  void put('eventMeta', { ...base, id, profiles: profileIds, updatedAt: currentTime() });
-  if (scope === 'series' && ev.seriesId) {
-    const inst = metaKey(ev.calendarId, ev.id);
-    if (data.eventMeta.value.some((m) => m.id === inst)) void removeDoc('eventMeta', inst);
+function putOwn(ev: CalEvent, fields: Partial<Pick<EventMeta, 'profiles' | 'countdown' | 'emoji'>>): void {
+  const { own, ownKey } = metaDocs(ev);
+  const next: EventMeta = { profiles: [], ...own, ...fields, id: ownKey, updatedAt: currentTime() };
+  if (!next.profiles.length && next.countdown == null && next.emoji == null) {
+    if (own) void removeDoc('eventMeta', ownKey);
+    return;
   }
+  void put('eventMeta', next);
 }
 
+/** Write the series document (or the event's own one, for a one-off event) with `fields` changed. */
+function putSeries(ev: CalEvent, fields: Partial<Pick<EventMeta, 'profiles' | 'countdown' | 'emoji'>>): void {
+  const { own, series, ownKey, seriesKey } = metaDocs(ev);
+  const base = seriesKey ? series : own;
+  void put('eventMeta', { profiles: [], ...base, ...fields, id: seriesKey ?? ownKey, updatedAt: currentTime() });
+}
+
+/**
+ * Assign profiles. 'series' writes the series-level entry (and drops this
+ * occurrence's own profiles); 'instance' overrides one occurrence's profiles.
+ */
+export function assign(ev: CalEvent, profileIds: string[], scope: 'series' | 'instance' = 'series'): void {
+  if (!ev.seriesId) return putSeries(ev, { profiles: profileIds });
+  if (scope === 'instance') return putOwn(ev, { profiles: profileIds });
+  putSeries(ev, { profiles: profileIds });
+  if (metaDocs(ev).own) putOwn(ev, { profiles: [] });
+}
+
+/** Countdowns are per series: the series flag changes and this occurrence's own flag is dropped. */
 export function setCountdown(ev: CalEvent, on: boolean): void {
-  const base = metaFor(ev);
-  const id = ev.seriesId ? metaKey(ev.calendarId, ev.seriesId) : metaKey(ev.calendarId, ev.id);
-  void put('eventMeta', { profiles: [], ...base, id, countdown: on, updatedAt: currentTime() });
+  putSeries(ev, { countdown: on });
+  if (ev.seriesId && metaDocs(ev).own?.countdown != null) putOwn(ev, { countdown: undefined });
 }
 
 /** Countdown events within the configured window, soonest first, one per series. */
@@ -310,17 +351,40 @@ export async function updateEvent(
   profileIds: string[],
   opts: { countdown?: boolean } = {},
 ): Promise<void> {
-  const before = metaFor(ev);
+  const shown = metaFor(ev);
   const { newSeriesId } = await source.update(ev, draft, scope);
-  const meta = { profiles: profileIds, countdown: opts.countdown, updatedAt: currentTime() };
-  const id = newSeriesId ?? (ev.seriesId && scope === 'this' ? ev.id : (ev.seriesId ?? ev.id));
-  void put('eventMeta', { ...before, ...meta, id: metaKey(ev.calendarId, id) });
+  const countdown = !!opts.countdown;
+  if (newSeriesId) {
+    // The new series starts out as the edited occurrence looked.
+    void put('eventMeta', {
+      id: metaKey(ev.calendarId, newSeriesId),
+      profiles: profileIds,
+      countdown,
+      emoji: shown?.emoji,
+      updatedAt: currentTime(),
+    });
+  } else if (ev.seriesId && scope === 'this') {
+    // The occurrence keeps only what differs from its series.
+    const series = metaDocs(ev).series;
+    putOwn(ev, {
+      profiles: sameIds(profileIds, series?.profiles ?? []) ? [] : profileIds,
+      countdown: countdown === !!series?.countdown ? undefined : countdown,
+    });
+  } else {
+    putSeries(ev, { profiles: profileIds, countdown });
+    // "All events" applies to this occurrence too.
+    if (ev.seriesId && metaDocs(ev).own) putOwn(ev, { profiles: [], countdown: undefined });
+  }
   await refresh();
 }
 
+const sameIds = (a: string[], b: string[]) => a.length === b.length && a.every((x) => b.includes(x));
+
 export async function deleteEvent(ev: CalEvent, scope: EditScope): Promise<void> {
   await source.remove(ev, scope);
-  if (!ev.seriesId || scope === 'all') void removeDoc('eventMeta', metaKey(ev.calendarId, ev.seriesId ?? ev.id)).catch(() => {});
+  const { own, ownKey, seriesKey } = metaDocs(ev);
+  if (!seriesKey || scope === 'all') void removeDoc('eventMeta', seriesKey ?? ownKey).catch(() => {});
+  if (seriesKey && own) void removeDoc('eventMeta', ownKey).catch(() => {});
   await refresh();
 }
 
