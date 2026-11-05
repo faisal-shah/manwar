@@ -139,7 +139,14 @@ describe('calendar sync across a change of account', () => {
       JSON.stringify({
         household: 'gOurs',
         calendars: [cal('ours@gmail.com')],
-        events: [{ ...ev('ours@gmail.com', 'swim_x', { seriesId: 'swim' }), start: at, end: at + 2_700_000, originalStart: at - 2 * 86_400_000 }],
+        events: [
+          {
+            ...ev('ours@gmail.com', 'swim_x', { seriesId: 'swim' }),
+            start: at,
+            end: at + 2_700_000,
+            originalStart: at - 2 * 86_400_000,
+          },
+        ],
         from: '2026-01-01',
         to: '2027-01-01',
         at: Date.now(),

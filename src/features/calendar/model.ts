@@ -4,15 +4,7 @@ import type { CalEvent } from '../../calendar/types';
 import { profileById, settings } from '../../data/store';
 import { nowMs } from '../../lib/clock';
 import { EVERYONE, type ISODate, type MealCategory, type MealEntry, type Profile } from '../../data/types';
-import {
-  addDays,
-  dayShort,
-  formatHeaderDate,
-  formatLongDate,
-  formatTime,
-  formatTimeRange,
-  toISODate,
-} from '../../lib/date';
+import { addDays, dayShort, formatHeaderDate, formatLongDate, formatTime, formatTimeRange, toISODate } from '../../lib/date';
 import { calendarMeals } from '../meals/state';
 import { everyoneProfile } from '../../ui/profile';
 

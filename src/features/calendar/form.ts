@@ -60,7 +60,8 @@ export function newForm(day: ISODate | undefined, nowMs: number, calendarId: str
 
 export function formFromEvent(ev: CalEvent, profiles: string[], countdown: boolean): Form {
   const lastDay = toISODate(new Date(ev.end.getTime() - 1));
-  const reminder = ev.reminderMinutes === undefined ? 'default' : ev.reminderMinutes === null ? 'none' : String(ev.reminderMinutes);
+  const reminder =
+    ev.reminderMinutes === undefined ? 'default' : ev.reminderMinutes === null ? 'none' : String(ev.reminderMinutes);
   return {
     title: ev.title,
     allDay: ev.allDay,
