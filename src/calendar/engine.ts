@@ -1,6 +1,6 @@
 import { computed, effect, signal } from '@preact/signals';
 import { demoMode } from '../config';
-import { data, profileById, put, remove as removeDoc, settings } from '../data/store';
+import { data, householdId, profileById, put, remove as removeDoc, settings } from '../data/store';
 import { EVERYONE, type EventMeta, type ISODate } from '../data/types';
 import { addDays, addMonths, dateAt, diffDays, toISODate } from '../lib/date';
 import { currentTime, today } from '../lib/clock';
@@ -48,6 +48,8 @@ let loaded = fetchWindow();
 const SNAPSHOT_KEY = demoMode ? 'manwar.demoEvents.v1' : 'manwar.events.v1';
 
 interface Snapshot {
+  /** The household whose calendars these are: another household's never show. */
+  hid: string | null;
   calendars: CalendarInfo[];
   events: (Omit<CalEvent, 'start' | 'end'> & { start: number; end: number })[];
   from: ISODate;
@@ -58,6 +60,7 @@ interface Snapshot {
 function saveSnapshot() {
   try {
     const s: Snapshot = {
+      hid: householdId.peek(),
       calendars: calendars.value,
       events: events.value.map((e) => ({ ...e, start: e.start.getTime(), end: e.end.getTime() })),
       from: loaded.from,
@@ -75,6 +78,7 @@ function loadSnapshot() {
     const raw = localStorage.getItem(SNAPSHOT_KEY);
     if (!raw) return;
     const s = JSON.parse(raw) as Snapshot;
+    if (s.hid !== householdId.peek()) return;
     calendars.value = s.calendars;
     events.value = s.events.map((e) => ({ ...e, start: new Date(e.start), end: new Date(e.end) }));
     sync.value = { ...sync.value, lastSync: s.at };
@@ -140,11 +144,28 @@ export function ensureRange(from: ISODate, to: ISODate): void {
 let started = false;
 const POLL_MS = 3 * 60_000;
 
+/** Nothing of the last household's calendars stays once another one opens (Disconnect, then another account). */
+function forgetCalendars(): void {
+  calendars.value = [];
+  events.value = [];
+  farCountdowns.value = [];
+  farCache.clear();
+  sync.value = { loading: sync.value.loading, lastSync: null, error: null };
+}
+
 export function startCalendarSync(): void {
   if (started) return;
   started = true;
   loadSnapshot();
   void refresh();
+  let household = householdId.peek();
+  effect(() => {
+    const h = householdId.value;
+    if (!h || h === household) return;
+    household = h;
+    forgetCalendars();
+    void refresh();
+  });
   setInterval(() => void refresh(), POLL_MS);
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') void refresh();

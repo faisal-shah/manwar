@@ -74,7 +74,9 @@ flowchart LR
 - **Calendar events** live in the household's Google calendars. `calendar/engine.ts`
   fetches a window around today (six weeks back, four months ahead, widened
   to the days the latest view asked for with `ensureRange`), caches a snapshot
-  in localStorage for offline display, polls every 3 minutes, and joins each
+  in localStorage for offline display (marked with its household: another
+  household opening drops the calendars and ignores it), polls every 3
+  minutes, and joins each
   event with `EventMeta` (Firestore `eventMeta`, keyed by
   `metaKey(calendarId, seriesId ?? id)`). An occurrence's own document
   overrides its series' document field by field (empty `profiles` = inherit);
