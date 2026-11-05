@@ -177,6 +177,16 @@ test('Tasks: a kid cannot take back stars that were already spent', async ({ bro
   await col.getByRole('button', { name: 'Uncheck Tidy toys' }).click();
   await expect(balance).toHaveText('1');
   await expect(page.locator('.modal .pin-keys')).toHaveCount(0);
+  // The Undo on a check-off asks too once the stars are gone: another tablet spends them while its toast is up.
+  await col.getByRole('button', { name: 'Complete Water the plants' }).click();
+  await expect(balance).toHaveText('2');
+  await seedDoc(name, 'profiles', { id: 'p1', name: 'Maryam', color: '#F66850', order: 0, stars: 0, createdAt: 1 });
+  await expect(balance).toHaveText('0');
+  await page.locator('.toast', { hasText: 'Water the plants' }).getByRole('button', { name: 'Undo' }).click();
+  await expect(pad).toContainText('Those stars were spent');
+  await pad.getByRole('button', { name: 'Cancel' }).click();
+  await expect(col.getByRole('button', { name: 'Uncheck Water the plants' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(balance).toHaveText('0');
   await ctx.close();
 });
 
