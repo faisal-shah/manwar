@@ -14,14 +14,16 @@ export const firebaseConfig = {
 };
 
 /**
- * Web OAuth client for the household Google Calendar connection: the client
- * Firebase created for Google sign-in. Its registered JavaScript origins are
- * manwar-home.firebaseapp.com and localhost, so the app is served from
- * `canonicalHost` (web.app forwards there).
+ * Web OAuth client for the Google Calendar connection: the client Firebase
+ * created for Google sign-in. Its registered JavaScript origins are the
+ * project's firebaseapp.com host and localhost, so the app is served from
+ * `canonicalHost` and the project's web.app host forwards there.
  */
 export const googleClientId = '1056874888372-5akc9aoc2ouj70gck1heqosn74ugfqpq.apps.googleusercontent.com';
 
-export const canonicalHost = 'manwar-home.firebaseapp.com';
+export const canonicalHost = firebaseConfig.authDomain;
+/** Other hosts Firebase serves the same site on; they forward to `canonicalHost`. */
+export const forwardedHosts = [`${firebaseConfig.projectId}.web.app`];
 
 export const functionsRegion = 'us-central1';
 

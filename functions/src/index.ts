@@ -22,7 +22,8 @@ const NOT_ALLOWED = 'This Google account is not on the allowlist for this Manwar
 
 const opts: CallableOptions = {
   region: 'us-central1',
-  serviceAccount: 'manwar-functions@manwar-home.iam.gserviceaccount.com',
+  // Short form: firebase-tools appends the project (<name>@<project>.iam.gserviceaccount.com).
+  serviceAccount: 'manwar-functions@',
   secrets: [CLIENT_SECRET, ALLOWED_ACCOUNTS],
   cors: true,
   maxInstances: 3,

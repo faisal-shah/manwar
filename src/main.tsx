@@ -11,11 +11,11 @@ import './app/shell.css';
 import { App } from './app/App';
 import { initSession } from './data/session';
 import { startApp } from './app/start';
-import { buildId, canonicalHost } from './config';
+import { buildId, canonicalHost, forwardedHosts } from './config';
 
 // One origin for the wall: the OAuth client and the browser storage (Firestore
 // cache, offline snapshot) are both per origin.
-if (location.hostname === 'manwar-home.web.app')
+if (forwardedHosts.includes(location.hostname))
   location.replace(`https://${canonicalHost}${location.pathname}${location.search}`);
 
 document.documentElement.dataset.build = buildId;

@@ -6,36 +6,42 @@ decisions: `research/README.md` (start there; the numbered reports hold the
 detail and the images). Scope: Home, Calendar, Lists, Tasks, Rewards, Meals,
 Recipes, Sleep, Settings. Not built: Photos, Disney, Magic Import, Sidekick.
 
-## Accounts and infrastructure
+## Deployment configuration
 
-- Firebase/GCP project `manwar-home`. Run gcloud as an account with Owner on
-  the project (pass `--account <owner>` where the machine's gcloud default is
-  a different account). Deploys normally go through the GitHub workflow.
-- GitHub repo `faisal-shah/manwar` (public). Repo admin (secrets, alerts,
-  workflow runs) needs a `gh` login with admin on the repo.
-- Deploys: `.github/workflows/deploy.yml` on push to main, keyless via
-  Workload Identity Federation (pool `github`, provider `github`, restricted
-  to this repo) as `github-deployer@manwar-home.iam.gserviceaccount.com`.
-- Functions run as `manwar-functions@manwar-home.iam.gserviceaccount.com`.
-  Secret `GOOGLE_OAUTH_CLIENT_SECRET` in Secret Manager; non-secret params in
-  `functions/.env` (`GOOGLE_OAUTH_CLIENT_ID` must equal `googleClientId` in
-  `src/config.ts`; `tests/unit/config.test.ts` checks).
+Everything that ties the repo to one deployment lives in a few places; the
+docs refer to them rather than repeating the values. `<project>` below means
+the default project in `.firebaserc`.
+
+| What | Where |
+|---|---|
+| Firebase project | `.firebaserc` (default) |
+| Web config (API key, app id, auth domain) and the OAuth client id | `src/config.ts`; hosts derive from it (`canonicalHost` = authDomain, `<project>.web.app` forwards there) |
+| Functions params | `functions/.env` (`GOOGLE_OAUTH_CLIENT_ID`, must equal `googleClientId`; `tests/unit/config.test.ts` checks) |
+| Secrets | Secret Manager: `GOOGLE_OAUTH_CLIENT_SECRET`, `ALLOWED_ACCOUNTS` |
+| Deploy identity | GitHub repository variables `GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_DEPLOY_SERVICE_ACCOUNT` |
+
+- Run gcloud as an account with Owner on the project (pass `--account` where
+  the machine's gcloud default is a different account). Deploys go through
+  `.github/workflows/deploy.yml` on push to main (or Run workflow), keyless
+  via Workload Identity Federation (pool `github`, provider `github`,
+  restricted to this repository) as the `github-deployer` service account.
+  Repo admin (variables, alerts) needs a `gh` login with admin on the repo.
+- Functions run as the `manwar-functions` service account (written
+  `manwar-functions@`; firebase-tools appends the project).
 - The OAuth client is the one Firebase auto-created for Google sign-in
   ("Web client (auto created by Google Service)"). Its client id and secret
-  are readable from `identitytoolkit.googleapis.com/admin/v2/projects/manwar-home/defaultSupportedIdpConfigs/google.com`.
-  Its registered JavaScript origins are `https://manwar-home.firebaseapp.com`
-  and `http://localhost` (any port), not web.app, so the canonical origin is
-  `manwar-home.firebaseapp.com` and `main.tsx` forwards web.app there. Editing
-  the client's origins needs the Cloud Console (no public API).
+  are readable from `identitytoolkit.googleapis.com/admin/v2/projects/<project>/defaultSupportedIdpConfigs/google.com`.
+  Its registered JavaScript origins are `https://<project>.firebaseapp.com`
+  and `http://localhost` (any port), not web.app; editing them needs the
+  Cloud Console (no public API).
 - Accounts: each connected Google account is its own household (`hid` =
   `g` + the Google subject id); the Firestore rules keep households apart.
-  Only accounts in the Secret Manager secret `ALLOWED_ACCOUNTS` (emails,
-  comma separated) may connect or get Calendar tokens, so strangers cannot
-  run up the bill. Change it with
-  `gcloud secrets versions add ALLOWED_ACCOUNTS --data-file=- --project manwar-home`
+  Only accounts in the `ALLOWED_ACCOUNTS` secret (emails, comma separated)
+  may connect or get Calendar tokens, so strangers cannot run up the bill.
+  Change it with `gcloud secrets versions add ALLOWED_ACCOUNTS --data-file=- --project <project>`
   and redeploy the Functions (re-run the workflow). No account names belong
   in the repo.
-- Budget alert "manwar-home monthly", $10.
+- A monthly budget alert ($10) watches the project's billing.
 
 ## Architecture
 

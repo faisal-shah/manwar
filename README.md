@@ -9,8 +9,7 @@ A family wall calendar for a tablet, in the spirit of the Skylight Calendar 2
 with Plus: the household's Google calendars color-coded by person, chores and
 routines with stars and rewards, lists, a weekly meal plan and recipes.
 
-Live: **https://manwar-home.firebaseapp.com** (`manwar-home.web.app` forwards
-there).
+Live: **https://manwar-home.firebaseapp.com**
 
 The product research behind it, with screenshots, is in
 [research/](research/README.md).
@@ -63,7 +62,7 @@ has been idle for a few minutes.
 ## Setting up the tablet
 
 1. Install **Fully Kiosk Browser** on the Android tablet and set its start URL
-   to `https://manwar-home.firebaseapp.com`.
+   to the live address above.
 2. In Fully: Web Content Settings → **Enable Popups** on (needed once, for the
    Google consent window); Web Content Settings → **Autoplay audio** on (chimes);
    Advanced Web Settings → **Enable JavaScript Interface** on (lets the app dim

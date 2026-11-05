@@ -96,7 +96,7 @@ flowchart LR
   Phones[Phones, other Google accounts] -- create events, invite --> HH
 ```
 
-- **Static app on Firebase Hosting** (`manwar-home`), installable as a PWA,
+- **Static app on Firebase Hosting**, installable as a PWA,
   offline-capable through a service worker and a local snapshot.
 - **Events live in the household Google account's calendars** through the
   Google Calendar API. Events created on the tablet are written there; events
@@ -140,12 +140,12 @@ flowchart LR
 
 | Piece | Value |
 |---|---|
-| Firebase / GCP project | `manwar-home` (number 1056874888372) |
-| Billing | Blaze, "My Billing Account"; budget alert "manwar-home monthly" at $10 (50/90/100%) |
-| Hosting | `manwar-home.web.app`, `manwar-home.firebaseapp.com` |
-| Firestore | `(default)`, `nam5`, rules deny all client access for now |
+| Firebase / GCP project | The default project in `.firebaserc` (`<project>` below) |
+| Billing | Blaze; monthly budget alert at $10 (50/90/100%) |
+| Hosting | `<project>.firebaseapp.com` (canonical) and `<project>.web.app` (forwards) |
+| Firestore | `(default)`, `nam5`; rules give each household access to its own data only |
 | Auth | Identity Platform initialized; authorized domains localhost, web.app, firebaseapp.com |
 | APIs | Calendar, Functions, Cloud Build, Artifact Registry, Run, Eventarc, Secret Manager, Scheduler, IAM credentials, STS, Budgets |
-| Deploy identity | `github-deployer@manwar-home.iam.gserviceaccount.com` via Workload Identity Federation pool `github`, provider `github`, restricted to `faisal-shah/manwar` |
-| Functions runtime | `manwar-functions@manwar-home.iam.gserviceaccount.com` (Firestore user, Secret accessor, token creator on itself for custom tokens) |
-| OAuth | The web client Firebase auto-created when Google sign-in was enabled; secret in Secret Manager (`GOOGLE_OAUTH_CLIENT_SECRET`); origins `manwar-home.firebaseapp.com` and `localhost`, so the app is served from firebaseapp.com; consent screen External, In production (refresh tokens do not expire after 7 days) |
+| Deploy identity | `github-deployer` service account via Workload Identity Federation pool `github`, provider `github`, restricted to this repository (both in GitHub repository variables) |
+| Functions runtime | `manwar-functions` service account (Firestore user, Secret accessor, token creator on itself for custom tokens) |
+| OAuth | The web client Firebase auto-created when Google sign-in was enabled; secret in Secret Manager (`GOOGLE_OAUTH_CLIENT_SECRET`); origins `<project>.firebaseapp.com` and `localhost`, so the app is served from firebaseapp.com; consent screen External, In production (refresh tokens do not expire after 7 days) |
