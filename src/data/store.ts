@@ -86,6 +86,12 @@ export const ready = signal(false);
 export const profiles = computed(() => [...data.profiles.value].sort((a, b) => a.order - b.order || a.createdAt - b.createdAt));
 export const profileById = computed(() => new Map(profiles.value.map((p) => [p.id, p])));
 
+/**
+ * The ledger listener holds the household's newest entries, up to this many;
+ * the star history sheet pages further back with loadOlderLedger.
+ */
+export const LEDGER_LIVE = 1000;
+
 /** Live listeners by collection ('settings' for the settings document). */
 const listeners = new Map<string, Unsubscribe>();
 /** Collections (and 'settings') whose latest snapshot came from the server, not only the local cache. */
@@ -158,7 +164,7 @@ export function openHousehold(id: string): void {
       // back as the task views do, plus a margin; the window moves on each listen.
       const since = toISODate(new Date(currentTime() - (HISTORY_DAYS + 2) * 86_400_000));
       if (name === 'taskStates') q = query(q, where('date', '>=', since));
-      if (name === 'ledger') q = query(q, orderBy('at', 'desc'), limit(1000));
+      if (name === 'ledger') q = query(q, orderBy('at', 'desc'), limit(LEDGER_LIVE));
       return onSnapshot(
         q,
         (snap) => {

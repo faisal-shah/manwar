@@ -8,14 +8,14 @@ import { adjustStars, ledgerFor, undoLedgerEntry } from '../../tasks/state';
 import { Button, Chips } from '../../ui/controls';
 import { Sheet, toast } from '../../ui/overlays';
 import { Avatar } from '../../ui/profile';
-import { historyFor } from './history-state';
+import { historyFor, loadOlderLedger, moreLedger, olderLedger } from './history-state';
 import { MAX_REWARD_COST, REASON_LABEL, formatStars, relativeTime, undoable } from './logic';
 
 /** Star history for one profile: every ledger entry newest first, with undo, plus Give / Remove stars. */
 export function HistoryHost() {
   const id = historyFor.value;
   if (!id || !profileById.value.get(id)) return null;
-  return <StarHistory profileId={id} onClose={() => (historyFor.value = null)} />;
+  return <StarHistory key={id} profileId={id} onClose={() => (historyFor.value = null)} />;
 }
 
 const ICON: Record<LedgerReason, typeof Check> = {
@@ -32,10 +32,23 @@ const PAGE = 60;
 
 function StarHistory({ profileId, onClose }: { profileId: string; onClose: () => void }) {
   const p = profileById.value.get(profileId)!;
-  const entries = ledgerFor(profileId);
+  const live = ledgerFor(profileId);
+  const liveIds = new Set(live.map((e) => e.id));
+  // Entries older than the store's live window, once asked for: shown after the live ones, without Undo.
+  const older = olderLedger.value.filter((e) => e.profileId === profileId && !liveIds.has(e.id)).sort((a, b) => b.at - a.at);
+  const entries = [...live, ...older];
   const [adjust, setAdjust] = useState<'give' | 'remove' | null>(null);
   const [shown, setShown] = useState(PAGE);
+  const [loadingOlder, setLoadingOlder] = useState(false);
   const now = currentTime();
+  const showOlder = () => {
+    if (entries.length > shown) return setShown(shown + PAGE);
+    setLoadingOlder(true);
+    void loadOlderLedger(profileId, PAGE)
+      .then(() => setShown(shown + PAGE))
+      .catch(() => toast('Older stars could not be loaded. Try again once the wall is online.'))
+      .finally(() => setLoadingOlder(false));
+  };
   return (
     <Sheet title={`${p.name}'s stars`} onClose={onClose}>
       <div class="hist-head" style={{ '--c': p.color }}>
@@ -55,24 +68,26 @@ function StarHistory({ profileId, onClose }: { profileId: string; onClose: () =>
       </div>
       {adjust && <Adjust key={adjust} kind={adjust} balance={p.stars} profileId={profileId} onDone={() => setAdjust(null)} />}
       {entries.length === 0 ? (
-        <p class="muted hist-empty">No stars yet. Completed tasks and redeemed rewards show up here.</p>
+        <p class="muted hist-empty">
+          {moreLedger.value ? 'Nothing recent.' : 'No stars yet. Completed tasks and redeemed rewards show up here.'}
+        </p>
       ) : (
         <ul class="hist-list">
           {entries.slice(0, shown).map((e) => (
-            <Entry e={e} now={now} />
+            <Entry e={e} now={now} readOnly={!liveIds.has(e.id)} />
           ))}
         </ul>
       )}
-      {entries.length > shown && (
-        <Button variant="ghost" onClick={() => setShown(shown + PAGE)}>
-          Show older
+      {(entries.length > shown || moreLedger.value) && (
+        <Button variant="ghost" disabled={loadingOlder} onClick={showOlder}>
+          {loadingOlder ? 'Loading…' : 'Show older'}
         </Button>
       )}
     </Sheet>
   );
 }
 
-function Entry({ e, now }: { e: LedgerEntry; now: number }) {
+function Entry({ e, now, readOnly }: { e: LedgerEntry; now: number; readOnly: boolean }) {
   const Icon = ICON[e.reason];
   const sub = [REASON_LABEL[e.reason], e.note, relativeTime(e.at, now)].filter(Boolean).join(' · ');
   return (
@@ -91,7 +106,7 @@ function Entry({ e, now }: { e: LedgerEntry; now: number }) {
         {e.delta > 0 ? '+' : e.delta < 0 ? '−' : ''}
         {formatStars(Math.abs(e.delta))}
       </span>
-      {undoable(e) ? (
+      {undoable(e) && !readOnly ? (
         <button
           type="button"
           class="hist-undo"

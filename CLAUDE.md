@@ -111,8 +111,11 @@ flowchart LR
   written only for an occurrence still on that day (`stillOn`: not for a
   task deleted or reassigned on another tablet while its popover was open).
   `HISTORY_DAYS` bounds the task views, late carry-over, the writes and the
-  store's `taskStates` query. Two devices completing the same occurrence in
-  the same instant can still both award (the balance is an increment).
+  store's `taskStates` query. The ledger listener holds the household's
+  newest `LEDGER_LIVE` entries; the star history sheet reads older pages on
+  Show older (`rewards/history-state.ts`, shown without Undo). Balances never
+  depend on the window. Two devices completing the same occurrence in the
+  same instant can still both award (the balance is an increment).
 - **Parental lock** (`core/lock.ts`): with a PIN set, only checking off tasks
   is open; wrap every other mutation in `asParent(() => ...)` or
   `await requireParent()`. Repeated wrong PINs pause the pad
