@@ -109,6 +109,7 @@ function toCalEvent(calendarId: string, g: GEvent, role: AccessRole): CalEvent {
     calendarId,
     id: g.id,
     seriesId: g.recurringEventId,
+    originalStart: g.originalStartTime ? parseTime(g.originalStartTime).at : undefined,
     title: g.summary?.trim() || (detailsHidden ? 'Busy' : '(No title)'),
     allDay: s.allDay,
     start: s.at,
@@ -126,27 +127,66 @@ function toCalEvent(calendarId: string, g: GEvent, role: AccessRole): CalEvent {
   };
 }
 
-function draftBody(d: EventDraft): Partial<GEvent> {
-  const tz = zone();
+/** Time zones for a timed start and end. One left out keeps the event's own (PATCH merges). */
+interface Zones {
+  start?: string;
+  end?: string;
+}
+const deviceZones = (): Zones => ({ start: zone(), end: zone() });
+
+/**
+ * Zones for a change to an event that may be timed already: its own stay (a
+ * weekly call set in London time keeps following London's clock changes, a
+ * flight keeps its arrival zone), and only one that was all-day takes the
+ * tablet's.
+ */
+const keepZones = (wasAllDay: boolean): Zones => (wasAllDay ? deviceZones() : {});
+
+function draftBody(d: EventDraft, zones: Zones): Partial<GEvent> {
+  const timed = (at: Date, timeZone?: string): GTime => ({ date: null, dateTime: at.toISOString(), ...(timeZone && { timeZone }) });
   const body: Partial<GEvent> = {
     summary: d.title,
     description: d.description ?? '',
     location: d.location ?? '',
     // PATCH merges nested objects: clear the other kind of time, or a timed <-> all-day change is rejected.
-    start: d.allDay
-      ? { date: d.firstDay ?? toISODate(d.start), dateTime: null, timeZone: null }
-      : { date: null, dateTime: d.start.toISOString(), timeZone: tz },
-    end: d.allDay
-      ? { date: addDays(d.lastDay ?? toISODate(d.start), 1), dateTime: null, timeZone: null }
-      : { date: null, dateTime: d.end.toISOString(), timeZone: tz },
-    reminders:
+    start: d.allDay ? { date: d.firstDay ?? toISODate(d.start), dateTime: null, timeZone: null } : timed(d.start, zones.start),
+    end: d.allDay ? { date: addDays(d.lastDay ?? toISODate(d.start), 1), dateTime: null, timeZone: null } : timed(d.end, zones.end),
+  };
+  if (!d.keepReminders)
+    body.reminders =
       d.reminderMinutes === undefined
         ? { useDefault: true }
-        : { useDefault: false, overrides: d.reminderMinutes === null ? [] : [{ method: 'popup', minutes: d.reminderMinutes }] },
-  };
+        : { useDefault: false, overrides: d.reminderMinutes === null ? [] : [{ method: 'popup', minutes: d.reminderMinutes }] };
   if (!d.keepRecurrence) body.recurrence = d.repeat ? [toRRule(d.repeat, d.allDay)] : [];
   return body;
 }
+
+/**
+ * What a new series made by "This and following" takes over from the old
+ * one besides the editor's fields, as Google's own split does: the guests
+ * stay invited, the color, reminders and visibility stay.
+ */
+const CARRIED = [
+  'colorId',
+  'transparency',
+  'visibility',
+  'attendees',
+  'guestsCanInviteOthers',
+  'guestsCanModify',
+  'guestsCanSeeOtherGuests',
+  'anyoneCanAddSelf',
+  'extendedProperties',
+  'source',
+  'reminders',
+] as const;
+
+function carried(master: GEvent): Record<string, unknown> {
+  const m = master as unknown as Record<string, unknown>;
+  return Object.fromEntries(CARRIED.filter((k) => m[k] !== undefined).map((k) => [k, m[k]]));
+}
+
+/** Where an occurrence sits in its series: its original start, which a moved occurrence no longer shows. */
+const seriesStart = (ev: CalEvent) => ev.originalStart ?? ev.start;
 
 /** Occurrences of a series starting before `before`, cancelled ones included (COUNT counts them too). */
 async function instancesBefore(cal: string, seriesId: string, before: Date): Promise<number> {
@@ -242,42 +282,46 @@ export const googleSource: CalendarSource = {
 
   async insert(calendarId, id, draft) {
     const cal = encodeURIComponent(calendarId);
+    // A new event is in the tablet's time zone.
+    const body = draftBody(draft, deviceZones());
     try {
-      await call<GEvent>(`/calendars/${cal}/events`, { method: 'POST', body: JSON.stringify({ ...draftBody(draft), id }) });
+      await call<GEvent>(`/calendars/${cal}/events`, { method: 'POST', body: JSON.stringify({ ...body, id }) });
     } catch (e) {
       // A retry after a lost response: the event exists already, so bring it up to date instead of adding it twice.
       if (!(e instanceof GoogleError && e.status === 409)) throw e;
-      await call(`/calendars/${cal}/events/${encodeURIComponent(id)}`, {
-        method: 'PATCH',
-        body: JSON.stringify(draftBody(draft)),
-      });
+      await call(`/calendars/${cal}/events/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(body) });
     }
   },
 
   async update(ev, draft, scope) {
     const cal = encodeURIComponent(ev.calendarId);
     if (!ev.seriesId || scope === 'this') {
-      const body = draftBody({ ...draft, keepRecurrence: ev.seriesId ? true : draft.keepRecurrence });
+      const body = draftBody({ ...draft, keepRecurrence: ev.seriesId ? true : draft.keepRecurrence }, keepZones(ev.allDay));
       await call(`/calendars/${cal}/events/${encodeURIComponent(ev.id)}`, { method: 'PATCH', body: JSON.stringify(body) });
       return {};
     }
     const master = await call<GEvent>(`/calendars/${cal}/events/${encodeURIComponent(ev.seriesId)}`);
     const masterStart = parseTime(master.start).at;
-    if (scope === 'following' && toISODate(masterStart) < toISODate(ev.start)) {
-      // Start a new series here, then end the old one the day before this occurrence.
+    const seriesAllDay = !master.start.dateTime;
+    const cut = seriesStart(ev);
+    if (scope === 'following' && toISODate(masterStart) < toISODate(cut)) {
+      // Start a new series here, then end the old one just before this occurrence.
       const lines = master.recurrence ?? [];
-      const body = draftBody({ ...draft, keepRecurrence: false });
+      const zones = seriesAllDay
+        ? deviceZones()
+        : { start: master.start.timeZone ?? zone(), end: master.end.timeZone ?? master.start.timeZone ?? zone() };
+      const body = { ...carried(master), ...draftBody({ ...draft, keepRecurrence: false }, zones) };
       if (draft.keepRecurrence) {
         // A COUNT rule continues with the occurrences it has left, not a fresh COUNT.
         const count = recurrenceCount(lines);
         body.recurrence =
-          count === null ? lines : withCount(lines, Math.max(1, count - (await instancesBefore(cal, ev.seriesId, ev.start))));
+          count === null ? lines : withCount(lines, Math.max(1, count - (await instancesBefore(cal, ev.seriesId, cut))));
       }
       const created = await call<GEvent>(`/calendars/${cal}/events`, { method: 'POST', body: JSON.stringify(body) });
       try {
         await call(`/calendars/${cal}/events/${encodeURIComponent(ev.seriesId)}`, {
           method: 'PATCH',
-          body: JSON.stringify({ recurrence: endSeriesBefore(lines, toISODate(ev.start), ev.allDay) }),
+          body: JSON.stringify({ recurrence: endSeriesBefore(lines, cut, seriesAllDay) }),
         });
       } catch (e) {
         // Without the old series ended, the new one would double every occurrence.
@@ -299,7 +343,7 @@ export const googleSource: CalendarSource = {
     }
     await call(`/calendars/${cal}/events/${encodeURIComponent(ev.seriesId)}`, {
       method: 'PATCH',
-      body: JSON.stringify(draftBody(moved)),
+      body: JSON.stringify(draftBody(moved, keepZones(seriesAllDay))),
     });
     return {};
   },
@@ -315,13 +359,14 @@ export const googleSource: CalendarSource = {
       return;
     }
     const master = await call<GEvent>(`/calendars/${cal}/events/${encodeURIComponent(ev.seriesId)}`);
-    if (toISODate(parseTime(master.start).at) >= toISODate(ev.start)) {
+    const cut = seriesStart(ev);
+    if (toISODate(parseTime(master.start).at) >= toISODate(cut)) {
       await del(`/calendars/${cal}/events/${encodeURIComponent(ev.seriesId)}`);
       return;
     }
     await call(`/calendars/${cal}/events/${encodeURIComponent(ev.seriesId)}`, {
       method: 'PATCH',
-      body: JSON.stringify({ recurrence: endSeriesBefore(master.recurrence ?? [], toISODate(ev.start), ev.allDay) }),
+      body: JSON.stringify({ recurrence: endSeriesBefore(master.recurrence ?? [], cut, !master.start.dateTime) }),
     });
   },
 };

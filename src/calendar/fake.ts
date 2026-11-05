@@ -160,6 +160,7 @@ function occurrence(ms: Master, day: ISODate, recurring: boolean): CalEvent {
     calendarId: ms.calendarId,
     id,
     seriesId: recurring ? ms.id : undefined,
+    originalStart: recurring ? (ms.allDay ? dateAt(day) : dateAt(day, minutesToHHMM(ms.startMin))) : undefined,
     title: o.title ?? ms.title,
     allDay: ms.allDay,
     start,
@@ -256,19 +257,18 @@ export const fakeSource: CalendarSource = {
     if (i < 0) throw new Error('demo calendar: event not found');
     const master = ms[i];
     const next = fromDraft(master.id, master.calendarId, draft);
+    // Where the series has this occurrence, even when it was moved.
+    const orig = toISODate(ev.originalStart ?? ev.start);
     if (!ev.seriesId) {
       ms[i] = { ...master, ...next, repeat: draft.keepRecurrence ? master.repeat : next.repeat };
     } else if (scope === 'this') {
       const { day } = parseInstance(ev.id);
       master.overrides[day] = { title: next.title, day: next.day, startMin: next.startMin, durMin: next.durMin };
-    } else if (scope === 'following' && master.day < toISODate(ev.start)) {
-      master.repeat = { ...master.repeat!, until: addDays(toISODate(ev.start), -1) };
+    } else if (scope === 'following' && master.day < orig) {
+      const kept = master.repeat;
+      master.repeat = { ...master.repeat!, until: addDays(orig, -1) };
       const id = `ev${Math.random().toString(36).slice(2, 10)}`;
-      ms.push({
-        ...next,
-        id,
-        repeat: draft.keepRecurrence ? master.repeat && { ...master.repeat, until: undefined } : next.repeat,
-      });
+      ms.push({ ...next, id, repeat: draft.keepRecurrence ? kept : next.repeat });
       save(ms);
       return { newSeriesId: id };
     } else {
@@ -290,12 +290,13 @@ export const fakeSource: CalendarSource = {
     const masterId = ev.seriesId ?? ev.id;
     const master = ms.find((x) => x.id === masterId);
     if (!master) return;
-    if (!ev.seriesId || scope === 'all' || (scope === 'following' && master.day >= toISODate(ev.start))) {
+    const orig = toISODate(ev.originalStart ?? ev.start);
+    if (!ev.seriesId || scope === 'all' || (scope === 'following' && master.day >= orig)) {
       ms = ms.filter((x) => x.id !== masterId);
     } else if (scope === 'this') {
       master.exdates.push(parseInstance(ev.id).day);
     } else {
-      master.repeat = { ...master.repeat!, until: addDays(toISODate(ev.start), -1) };
+      master.repeat = { ...master.repeat!, until: addDays(orig, -1) };
     }
     save(ms);
   },

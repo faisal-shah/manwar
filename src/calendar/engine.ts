@@ -47,9 +47,11 @@ let loaded = fetchWindow();
 
 const SNAPSHOT_KEY = demoMode ? 'manwar.demoEvents.v1' : 'manwar.events.v1';
 
+type StoredEvent = Omit<CalEvent, 'start' | 'end' | 'originalStart'> & { start: number; end: number; originalStart?: number };
+
 interface Snapshot {
   calendars: CalendarInfo[];
-  events: (Omit<CalEvent, 'start' | 'end'> & { start: number; end: number })[];
+  events: StoredEvent[];
   from: ISODate;
   to: ISODate;
   at: number;
@@ -59,7 +61,12 @@ function saveSnapshot() {
   try {
     const s: Snapshot = {
       calendars: calendars.value,
-      events: events.value.map((e) => ({ ...e, start: e.start.getTime(), end: e.end.getTime() })),
+      events: events.value.map((e) => ({
+        ...e,
+        start: e.start.getTime(),
+        end: e.end.getTime(),
+        originalStart: e.originalStart?.getTime(),
+      })),
       from: loaded.from,
       to: loaded.to,
       at: Date.now(),
@@ -76,7 +83,12 @@ function loadSnapshot() {
     if (!raw) return;
     const s = JSON.parse(raw) as Snapshot;
     calendars.value = s.calendars;
-    events.value = s.events.map((e) => ({ ...e, start: new Date(e.start), end: new Date(e.end) }));
+    events.value = s.events.map((e) => ({
+      ...e,
+      start: new Date(e.start),
+      end: new Date(e.end),
+      originalStart: e.originalStart === undefined ? undefined : new Date(e.originalStart),
+    }));
     sync.value = { ...sync.value, lastSync: s.at };
   } catch {
     /* corrupt snapshot: ignore */

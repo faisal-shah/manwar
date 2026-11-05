@@ -20,6 +20,11 @@ export interface CalEvent {
   id: string;
   /** Recurring series id, for occurrences of a recurring event. */
   seriesId?: string;
+  /**
+   * Occurrences: where the series put it (Google's originalStartTime), which
+   * differs from `start` when the occurrence was moved. Series edits cut here.
+   */
+  originalStart?: Date;
   title: string;
   allDay: boolean;
   /** Timed events: instants. All-day events: local midnight of the first day / day after the last day. */
@@ -50,6 +55,11 @@ export interface EventDraft {
   location?: string;
   description?: string;
   reminderMinutes?: number | null;
+  /**
+   * Keep the event's own reminders (the editor's reminder was not changed):
+   * an event can carry email and several popup reminders the editor does not show.
+   */
+  keepReminders?: boolean;
 }
 
 export type EditScope = 'this' | 'following' | 'all';

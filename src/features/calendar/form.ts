@@ -18,6 +18,12 @@ export interface Form {
   calendarId: string;
   /** 'default' (calendar's own reminders), 'none', or minutes before as a string. */
   reminder: string;
+  /**
+   * The reminder as read from the event. While `reminder` still equals it,
+   * the event's own reminders are written back untouched (email ones, more
+   * than one popup).
+   */
+  loadedReminder?: string;
   location: string;
   /** Notes as plain text (a Google description may be HTML). */
   notes: string;
@@ -54,6 +60,7 @@ export function newForm(day: ISODate | undefined, nowMs: number, calendarId: str
 
 export function formFromEvent(ev: CalEvent, profiles: string[], countdown: boolean): Form {
   const lastDay = toISODate(new Date(ev.end.getTime() - 1));
+  const reminder = ev.reminderMinutes === undefined ? 'default' : ev.reminderMinutes === null ? 'none' : String(ev.reminderMinutes);
   return {
     title: ev.title,
     allDay: ev.allDay,
@@ -63,7 +70,8 @@ export function formFromEvent(ev: CalEvent, profiles: string[], countdown: boole
     endTime: hhmm(ev.end),
     profiles,
     calendarId: ev.calendarId,
-    reminder: ev.reminderMinutes === undefined ? 'default' : ev.reminderMinutes === null ? 'none' : String(ev.reminderMinutes),
+    reminder,
+    loadedReminder: reminder,
     location: ev.location ?? '',
     notes: ev.description ? plainText(ev.description) : '',
     description: ev.description ? { raw: ev.description, shown: plainText(ev.description) } : undefined,
@@ -90,6 +98,7 @@ export function draftFromForm(f: Form, keepRecurrence: boolean): EventDraft {
     location: f.location.trim() || undefined,
     description: f.description && f.notes === f.description.shown ? f.description.raw : f.notes.trim() || undefined,
     reminderMinutes,
+    keepReminders: f.loadedReminder !== undefined && f.reminder === f.loadedReminder,
   };
   if (f.allDay)
     return {

@@ -388,6 +388,20 @@ describe('google calendar: reading events', () => {
       expect(own.title).toBe('(No title)');
     });
 
+    it('keeps the original start of a moved occurrence', async () => {
+      const [ev] = await listOne([
+        base({
+          id: 'swim_20261121T153000Z',
+          summary: 'Swim lesson',
+          recurringEventId: 'swim',
+          originalStartTime: { dateTime: '2026-11-21T09:30:00-06:00', timeZone: 'America/Chicago' },
+          start: { dateTime: '2026-11-23T16:00:00-06:00', timeZone: 'America/Chicago' },
+          end: { dateTime: '2026-11-23T16:45:00-06:00', timeZone: 'America/Chicago' },
+        }),
+      ]);
+      expect(ev.start.toISOString()).toBe('2026-11-23T22:00:00.000Z');
+      expect(ev.originalStart?.toISOString()).toBe('2026-11-21T15:30:00.000Z');
+    });
   });
 
   describe('next occurrence (countdowns past the window)', () => {
@@ -562,7 +576,7 @@ describe('google calendar: writing events', () => {
       const post = calls.find((c) => c.method === 'POST')!;
       expect(post.body.recurrence).toEqual(['RRULE:FREQ=WEEKLY;COUNT=7']);
       const patch = calls.find((c) => c.method === 'PATCH')!;
-      expect(patch.body.recurrence).toEqual(['RRULE:FREQ=WEEKLY;UNTIL=20261121T055959Z']);
+      expect(patch.body.recurrence).toEqual(['RRULE:FREQ=WEEKLY;UNTIL=20261121T152959Z']);
       expect(calls.find((c) => c.path.endsWith('/instances'))!.query).toMatchObject({
         showDeleted: 'true',
         timeMax: '2026-11-21T15:30:00.000Z',
@@ -596,10 +610,144 @@ describe('google calendar: writing events', () => {
       ]);
     });
 
+    // Saturday's lesson was moved to Monday afternoon on a phone. The series still has it on Saturday,
+    // so a cut at the moved day (end of Sunday) would keep it in the old series and show it twice.
+    const moved: CalEvent = {
+      ...occ,
+      originalStart: new Date('2026-11-21T09:30'),
+      start: new Date('2026-11-23T16:00'),
+      end: new Date('2026-11-23T16:45'),
+    };
 
+    it('splits a moved occurrence where the series had it', async () => {
+      routes.push((c) => (c.method === 'GET' ? { body: master(['RRULE:FREQ=WEEKLY;COUNT=10']) } : undefined));
+      routes.push((c) => (c.path.endsWith('/instances') ? { body: { items: [{ id: 'a' }, { id: 'b' }, { id: 'c' }] } } : undefined));
+      routes.push((c) => (c.method === 'POST' ? { body: { id: 'swim2' } } : undefined));
+      routes.push((c) => (c.method === 'PATCH' ? { body: { id: 'swim' } } : undefined));
+      await googleSource.update(moved, { ...draft, start: moved.start, end: moved.end }, 'following');
+      expect(calls.find((c) => c.method === 'PATCH')!.body.recurrence).toEqual(['RRULE:FREQ=WEEKLY;UNTIL=20261121T152959Z']);
+      expect(calls.find((c) => c.path.endsWith('/instances'))!.query.timeMax).toBe('2026-11-21T15:30:00.000Z');
+    });
 
+    it('deletes a moved occurrence and the rest from where the series had it', async () => {
+      routes.push((c) => (c.method === 'GET' ? { body: master(['RRULE:FREQ=WEEKLY']) } : undefined));
+      routes.push((c) => (c.method === 'PATCH' ? { body: { id: 'swim' } } : undefined));
+      await googleSource.remove(moved, 'following');
+      expect(calls.at(-1)!.body).toEqual({ recurrence: ['RRULE:FREQ=WEEKLY;UNTIL=20261121T152959Z'] });
+    });
+
+    it('carries the guests, color, reminders and time zone over to the new series', async () => {
+      const reminders = {
+        useDefault: false,
+        overrides: [
+          { method: 'email', minutes: 1440 },
+          { method: 'popup', minutes: 10 },
+          { method: 'popup', minutes: 60 },
+        ],
+      };
+      const attendees = [
+        { email: CAL, self: true, organizer: true, responseStatus: 'accepted' },
+        { email: 'nani@example.co.uk', displayName: 'Nani', responseStatus: 'accepted' },
+      ];
+      routes.push((c) =>
+        c.method === 'GET'
+          ? {
+              body: base({
+                id: 'call',
+                summary: 'Call with Nani',
+                recurrence: ['RRULE:FREQ=WEEKLY;BYDAY=SA'],
+                start: { dateTime: '2026-10-31T16:00:00+00:00', timeZone: 'Europe/London' },
+                end: { dateTime: '2026-10-31T16:30:00+00:00', timeZone: 'Europe/London' },
+                colorId: '5',
+                attendees,
+                reminders,
+                guestsCanModify: true,
+                hangoutLink: 'https://meet.google.com/abc-defg-hij',
+              }),
+            }
+          : undefined,
+      );
+      routes.push((c) => (c.method === 'POST' ? { body: { id: 'call2' } } : undefined));
+      routes.push((c) => (c.method === 'PATCH' ? { body: { id: 'call' } } : undefined));
+      const callOcc: CalEvent = {
+        ...occ,
+        key: `${CAL}::call_20261121T160000Z`,
+        id: 'call_20261121T160000Z',
+        seriesId: 'call',
+        title: 'Call with Nani',
+        originalStart: new Date('2026-11-21T16:00:00Z'),
+        start: new Date('2026-11-21T16:00:00Z'),
+        end: new Date('2026-11-21T16:30:00Z'),
+      };
+      await googleSource.update(
+        callOcc,
+        { ...draft, title: 'Call with Nani and Nana', start: callOcc.start, end: callOcc.end, keepReminders: true },
+        'following',
+      );
+      const post = calls.find((c) => c.method === 'POST')!.body;
+      expect(post).toMatchObject({ summary: 'Call with Nani and Nana', colorId: '5', attendees, reminders, guestsCanModify: true });
+      expect(post.start).toEqual({ date: null, dateTime: '2026-11-21T16:00:00.000Z', timeZone: 'Europe/London' });
+      expect(post.end.timeZone).toBe('Europe/London');
+      expect(Object.keys(post)).not.toContain('id');
+      expect(Object.keys(post)).not.toContain('etag');
+    });
   });
 
+  describe('changing an event keeps what the editor does not show', () => {
+    const london: CalEvent = {
+      ...timed,
+      id: 'call',
+      key: `${CAL}::call`,
+      start: new Date('2026-11-07T16:00:00Z'),
+      end: new Date('2026-11-07T16:30:00Z'),
+    };
+    const draft: EventDraft = {
+      title: 'Call with Nani',
+      allDay: false,
+      start: london.start,
+      end: london.end,
+      keepRecurrence: true,
+      reminderMinutes: 10,
+      keepReminders: true,
+    };
+
+    it('a timed event keeps its own time zone and its reminders', async () => {
+      routes.push((c) => (c.method === 'PATCH' ? { body: { id: 'call' } } : undefined));
+      await googleSource.update(london, draft, 'all');
+      expect(calls[0].body.start).toEqual({ date: null, dateTime: '2026-11-07T16:00:00.000Z' });
+      expect(calls[0].body.end).toEqual({ date: null, dateTime: '2026-11-07T16:30:00.000Z' });
+      expect(calls[0].body).not.toHaveProperty('reminders');
+      expect(calls[0].body).not.toHaveProperty('recurrence');
+    });
+
+    it('a changed reminder replaces the reminders', async () => {
+      routes.push((c) => (c.method === 'PATCH' ? { body: { id: 'call' } } : undefined));
+      await googleSource.update(london, { ...draft, reminderMinutes: 30, keepReminders: false }, 'all');
+      expect(calls[0].body.reminders).toEqual({ useDefault: false, overrides: [{ method: 'popup', minutes: 30 }] });
+    });
+
+    it('moving a whole series keeps the zone it repeats in', async () => {
+      const occ: CalEvent = { ...london, id: 'call_20261121T160000Z', key: `${CAL}::call_20261121T160000Z`, seriesId: 'call' };
+      routes.push((c) =>
+        c.method === 'GET'
+          ? {
+              body: base({
+                id: 'call',
+                recurrence: ['RRULE:FREQ=WEEKLY'],
+                start: { dateTime: '2026-10-31T16:00:00+00:00', timeZone: 'Europe/London' },
+                end: { dateTime: '2026-10-31T16:30:00+00:00', timeZone: 'Europe/London' },
+              }),
+            }
+          : undefined,
+      );
+      routes.push((c) => (c.method === 'PATCH' ? { body: { id: 'call' } } : undefined));
+      // Half an hour later, every week.
+      const later = (d: Date) => new Date(d.getTime() + 30 * 60_000);
+      await googleSource.update(occ, { ...draft, start: later(occ.start), end: later(occ.end) }, 'all');
+      const patch = calls.find((c) => c.method === 'PATCH')!.body;
+      expect(patch.start).toEqual({ date: null, dateTime: '2026-10-31T16:30:00.000Z' });
+    });
+  });
 
   it('asks for a new token once when Google refuses the current one', async () => {
     tokens.dropped = [];

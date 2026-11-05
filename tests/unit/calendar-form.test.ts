@@ -98,6 +98,27 @@ describe('event editor form', () => {
     const t = valid({ startTime: '14:00', endTime: '15:30' });
     expect(setAllDay(setAllDay(t, true), false)).toEqual(t);
   });
+  it("writes the event's own reminders back unless the reminder was changed", () => {
+    const ev: CalEvent = {
+      key: 'c::r',
+      calendarId: 'c',
+      id: 'r',
+      title: 'Dentist',
+      allDay: false,
+      start: new Date('2026-11-06T16:30'),
+      end: new Date('2026-11-06T17:30'),
+      editable: true,
+      // Google: an email a day before and popups at 10 and 60 minutes; the editor shows the first popup.
+      reminderMinutes: 10,
+    };
+    const f = formFromEvent(ev, ['asiyah'], false);
+    expect(f.reminder).toBe('10');
+    expect(draftFromForm({ ...f, title: 'Dentist (Asiyah)' }, false).keepReminders).toBe(true);
+    expect(draftFromForm({ ...f, reminder: '30' }, false)).toMatchObject({ keepReminders: false, reminderMinutes: 30 });
+    expect(draftFromForm({ ...f, reminder: 'none' }, false)).toMatchObject({ keepReminders: false, reminderMinutes: null });
+    // A new event has nothing of its own to keep.
+    expect(draftFromForm(valid({ reminder: 'none' }), false).keepReminders).toBe(false);
+  });
   it('compares repeat rules regardless of weekday order', () => {
     expect(sameRepeat({ every: 1, unit: 'week', weekdays: [4, 6] }, { every: 1, unit: 'week', weekdays: [6, 4] })).toBe(true);
     expect(sameRepeat({ every: 1, unit: 'week', weekdays: [4] }, { every: 1, unit: 'week', weekdays: [4, 6] })).toBe(false);
