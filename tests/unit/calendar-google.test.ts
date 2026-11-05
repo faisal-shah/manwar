@@ -848,6 +848,98 @@ describe('google calendar: writing events', () => {
     expect(calls[2].body.summary).toBe('Dentist (Asiyah)');
   });
 
+  describe('the requests each scope sends', () => {
+    const master = base({
+      id: 'piano',
+      summary: 'Piano',
+      recurrence: ['RRULE:FREQ=WEEKLY;BYDAY=MO,WE'],
+      start: { dateTime: '2026-11-02T16:00:00-06:00', timeZone: 'America/Chicago' },
+      end: { dateTime: '2026-11-02T16:30:00-06:00', timeZone: 'America/Chicago' },
+    });
+    const occ = (day: string): CalEvent => ({
+      key: `${CAL}::piano_${day.replace(/-/g, '')}T220000Z`,
+      calendarId: CAL,
+      id: `piano_${day.replace(/-/g, '')}T220000Z`,
+      seriesId: 'piano',
+      originalStart: new Date(`${day}T16:00`),
+      title: 'Piano',
+      allDay: false,
+      start: new Date(`${day}T16:00`),
+      end: new Date(`${day}T16:30`),
+      editable: true,
+      timeZone: 'America/Chicago',
+      endTimeZone: 'America/Chicago',
+    });
+    const draft = (day: string, keep = true): EventDraft => ({
+      title: 'Piano',
+      allDay: false,
+      start: new Date(`${day}T16:15`),
+      end: new Date(`${day}T16:45`),
+      keepRecurrence: keep,
+      keepReminders: true,
+      reminderMinutes: undefined,
+    });
+    const sent = () => calls.map((c) => `${c.method} ${c.path.replace(`/calendars/${CAL}/events`, '')}`);
+    beforeEach(() => {
+      routes.push((c) => (c.method === 'GET' ? { body: master } : undefined));
+      routes.push((c) => (c.method === 'DELETE' ? { status: 204 } : undefined));
+      routes.push((c) => (c.method === 'PATCH' || c.method === 'POST' ? { body: { id: 'piano2' } } : undefined));
+    });
+
+    it('adds a new repeating event with every field set', async () => {
+      await googleSource.insert(CAL, 'new1', {
+        ...draft('2026-11-09', false),
+        keepReminders: false,
+        reminderMinutes: null,
+        repeat: { every: 1, unit: 'week', weekdays: [3, 1] },
+      });
+      expect(calls[0].body).toEqual({
+        id: 'new1',
+        summary: 'Piano',
+        description: '',
+        location: '',
+        start: { date: null, dateTime: '2026-11-09T22:15:00.000Z', timeZone: 'America/Chicago' },
+        end: { date: null, dateTime: '2026-11-09T22:45:00.000Z', timeZone: 'America/Chicago' },
+        reminders: { useDefault: false, overrides: [] },
+        recurrence: ['RRULE:FREQ=WEEKLY;BYDAY=MO,WE'],
+      });
+    });
+
+    it('This event patches the occurrence alone, without a recurrence', async () => {
+      await googleSource.update(occ('2026-11-11'), draft('2026-11-11'), 'this');
+      expect(sent()).toEqual(['PATCH /piano_20261111T220000Z']);
+      expect(calls[0].body).toEqual({
+        summary: 'Piano',
+        description: '',
+        location: '',
+        start: { date: null, dateTime: '2026-11-11T22:15:00.000Z', timeZone: 'America/Chicago' },
+        end: { date: null, dateTime: '2026-11-11T22:45:00.000Z', timeZone: 'America/Chicago' },
+      });
+    });
+
+    it('This and following from the first occurrence changes the whole series', async () => {
+      await googleSource.update(occ('2026-11-02'), draft('2026-11-02'), 'following');
+      expect(sent()).toEqual(['GET /piano', 'PATCH /piano']);
+      expect(calls[1].body.start.dateTime).toBe('2026-11-02T22:15:00.000Z');
+    });
+
+    it('deletes one occurrence, the rest from one, or the series', async () => {
+      await googleSource.remove(occ('2026-11-11'), 'this');
+      await googleSource.remove(occ('2026-11-11'), 'all');
+      await googleSource.remove(occ('2026-11-02'), 'following');
+      await googleSource.remove(occ('2026-11-11'), 'following');
+      expect(sent()).toEqual([
+        'DELETE /piano_20261111T220000Z',
+        'DELETE /piano',
+        'GET /piano',
+        'DELETE /piano',
+        'GET /piano',
+        'PATCH /piano',
+      ]);
+      expect(calls.at(-1)!.body).toEqual({ recurrence: ['RRULE:FREQ=WEEKLY;BYDAY=MO,WE;UNTIL=20261111T215959Z'] });
+    });
+  });
+
   it('treats deleting an event that is already gone as done', async () => {
     routes.push((c) =>
       c.method === 'DELETE' ? { status: 410, body: { error: { code: 410, message: 'Resource has been deleted' } } } : undefined,
