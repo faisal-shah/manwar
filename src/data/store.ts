@@ -9,6 +9,7 @@ import {
   onSnapshotsInSync,
   orderBy,
   query,
+  runTransaction,
   setDoc,
   updateDoc,
   where,
@@ -361,6 +362,41 @@ export function saveSettings(partial: SettingsPatch): Promise<void> {
   return setDoc(settingsRef(), partial, { merge: true });
 }
 
+/** The reads and writes of a transaction. */
+export interface Tx {
+  get<K extends CollectionName>(name: K, id: string): Promise<Collections[K] | undefined>;
+  put<K extends CollectionName>(name: K, value: Collections[K]): void;
+  patch<K extends CollectionName>(name: K, id: string, partial: Partial<Collections[K]>): void;
+}
+
+/**
+ * One retry, for a write by another device in between. Firestore's default
+ * (five, backing off) keeps a person offline waiting about eight seconds to
+ * hear that the server is out of reach.
+ */
+const TRANSACTION_ATTEMPTS = 2;
+
+/**
+ * Read and write on the server, for a decision this device must not make
+ * from its own copy (a phone acting on the wall). Unlike the writes above
+ * it does not queue: it fails (Firestore code 'unavailable') when the
+ * server cannot be reached, and runs `fn` again when another device
+ * changed what it read before it could write. The result shows here once
+ * the listeners deliver it.
+ */
+export function transaction<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
+  return runTransaction(
+    db,
+    (t) =>
+      fn({
+        get: async (name, id) => (await t.get(docRef(name, id))).data() as never,
+        put: (name, value) => void t.set(docRef(name, value.id), value as object),
+        patch: (name, id, partial) => void t.update(docRef(name, id), partial as object),
+      }),
+    { maxAttempts: TRANSACTION_ATTEMPTS },
+  );
+}
+
 /** Atomic multi-document write. */
 export function batch() {
   const b = writeBatch(db);
@@ -371,6 +407,11 @@ export function batch() {
     },
     patch<K extends CollectionName>(name: K, id: string, partial: Partial<Collections[K]>) {
       b.update(docRef(name, id), partial as object);
+      return api;
+    },
+    /** Write only the fields in `partial`, creating the document when it does not exist (as upsert does). */
+    upsert<K extends CollectionName>(name: K, id: string, partial: Partial<Collections[K]>) {
+      b.set(docRef(name, id), fieldChanges(partial), { merge: true });
       return api;
     },
     remove(name: CollectionName, id: string) {

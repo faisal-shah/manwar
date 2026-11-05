@@ -39,10 +39,15 @@ export function redeem(reward: Reward, p: Profile): void {
         );
       return;
     }
-    const entry = redeemReward(view.reward, p.id);
-    if (!entry) return;
+    const write = redeemReward(view.reward, p.id);
+    if (!write) return;
+    const { entry, saved } = write;
     playCelebrate();
     redeemed.value = { reward: view.reward, profileId: p.id, entry };
+    // Refused (another device spent the stars first, said in a toast): nothing to celebrate or undo.
+    void saved.then((ok) => {
+      if (!ok && redeemed.peek()?.entry.id === entry.id) redeemed.value = null;
+    });
   }, `Enter the PIN to redeem ${reward.title}.`);
 }
 

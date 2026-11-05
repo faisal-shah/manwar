@@ -1,5 +1,5 @@
 import './notes.css';
-import { signal } from '@preact/signals';
+import { effect, signal } from '@preact/signals';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { TargetedEvent } from 'preact';
 import { StickyNote } from 'lucide-preact';
@@ -33,8 +33,29 @@ function storeFrom(id: string | undefined): void {
   }
 }
 
-/** The note being written: kept when the view closes (Back mid-sentence), until it is posted or the page reloads. */
-const draft = signal('');
+/**
+ * The note being written, until it is posted: kept when the view closes
+ * (Back mid-sentence) and, in sessionStorage, through a reload (an update
+ * applied while the phone sat idle, the browser restoring the tab).
+ */
+const DRAFT_KEY = 'manwar.phone.noteDraft.v1';
+function loadDraft(): string {
+  try {
+    return sessionStorage.getItem(DRAFT_KEY) ?? '';
+  } catch {
+    return '';
+  }
+}
+const draft = signal(loadDraft());
+effect(() => {
+  const text = draft.value;
+  try {
+    if (text) sessionStorage.setItem(DRAFT_KEY, text);
+    else sessionStorage.removeItem(DRAFT_KEY);
+  } catch {
+    // No storage: the draft lasts for this page load.
+  }
+});
 
 /** More > Note to the wall: write a note that pops up on the wall; see and dismiss what it shows. */
 function NoteView() {

@@ -204,21 +204,27 @@ export interface Device {
   name: string;
   kind: 'phone';
   createdAt: number;
-  /** When the phone last opened the household; it stamps this itself, at most hourly. */
+  /** When the phone was last used (opened, shown again, touched); it stamps this itself, at most hourly. */
   lastSeenAt?: number;
 }
 
 /** The wall's one timer (`timers/wall`), shared so a phone can start, watch or stop it. */
 export interface WallTimer {
   id: 'wall';
+  /** This run of the timer: every start is a new run, written over the last. */
+  run: string;
   minutes: number;
   /** End of the "3, 2, 1" lead-in; the timer runs from here. */
   startAt: number;
   endAt: number;
   /** The phone that started it, when one did (Device id). */
   startedBy?: string;
-  /** Stopped or dismissed at this instant (the document stays, so the wall knows when sleep may resume). */
-  stoppedAt?: number;
+  /**
+   * When runs were stopped or dismissed, by run id (the document stays, so
+   * the wall knows when sleep may resume). Only the document's own run
+   * counts: a stop that lands late, meant for an earlier run, stops nothing.
+   */
+  stopped?: Record<string, number>;
 }
 
 /** A request for the wall's screen from a phone (`commands/display`): sleep now, or wake up. */

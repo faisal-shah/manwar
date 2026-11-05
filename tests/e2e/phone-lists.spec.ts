@@ -369,6 +369,74 @@ test('writes made offline on the phone reach the wall once it is back online', a
   expect(w.errors).toEqual([]);
 });
 
+/** The household's list items on the server, by text. */
+async function serverItems(household: string): Promise<Map<string, { id: string; fields: Record<string, unknown> }>> {
+  const res = await fetch(`${FS}/households/demo-${household}/listItems?pageSize=500`, { headers: OWNER });
+  const body = (await res.json()) as { documents: { name: string; fields: Record<string, { stringValue?: string }> }[] };
+  return new Map(
+    body.documents.map((d) => [
+      d.fields.text.stringValue!,
+      { id: d.name.split('/').pop()!, fields: d.fields as Record<string, unknown> },
+    ]),
+  );
+}
+
+test('done items cleared at the wall while the phone was offline come back whole when the phone adds them again', async ({
+  browser,
+}) => {
+  const hh = name('stale-readd');
+  const w = await wall(browser, hh);
+  const p = await phone(browser, hh);
+  await openList(p.page, 'Grocery List');
+  // Yogurt checked off; Olive oil is checked off in the demo.
+  await phoneRow(p.page, 'Yogurt').getByRole('checkbox').click();
+  await expect.poll(async () => (await serverItems(hh)).get('Yogurt')?.fields.done).toEqual({ booleanValue: true });
+  await p.page.context().setOffline(true);
+  // The wall clears them; the phone, offline, still shows them done.
+  const before = await serverItems(hh);
+  for (const text of ['Olive oil', 'Yogurt']) {
+    const res = await fetch(`${FS}/households/demo-${hh}/listItems/${before.get(text)!.id}`, {
+      method: 'DELETE',
+      headers: OWNER,
+    });
+    expect(res.ok).toBe(true);
+  }
+  const field = p.page.getByLabel('Add item to Grocery List');
+  await field.fill('Olive oil');
+  await field.press('Enter');
+  // Tonight's biryani takes a cup of yogurt: the ingredients bring the done Yogurt back with the rest, in one batch.
+  await p.page.locator('.ph-nav').getByRole('button', { name: 'More' }).click();
+  await p.page.locator('.ph-menu button', { hasText: 'Meals' }).click();
+  await settleOpen(p.page);
+  await p.page.locator('.pm-tonight').getByRole('button', { name: 'Add ingredients' }).click();
+  const modal = p.page.getByRole('dialog', { name: 'Add to Grocery List?' });
+  await settleOpen(p.page);
+  await expect(modal).toContainText('yogurt');
+  await modal.getByRole('button', { name: /^Add \d+ items?$/ }).click();
+  await p.page.context().setOffline(false);
+  // Back online, all of it is on the list, on both, open.
+  await wallLists(w.page);
+  const card = wallCard(w.page, 'Grocery List');
+  for (const text of [/olive oil/i, /yogurt/i, /chicken thighs/i]) {
+    const row = card.locator('.li-row', { hasText: text });
+    await expect(row).toHaveCount(1, { timeout: 30_000 });
+    await expect(row.getByRole('checkbox')).toHaveAttribute('aria-checked', 'false');
+  }
+  const after = await serverItems(hh);
+  for (const text of ['Olive oil', 'Yogurt']) {
+    const f = after.get(text)!.fields;
+    expect(f.done).toEqual({ booleanValue: false });
+    expect(Object.keys(f)).toEqual(expect.arrayContaining(['id', 'listId', 'text', 'createdAt', 'order', 'sectionId']));
+  }
+  // The Lists tab comes back on the list it showed.
+  await openLists(p.page);
+  await expect(p.page.locator('.ph-head h1')).toContainText('Grocery List');
+  await expect(phoneRow(p.page, /olive oil/i).getByRole('checkbox')).toHaveAttribute('aria-checked', 'false');
+  await expect(phoneRow(p.page, /yogurt/i).getByRole('checkbox')).toHaveAttribute('aria-checked', 'false');
+  expect(w.errors).toEqual([]);
+  expect(p.errors.filter((e) => !/ERR_INTERNET_DISCONNECTED/.test(e))).toEqual([]);
+});
+
 test('a phone signed in as the wall asks for the PIN before adding; a paired phone never does', async ({ browser }) => {
   const hh = name('pin');
   const w = await wall(browser, hh);

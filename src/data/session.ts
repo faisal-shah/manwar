@@ -1,8 +1,9 @@
 import { signal } from '@preact/signals';
 import { onAuthStateChanged, signInWithCustomToken, signOut, type User } from 'firebase/auth';
-import { doc, onSnapshot, updateDoc, type Unsubscribe } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { demoMode, googleClientId, googleScopes } from '../config';
+import { onActivity } from '../core/activity';
 import { errorMessage, isSignInRefused, needsReconnect } from './errors';
 import { auth, db, functions } from './firebase';
 import { closeHousehold, householdId, openHousehold } from './store';
@@ -204,11 +205,24 @@ export function dropGoogleToken(value: string): void {
   if (token?.value === value) token = null;
 }
 
+/**
+ * This page signed itself out since the last sign-in (disconnect, unpair, a
+ * refused sign-in). Otherwise a sign-out came from Auth: it drops a sign-in
+ * whose token refresh is refused, as a phone's is once it was removed
+ * while offline (the device watch never heard the news).
+ */
+let signedOutHere = false;
+
+function leave(): Promise<void> {
+  signedOutHere = true;
+  return signOut(auth);
+}
+
 export async function disconnect(): Promise<void> {
   newConnection();
   googleProblem.value = null;
   forgetHousehold();
-  await signOut(auth);
+  await leave();
 }
 
 /*
@@ -280,35 +294,46 @@ export async function unpairPhone(): Promise<void> {
 /** A paired phone's Auth user (`deviceUid` in functions/src/pairing.ts). */
 const isPhoneUser = (uid: string) => uid.includes('.phone.');
 
-let stopDeviceWatch: Unsubscribe | null = null;
+let stopDeviceWatch: (() => void) | null = null;
 const LAST_SEEN_EVERY_MS = 60 * 60_000;
 
 /**
  * Follow this phone's devices/ document: when the wall removes it (the
  * server says it is gone, or the rules refuse it), sign out. Also stamps
- * when the phone was last used, at most hourly.
+ * when the phone was last used: when it opens, when it is shown again and
+ * on a touch, at most hourly (a phone page stays open for days).
  */
 function watchDevice(hid: string, device: string): void {
   stopDeviceWatch?.();
-  let stamped = false;
   const ref = doc(db, 'households', hid, 'devices', device);
-  stopDeviceWatch = onSnapshot(
+  /** The stamp as last read or written; null until the document is read. */
+  let seen: number | null = null;
+  const stamp = () => {
+    if (seen === null || document.visibilityState !== 'visible' || Date.now() - seen <= LAST_SEEN_EVERY_MS) return;
+    seen = Date.now();
+    void updateDoc(ref, { lastSeenAt: seen }).catch(() => {});
+  };
+  const unsubscribe = onSnapshot(
     ref,
     (snap) => {
       if (!snap.exists()) {
         if (!snap.metadata.fromCache) void removed();
         return;
       }
-      const seen = Number(snap.get('lastSeenAt')) || 0;
-      if (!stamped && Date.now() - seen > LAST_SEEN_EVERY_MS) {
-        stamped = true;
-        void updateDoc(ref, { lastSeenAt: Date.now() }).catch(() => {});
-      }
+      seen = Math.max(seen ?? 0, Number(snap.get('lastSeenAt')) || 0);
+      stamp();
     },
     (e) => {
       if (e.code === 'permission-denied') void removed();
     },
   );
+  document.addEventListener('visibilitychange', stamp);
+  const offActivity = onActivity(stamp);
+  stopDeviceWatch = () => {
+    unsubscribe();
+    document.removeEventListener('visibilitychange', stamp);
+    offActivity();
+  };
 }
 
 async function removed(): Promise<void> {
@@ -420,19 +445,31 @@ function demoToken(): string {
 export function initSession(): void {
   if (!demoMode) void loadGis().catch(() => {});
   let seq = 0;
+  /** The user signed in on this page, if any (a sign-out event names none). */
+  let current: User | null = null;
   onAuthStateChanged(auth, (user) => signedInAs(user, ++seq));
 
   async function signedInAs(user: User | null, n: number): Promise<void> {
     if (!user) {
+      // Auth itself dropped a phone's sign-in: its token refresh was refused, as it is once the phone is removed.
+      const dropped = !!current && isPhoneUser(current.uid) && !signedOutHere;
+      current = null;
       stopDeviceWatch?.();
       stopDeviceWatch = null;
       closeHousehold();
+      if (dropped) {
+        forgetHousehold();
+        fail(PHONE_REMOVED);
+        return;
+      }
       if (session.value.state === 'connecting' || session.value.state === 'error') return;
       session.value = { state: 'signedOut' };
       // A demo page with `pair` in its address (a code, or empty) pairs like a real phone instead of signing in as the demo wall.
       if (demoMode && pairParam === null) await signInWithCustomToken(auth, demoToken());
       return;
     }
+    current = user;
+    signedOutHere = false;
     let h: Household | null;
     try {
       h = await householdOf(user);
@@ -447,12 +484,12 @@ export function initSession(): void {
       }
       // The sign-in itself was refused (revoked, disabled, a phone removed): connect or pair again.
       fail(isPhoneUser(user.uid) ? PHONE_REMOVED : 'The sign-in expired. Connect the Google account again.');
-      await signOut(auth);
+      await leave();
       return;
     }
     if (n !== seq) return;
     if (!h) {
-      await signOut(auth);
+      await leave();
       return;
     }
     openHousehold(h.hid);

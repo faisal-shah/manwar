@@ -56,6 +56,50 @@ const doc = (fields: Record<string, string>) => ({
 const read = (who: Who, path: string) => req(who, 'GET', path);
 const write = (who: Who, path: string) => req(who, 'PATCH', path, doc({ name: 'x' }));
 
+/** Firestore values for plain strings, numbers and maps. */
+type Plain = string | number | { [k: string]: Plain };
+const value = (v: Plain): object =>
+  typeof v === 'string'
+    ? { stringValue: v }
+    : typeof v === 'number'
+      ? { integerValue: String(v) }
+      : { mapValue: { fields: Object.fromEntries(Object.entries(v).map(([k, x]) => [k, value(x)])) } };
+const fields = (o: Record<string, Plain>) => ({ fields: Object.fromEntries(Object.entries(o).map(([k, v]) => [k, value(v)])) });
+const put = (who: Who, path: string, o: Record<string, Plain>) => req(who, 'PATCH', path, fields(o));
+/** Write only `paths` of `o` (a path missing from `o` deletes that field), as the SDK's update does. */
+const update = (who: Who, path: string, o: Record<string, Plain>, paths: string[]) =>
+  req(who, 'PATCH', `${path}?${paths.map((p) => `updateMask.fieldPaths=${encodeURIComponent(p)}`).join('&')}`, fields(o));
+const name = (path: string) => `projects/${PROJECT}/databases/(default)/documents/${path}`;
+/** One write of an atomic batch, as the SDK sends it: a whole document, a delete, or a star balance changed by `delta`. */
+type Write = { set: string; data: Record<string, Plain> } | { remove: string } | { stars: string; delta: number };
+const encode = (w: Write) =>
+  'set' in w
+    ? { update: { name: name(w.set), ...fields(w.data) } }
+    : 'remove' in w
+      ? { delete: name(w.remove) }
+      : {
+          update: { name: name(w.stars), fields: {} },
+          updateMask: { fieldPaths: [] },
+          updateTransforms: [{ fieldPath: 'stars', increment: { integerValue: String(w.delta) } }],
+          currentDocument: { exists: true },
+        };
+async function commit(who: Who, writes: Write[]): Promise<number> {
+  const res = await fetch(`${DOCS}:commit`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${who}` },
+    body: JSON.stringify({ writes: writes.map(encode) }),
+  });
+  await res.text();
+  return res.status;
+}
+/** A number field on the server (rules bypassed). */
+async function num(path: string, field: string): Promise<number | null> {
+  const res = await fetch(`${DOCS}/${path}`, { headers: { Authorization: 'Bearer owner' } });
+  if (res.status !== 200) return null;
+  const v = ((await res.json()) as { fields: Record<string, { integerValue?: string }> }).fields[field];
+  return v?.integerValue === undefined ? null : Number(v.integerValue);
+}
+
 test.beforeAll(async () => {
   const rules = readFileSync('firestore.rules', 'utf8');
   const res = await fetch(`http://${HOST}/emulator/v1/projects/${PROJECT}:securityRules`, {
@@ -169,4 +213,97 @@ test("pairing codes are out of every client's reach", async () => {
   expect(await read('anon', 'pairings/ABCDEFGH')).toBe(403);
   expect(await write(tablet(A), 'pairings/ZZZZZZZZ')).toBe(403);
   expect(await read(tablet(A), 'pairings')).toBe(403);
+});
+
+/*
+ * Stars. A device writes a check-off, its ledger entry and the balance in
+ * one batch, decided from its own copy; a phone offline decides from a
+ * stale one. Each test has its own documents in household A.
+ */
+const H = (path: string) => `households/${A}/${path}`;
+const entry = (id: string, profileId: string, delta: number, reason: string) => ({
+  set: H(`ledger/${id}`),
+  data: { id, profileId, delta, reason, label: 'Breakfast', at: 1 },
+});
+const checkOff = (state: string, ledger: string, profile: string, stars: number): Write[] => [
+  { set: H(`taskStates/${state}`), data: { id: state, taskId: 't', profileId: profile, by: profile, status: 'done', stars } },
+  entry(ledger, profile, stars, 'task'),
+  { stars: H(`profiles/${profile}`), delta: stars },
+];
+const uncheck = (state: string, ledger: string, profile: string, stars: number): Write[] => [
+  { remove: H(`taskStates/${state}`) },
+  entry(ledger, profile, -stars, 'untask'),
+  { stars: H(`profiles/${profile}`), delta: -stars },
+];
+
+test('a task state is only created and deleted: never written over, never deleted twice', async () => {
+  const t = tablet(A);
+  expect(await put(t, H('taskStates/s1'), { id: 's1', status: 'done' })).toBe(200);
+  expect(await put(t, H('taskStates/s1'), { id: 's1', status: 'skipped' })).toBe(403);
+  expect(await update(t, H('taskStates/s1'), { status: 'skipped' }, ['status'])).toBe(403);
+  expect(await req(t, 'DELETE', H('taskStates/s1'))).toBe(200);
+  expect(await req(t, 'DELETE', H('taskStates/s1'))).toBe(403);
+  // Made again after the delete: a new check-off.
+  expect(await put(phone(A, PHONE), H('taskStates/s1'), { id: 's1', status: 'done' })).toBe(200);
+  expect(await read(phone(A, PHONE), H('taskStates/s1'))).toBe(200);
+});
+
+test('a check-off or uncheck made twice (a phone that was offline) is refused whole', async () => {
+  expect(await put('owner', H('profiles/kid1'), { id: 'kid1', stars: 10 })).toBe(200);
+  expect(await commit(tablet(A), checkOff('s2', 'l2a', 'kid1', 2))).toBe(200);
+  expect(await num(H('profiles/kid1'), 'stars')).toBe(12);
+  // No second entry, no second award.
+  expect(await commit(phone(A, PHONE), checkOff('s2', 'l2b', 'kid1', 2))).toBe(403);
+  expect(await num(H('profiles/kid1'), 'stars')).toBe(12);
+  expect(await read('owner', H('ledger/l2b'))).toBe(404);
+  // Unchecked here, then again from a phone that had not heard: no second take-back.
+  expect(await commit(tablet(A), uncheck('s2', 'l2c', 'kid1', 2))).toBe(200);
+  expect(await commit(phone(A, PHONE), uncheck('s2', 'l2d', 'kid1', 2))).toBe(403);
+  expect(await num(H('profiles/kid1'), 'stars')).toBe(10);
+});
+
+test('a ledger entry is added, and marked undone once; never otherwise changed or deleted', async () => {
+  const t = tablet(A);
+  expect(await commit(t, [entry('l3', 'p1', 5, 'give')])).toBe(200);
+  expect(await update(t, H('ledger/l3'), { undoneAt: 7 }, ['undoneAt'])).toBe(200);
+  // The same undo from a device that had not heard of the first: refused.
+  expect(await update(phone(A, PHONE), H('ledger/l3'), { undoneAt: 8 }, ['undoneAt'])).toBe(403);
+  expect(await commit(t, [entry('l4', 'p1', 5, 'give')])).toBe(200);
+  expect(await update(t, H('ledger/l4'), { delta: 50 }, ['delta'])).toBe(403);
+  expect(await commit(t, [entry('l4', 'p1', 50, 'give')])).toBe(403);
+  expect(await req(t, 'DELETE', H('ledger/l4'))).toBe(403);
+  expect(await num(H('ledger/l4'), 'delta')).toBe(5);
+});
+
+test('a redemption may not take the balance below zero; a take-back or a removal may', async () => {
+  expect(await put('owner', H('profiles/kid2'), { id: 'kid2', stars: 100 })).toBe(200);
+  const spend = (ledger: string, reason: string, delta: number): Write[] => [
+    entry(ledger, 'kid2', delta, reason),
+    { stars: H('profiles/kid2'), delta },
+  ];
+  expect(await commit(tablet(A), spend('l5a', 'redeem', -75))).toBe(200);
+  // The same reward from a phone that still saw 100 stars.
+  expect(await commit(phone(A, PHONE), spend('l5b', 'redeem', -75))).toBe(403);
+  expect(await num(H('profiles/kid2'), 'stars')).toBe(25);
+  expect(await commit(tablet(A), spend('l5c', 'redeem', -25))).toBe(200);
+  expect(await num(H('profiles/kid2'), 'stars')).toBe(0);
+  // Unchecking stars already spent, or a parent removing stars, is the parent's call.
+  expect(await commit(tablet(A), spend('l5d', 'untask', -10))).toBe(200);
+  expect(await commit(tablet(A), spend('l5e', 'remove', -5))).toBe(200);
+  expect(await num(H('profiles/kid2'), 'stars')).toBe(-15);
+});
+
+test("a one-time reward's redemption is never written over; an undo removes it", async () => {
+  const t = tablet(A);
+  expect(await put('owner', H('rewards/r1'), { id: 'r1', title: 'New book', cost: 150, redeemedBy: {} })).toBe(200);
+  expect(await update(t, H('rewards/r1'), { redeemedBy: { kid3: 5 } }, ['redeemedBy.kid3'])).toBe(200);
+  // Redeemed again by a phone that had not heard: refused.
+  expect(await update(phone(A, PHONE), H('rewards/r1'), { redeemedBy: { kid3: 6 } }, ['redeemedBy.kid3'])).toBe(403);
+  expect(await update(t, H('rewards/r1'), { redeemedBy: { kid4: 6 } }, ['redeemedBy.kid4'])).toBe(200);
+  expect(await update(t, H('rewards/r1'), {}, ['redeemedBy.kid3'])).toBe(200);
+  expect(await update(t, H('rewards/r1'), { title: 'Two new books', cost: 200 }, ['title', 'cost'])).toBe(200);
+  // A reward written before redeemedBy was kept, edited and deleted.
+  expect(await put('owner', H('rewards/r2'), { id: 'r2', title: 'Ice cream trip', cost: 50 })).toBe(200);
+  expect(await update(t, H('rewards/r2'), { cost: 40 }, ['cost'])).toBe(200);
+  expect(await req(t, 'DELETE', H('rewards/r2'))).toBe(200);
 });

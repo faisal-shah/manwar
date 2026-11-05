@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { asleepAt, inWindow, sleepNowEnd, WAKE_MS } from '../../src/core/sleep';
 import type { DisplayCommand, List, ListItem, MealCategory, MealEntry, TimeWindow, WallTimer } from '../../src/data/types';
-import { SLEEP_GRACE_MS, timerSleepHold } from '../../src/features/timer/logic';
+import { LEAD_MS, SLEEP_GRACE_MS, STALE_MS, newRun, onWall, stoppedAt, timerSleepHold } from '../../src/features/timer/logic';
 import { listSummary, summaryLine } from '../../src/phone/lists/logic';
 import { mealsOn, planCategory, weekByDay } from '../../src/phone/meals/logic';
 import { clockLeft, minutesField } from '../../src/phone/timer/logic';
@@ -33,10 +33,38 @@ describe('the sleep rule', () => {
     expect(asleepAt(t, { wokenUntil: t + 1, forcedUntil: t + 1, heldUntil: 0 }, NIGHT)).toBe(false);
   });
   it('holds sleep a few minutes past a timer, or past its stop', () => {
-    const t: WallTimer = { id: 'wall', minutes: 10, startAt: 1000, endAt: 601_000 };
+    const t: WallTimer = { id: 'wall', run: 'r2', minutes: 10, startAt: 1000, endAt: 601_000 };
     expect(timerSleepHold(t)).toBe(601_000 + SLEEP_GRACE_MS);
-    expect(timerSleepHold({ ...t, stoppedAt: 5000 })).toBe(5000 + SLEEP_GRACE_MS);
+    expect(timerSleepHold({ ...t, stopped: { r2: 5000 } })).toBe(5000 + SLEEP_GRACE_MS);
+    // A stop meant for the run before (landing late) does not end this one's hold.
+    expect(timerSleepHold({ ...t, stopped: { r1: 5000 } })).toBe(601_000 + SLEEP_GRACE_MS);
     expect(timerSleepHold(undefined)).toBe(0);
+  });
+});
+
+describe('timer runs', () => {
+  const t = newRun('r2', 10, 1000, 'phone1');
+  it('starts after the lead-in, from the phone that started it', () => {
+    expect(t).toEqual({
+      id: 'wall',
+      run: 'r2',
+      minutes: 10,
+      startAt: 1000 + LEAD_MS,
+      endAt: 1000 + LEAD_MS + 600_000,
+      startedBy: 'phone1',
+    });
+    expect(() => newRun('r3', 0, 1000)).toThrow();
+  });
+  it('is stopped only by a stop for its own run', () => {
+    expect(stoppedAt(t)).toBeUndefined();
+    expect(stoppedAt({ ...t, stopped: { r1: 5000 } })).toBeUndefined();
+    expect(stoppedAt({ ...t, stopped: { r1: 5000, r2: 6000 } })).toBe(6000);
+    expect(onWall({ ...t, stopped: { r1: 5000 } }, 6000)).toBe(true);
+    expect(onWall({ ...t, stopped: { r2: 6000 } }, 6000)).toBe(false);
+  });
+  it('is left over a while after it ends, with nobody to dismiss it', () => {
+    expect(onWall(t, t.endAt + STALE_MS - 1)).toBe(true);
+    expect(onWall(t, t.endAt + STALE_MS)).toBe(false);
   });
 });
 
@@ -56,9 +84,18 @@ describe("the phone's guess at the wall's screen", () => {
   });
   it('is awake in the window while a timer runs', () => {
     const t = at('2026-11-04T22:00');
-    const timer: WallTimer = { id: 'wall', minutes: 10, startAt: t, endAt: t + 600_000 };
+    const timer: WallTimer = { id: 'wall', run: 'r1', minutes: 10, startAt: t, endAt: t + 600_000 };
     expect(wallAsleepGuess(NIGHT, undefined, timer, t + 60_000)).toBe(false);
     expect(wallAsleepGuess(NIGHT, undefined, timer, t + 600_000 + SLEEP_GRACE_MS)).toBe(true);
+  });
+  it('is awake for a timer started after Sleep now, and asleep for one started before it', () => {
+    const sleep = cmd('sleep', '2026-11-04T11:44');
+    const after = newRun('r1', 10, at('2026-11-04T11:50'));
+    expect(wallAsleepGuess(OFF, sleep, after, at('2026-11-04T11:55'))).toBe(false);
+    // Past the timer's hold, the wall follows its (here, disabled) window: Sleep now is over.
+    expect(wallAsleepGuess(OFF, sleep, after, after.endAt + SLEEP_GRACE_MS)).toBe(false);
+    const before = newRun('r1', 30, at('2026-11-04T11:40'));
+    expect(wallAsleepGuess(OFF, sleep, before, at('2026-11-04T11:55'))).toBe(true);
   });
   it('says what was asked and when', () => {
     const now = at('2026-11-04T21:20');

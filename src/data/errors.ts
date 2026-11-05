@@ -20,12 +20,19 @@ const coded = (e: unknown): e is CodedError =>
 
 const STATUS_SUFFIX = /\s*\[\d+\]$/;
 
-/** The request never reached the server (offline, DNS, a dropped connection). */
+/** The request never reached the server (offline, DNS, a dropped connection). Firestore says 'unavailable'. */
 export function isNetworkError(e: unknown): boolean {
   if (!coded(e)) return e instanceof TypeError;
-  if (e.code === 'auth/network-request-failed') return true;
+  if (e.code === 'auth/network-request-failed' || e.code === 'unavailable') return true;
   return e.code.startsWith('functions/') && / \[0\]$/.test(e.message);
 }
+
+/**
+ * The server refused a Firestore write decided from data another device had
+ * changed: the rules (a task checked off twice, stars spent twice), or a
+ * document deleted since.
+ */
+export const isWriteRefused = (e: unknown): boolean => coded(e) && (e.code === 'permission-denied' || e.code === 'not-found');
 
 /**
  * Auth refused the stored sign-in itself (revoked, disabled, deleted): only

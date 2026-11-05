@@ -8,6 +8,15 @@ rules_version = '2';
 // Google refresh token, and pairings/ the pairing codes: both are reachable
 // only through the Admin SDK. Devices are added and removed by the
 // Functions; a phone may only stamp its own lastSeenAt.
+//
+// Stars: a device writes a check-off, its ledger entry and the balance in
+// one batch, decided from its own copy, which can be stale (a phone offline
+// checking off what the wall checked off meanwhile). The rules refuse the
+// batch whole when another device got there first: a task state is only
+// created (checked off, skipped) or deleted (unchecked, unskipped), never
+// written over or deleted twice; a ledger entry is added, and marked undone
+// once; a redemption may not take the balance below zero; and a one-time
+// reward's redemption stamp is never written over.
 service cloud.firestore {
   match /databases/{database}/documents {
     function deviceActive(hid) {
@@ -29,8 +38,27 @@ service cloud.firestore {
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastSeenAt'])
           && request.resource.data.lastSeenAt is int;
       }
+      match /taskStates/{id} {
+        allow read, create: if member(hid);
+        allow delete: if member(hid) && resource != null;
+      }
+      match /ledger/{id} {
+        allow read: if member(hid);
+        allow create: if member(hid)
+          && (request.resource.data.reason != 'redeem'
+            || getAfter(/databases/$(database)/documents/households/$(hid)/profiles/$(request.resource.data.profileId)).data.stars >= 0);
+        allow update: if member(hid)
+          && !('undoneAt' in resource.data)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['undoneAt']);
+      }
+      match /rewards/{id} {
+        allow read, create, delete: if member(hid);
+        allow update: if member(hid)
+          && request.resource.data.get('redeemedBy', {}).diff(resource.data.get('redeemedBy', {})).changedKeys().size() == 0;
+      }
       match /{collection}/{docId} {
-        allow read, write: if member(hid) && collection != 'private' && collection != 'devices';
+        allow read, write: if member(hid)
+          && !(collection in ['private', 'devices', 'taskStates', 'ledger', 'rewards']);
       }
     }
   }

@@ -69,7 +69,10 @@ flowchart LR
   (`src/data/types.ts` is the model; `Collections` in `store.ts` maps names
   to types). `data.<collection>` signals hold live snapshots; writes
   (`put`/`patch`/`remove`/`batch()`) apply locally at once, so UI code does
-  not await them. `settings/main` is one document merged over
+  not await them. `transaction()` is the one that does not queue: a read
+  and write on the server for a phone acting on the wall (the timer), it
+  fails at once offline (one retry, not Firestore's five), so the phone
+  can say so. `settings/main` is one document merged over
   `DEFAULT_SETTINGS` (`data/settings.ts`). Firestore ends a listener for
   good on an error, so `listen()` in the store reports it (`loadError`,
   shown on the loading screen, and as Not syncing in the top bar once the
@@ -203,11 +206,18 @@ flowchart LR
   drops out in between. The ledger listener holds the household's
   newest `LEDGER_LIVE` entries; the star history sheet reads older pages on
   Show older (`rewards/history-state.ts`, shown without Undo). Balances never
-  depend on the window. Two devices completing the same occurrence in the
-  same instant can still both award (the balance is an increment); so can
-  a phone that checks off offline what another device checked off before
-  it reconnects. The star history then shows both entries, and Undo on
-  one takes its stars back.
+  depend on the window. What no guard on one device sees (two devices
+  checking off one occurrence at once, a phone offline checking off,
+  unchecking or redeeming against what another device did meanwhile)
+  `firestore.rules` refuse, the whole batch: a task state is only created
+  or deleted (never written over, never deleted when gone), so a change to
+  one is a delete and a create, never an update; a ledger entry is added,
+  and marked `undoneAt` once; a `redeem` entry may not leave the balance
+  below zero (`getAfter` on the profile); a one-time reward's `redeemedBy`
+  stamp is never written over. The device's own change rolls back,
+  `exclusive()` says so in a toast, and the write's promise resolves false
+  (the redeemed dialog closes on it). A check-off is written only where no
+  state is (a skip is undone first).
 - **Parental lock** (`core/lock.ts`): with a PIN set, only checking off tasks
   is open; wrap every other mutation in `asParent(() => ...)` or
   `await requireParent()`; an editor asks again on Save, since the lock can
@@ -225,10 +235,14 @@ flowchart LR
   localStorage and the backlight is not touched until the settings load, so
   a reload at night does not light the screen. The rule itself (woken, then
   Sleep now until the window's end or 7:00, then a timer's hold, then the
-  window) is pure in `core/sleep.ts`, shared with the phone's guess.
+  window) is pure in `core/sleep.ts`, shared with the phone's guess. A new
+  timer run ends Sleep now (`holdSleepForTimer`, `endForcedSleep`), so a
+  timer started from a phone shows on the wall; the run already there when
+  the wall opens does not, as it may be older than the Sleep now.
 - **Activity** (`core/activity.ts`): the one source of "someone is using the
   wall" (pointer, key and input events; the on-screen keyboard sends no
-  pointer events). Idle return, relock, sleep and the update check read it.
+  pointer events). Idle return, relock, sleep, the update check and a
+  phone's last-seen stamp read it.
 - **Shell**: `app/tabs.tsx` lists the tabs; each feature exports a `TabDef`
   (`app/tab.ts`) from `src/features/<tab>/index.tsx` with `Body`, optional
   top-bar `Controls`, `onAdd` (the + button) and `title`.
@@ -270,20 +284,26 @@ sequenceDiagram
   claims `hid`, `account`, `device`. `firestore.rules` count it a member
   only while `devices/{device}` exists (one extra read per request, for
   phones only); devices are written only by the Functions, except a phone
-  stamping its own `lastSeenAt`. `googleAccessToken` refuses a removed
+  stamping its own `lastSeenAt` (`watchDevice` in `data/session.ts`: on
+  opening, on being shown again and on a touch, at most hourly, as a phone
+  page stays open for days). `googleAccessToken` refuses a removed
   phone too. `session.pairedDevice()` is the device id on a paired phone;
   `core/lock.ts` turns the lock off there in the phone layout only (a
-  paired device switched to the wall layout is a wall, and asks).
+  paired device switched to the wall layout is a wall, and asks). A phone
+  removed while offline never hears it from its device watch; once its
+  token is refused, Auth signs it out by itself, and a phone's sign-out
+  this page did not ask for (`leave()`: disconnect, unpair, a refused
+  sign-in) shows the removed message too.
 - **Pairing limits** (`functions/src/index.ts`): Add a phone asks for the
-  PIN even while the wall is unlocked (`requireParent(reason, { fresh:
-true })`), since what it grants outlasts the unlock. A code shown is put
-  away (`cancelPairing`) on Done or when Settings closes, and
-  `createPairing` clears codes any household left expired.
-  `redeemPairing` needs no sign-in, so it runs on one instance and each
-  instance refuses calls past 30 a minute (bursts of 15) before any
-  database read (`rateLimiter`, off in the emulator, where the e2e suite
-  pairs hundreds of phones). That bounds what a stranger can add to the
-  bill to the calls themselves.
+  PIN even while the wall is unlocked (`requireParent` with `fresh`),
+  since what it grants outlasts the unlock. A code shown is put away
+  (`cancelPairing`) on Done or when Settings closes, and `createPairing`
+  clears codes any household left expired. `redeemPairing` needs no
+  sign-in, so it runs on one instance and each instance refuses calls
+  past 30 a minute (bursts of 15) before any database read
+  (`rateLimiter`, off in the emulator, where the e2e suite pairs hundreds
+  of phones). That bounds what a stranger can add to the bill to the
+  calls themselves.
 - **No household data at rest on a phone**: phones use Firestore's memory
   cache (`data/firebase.ts`; the wall's is persistent), and the calendar
   snapshot is dropped when the device signs out (disconnected, removed,
@@ -388,17 +408,24 @@ true })`), since what it grants outlasts the unlock. A code shown is put
   through `PlanMealSheet` on `planTarget`, a meal's `MealPopover`, which
   has no Open recipe on a phone), Note to the wall (`phone/notes/`: from
   whom, remembered per phone, read aloud, the notes the wall shows or
-  holds, Dismiss; the draft survives Back), Wall timer (`phone/timer/`:
-  presets, any minutes, the countdown, Stop or Done; a timer replaced
-  elsewhere is a new view) and Wall screen (`phone/wallscreen/`: Sleep now,
+  holds, Dismiss; the draft survives Back, and a reload in sessionStorage,
+  as the update check may reload an idle phone), Wall timer
+  (`phone/timer/`: presets, any minutes, the countdown, Stop or Done,
+  through the server, so an offline phone says it could not reach the
+  wall; a timer replaced elsewhere is a new view) and Wall screen
+  (`phone/wallscreen/`: Sleep now,
   Wake up, what was last asked and by whom). What the wall's screen is
   doing is a guess (`wallAsleepGuess`, by the wall's own rule in
   `core/sleep.ts` from the last command, the timer and the sleep window; a
   touch on the wall is not shared), said as "likely"; the note view offers
   Wake the wall when a note waits behind a sleeping screen.
 - **Shared with the wall through Firestore**: the timer (`timers/wall`,
-  `features/timer/state.ts`; stopping stamps `stoppedAt`, and the wall's
-  sleep hold is derived from the document) and the screen
+  `features/timer/state.ts`: each start is a new `run` written over the
+  last, and a stop is stamped under its run's id in `stopped`, so a stop
+  that lands late stops nothing newer; the wall writes at once, a phone
+  through `transaction()`, which also refuses a start over a timer the
+  phone had not seen; the wall's sleep hold is derived from the document)
+  and the screen
   (`commands/display`: a phone asks the wall to sleep or wake;
   `followDisplayCommands` applies each nonce once, only within 10 minutes
   of being sent).
@@ -581,6 +608,11 @@ generated from it: `node scripts/icons/render.mjs` after any brand change.
   - The `isDefaultGrocery` flag only ever passes to a grocery list (on
     delete, or to a new grocery list when none has it); with none, the
     next Add to grocery list makes a "Grocery List".
+  - A done item added again (Add item, the ingredients merge) is written
+    whole as a merge (`reopenedItem`, `upsert`), so one cleared meanwhile
+    on another device comes back rather than the write being refused
+    (the merge's whole batch with it). A refused item write says so in a
+    toast (`notSaved`).
   - `IngredientsHost` is mounted once in `app/tabs.tsx` `Overlays`, so
     `openIngredients` works from any tab (the planned-meal toast).
   - Editing one occurrence of a repeating meal goes through
