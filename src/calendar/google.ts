@@ -1,7 +1,15 @@
 import { dropGoogleToken, googleAccessToken } from '../data/session';
 import { addDays, diffDays, fromISODate, toISODate } from '../lib/date';
 import { endSeriesBefore, recurrenceCount, toRRule, withCount } from './rrule';
-import { eventKey, type AccessRole, type CalEvent, type CalendarInfo, type CalendarSource, type EventDraft } from './types';
+import {
+  RateLimited,
+  eventKey,
+  type AccessRole,
+  type CalEvent,
+  type CalendarInfo,
+  type CalendarSource,
+  type EventDraft,
+} from './types';
 
 const API = 'https://www.googleapis.com/calendar/v3';
 
@@ -47,16 +55,68 @@ async function request(url: URL, init: RequestInit, token: string): Promise<{ re
   }
 }
 
+/** Reasons Google gives a 403 that means "slow down" rather than "no access" (a 429 always means it). */
+const RATE_REASONS = new Set(['rateLimitExceeded', 'userRateLimitExceeded']);
+
+function isRateLimit(status: number, body: any): boolean {
+  if (status === 429) return true;
+  const errors = body?.error?.errors;
+  return status === 403 && Array.isArray(errors) && errors.some((e) => RATE_REASONS.has(e?.reason));
+}
+
+/** The wait a Retry-After header names (seconds or an HTTP date), when the response has a readable one. */
+function retryAfterMs(res: Response): number | null {
+  const v = res.headers.get('Retry-After')?.trim();
+  if (!v) return null;
+  if (/^\d+$/.test(v)) return Number(v) * 1000;
+  const at = Date.parse(v);
+  return Number.isNaN(at) ? null : Math.max(0, at - Date.now());
+}
+
+/**
+ * Rate limits on a request a person waits for (a save, the editor's repeat
+ * rule): retried after these waits plus up to a second of jitter, as Google
+ * asks (exponential backoff), or after Retry-After when it names one. A wait
+ * longer than MAX_WAIT_MS is not sat out: the save fails at once and says
+ * when to try again.
+ */
+const RATE_WAITS_MS = [1000, 2000];
+const MAX_WAIT_MS = 5000;
+
+const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+function rateLimited(after: number | null): RateLimited {
+  const when = after === null || after <= 60_000 ? 'in a minute' : `in ${Math.ceil(after / 60_000)} minutes`;
+  return new RateLimited(`Google Calendar is busy. Try again ${when}.`, after);
+}
+
+type CallInit = RequestInit & {
+  query?: Record<string, string>;
+  /** A read of the background sync: a rate limit fails it at once, and the engine pauses the sync. */
+  background?: boolean;
+};
+
 /** Google Calendar API boundary: every response is validated here. */
-async function call<T>(path: string, init: RequestInit & { query?: Record<string, string> } = {}): Promise<T> {
+async function call<T>(path: string, init: CallInit = {}): Promise<T> {
   const url = new URL(API + path);
   for (const [k, v] of Object.entries(init.query ?? {})) url.searchParams.set(k, v);
-  for (let attempt = 0; ; attempt++) {
+  let renewed = false;
+  let limited = 0;
+  for (;;) {
     const token = await googleAccessToken();
     const { res, body } = await request(url, init, token);
     // A token Google no longer takes (expired early by the tablet's clock, or revoked): ask for a new one, once.
-    if (res.status === 401 && attempt === 0) {
+    if (res.status === 401 && !renewed) {
+      renewed = true;
       dropGoogleToken(token);
+      continue;
+    }
+    if (isRateLimit(res.status, body)) {
+      const after = retryAfterMs(res);
+      const pause = after ?? RATE_WAITS_MS[limited];
+      if (init.background || limited >= RATE_WAITS_MS.length || pause > MAX_WAIT_MS) throw rateLimited(after);
+      limited++;
+      await wait(pause + Math.random() * 1000);
       continue;
     }
     if (!res.ok) throw new GoogleError(res.status, `Google Calendar ${res.status}: ${body?.error?.message ?? res.statusText}`);
@@ -263,6 +323,7 @@ export const googleSource: CalendarSource = {
     do {
       const r = await call<{ items?: any[]; nextPageToken?: string }>('/users/me/calendarList', {
         query: pageToken ? { pageToken } : {},
+        background: true,
       });
       for (const c of r.items ?? []) {
         if (typeof c?.id !== 'string') continue;
@@ -293,6 +354,7 @@ export const googleSource: CalendarSource = {
           maxResults: '2500',
           ...(pageToken ? { pageToken } : {}),
         },
+        background: true,
       });
       for (const g of r.items ?? []) if (onWall(g)) out.push(toCalEvent(calendarId, g, roles.get(calendarId) ?? 'reader'));
       pageToken = r.nextPageToken;
@@ -305,7 +367,7 @@ export const googleSource: CalendarSource = {
     const role = roles.get(calendarId) ?? 'reader';
     let g: GEvent;
     try {
-      g = await call<GEvent>(`/calendars/${cal}/events/${encodeURIComponent(id)}`);
+      g = await call<GEvent>(`/calendars/${cal}/events/${encodeURIComponent(id)}`, { background: true });
     } catch (e) {
       if (e instanceof GoogleError && (e.status === 404 || e.status === 410)) return null;
       throw e;
@@ -319,6 +381,7 @@ export const googleSource: CalendarSource = {
     // A few instances, so one the household declined does not end the countdown.
     const r = await call<{ items?: GEvent[] }>(`/calendars/${cal}/events/${encodeURIComponent(id)}/instances`, {
       query: { timeMin: after.toISOString(), maxResults: '10' },
+      background: true,
     });
     const next = r.items?.find(onWall);
     return next ? toCalEvent(calendarId, next, role) : null;

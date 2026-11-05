@@ -117,6 +117,16 @@ flowchart LR
   the old one at the occurrence's `originalStart` (where the series had it,
   not where it was moved to). A 401 drops the cached token and retries once;
   requests give up after 30 seconds.
+- **Rate limits**: a 429, or a 403 whose reason is `rateLimitExceeded` or
+  `userRateLimitExceeded`, is `RateLimited` (with Retry-After when the
+  response has a readable one); any other 403 stays an ordinary error. A
+  background read (`background: true` in `call`) fails at once, and the
+  engine pauses the background sync: `refresh()` does nothing until the
+  pause ends (1 minute, doubling per limit in a row up to 30, or longer if
+  Retry-After says so), then one fetch runs. A save is never held by the
+  pause: it retries a limit twice (1 s and 2 s plus jitter, or a
+  Retry-After up to 5 s) and otherwise fails saying when to try again.
+  Google accepting a save, and Sync now, resume the sync (`syncNow`).
 - **Tasks**: `tasks/engine.ts` is pure (occurrences from schedules; late
   chores; Up for Grabs; repeat-after-done via `Task.lastDone`), unit-tested.
   `tasks/state.ts` has the reactive views and the writes. Stars use an

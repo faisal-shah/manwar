@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'preact/hooks';
 import { Check, RefreshCw } from 'lucide-preact';
 import { demoMode } from '../../config';
-import { calendars, defaultCalendarId, refresh, sync, writableCalendars } from '../../calendar/engine';
+import { calendars, defaultCalendarId, refresh, sync, syncNow, writableCalendars } from '../../calendar/engine';
 import type { CalendarInfo } from '../../calendar/types';
 import { asParent } from '../../core/lock';
 import { settings } from '../../data/store';
@@ -84,7 +84,7 @@ export function GooglePage() {
                     startGoogleConnect({
                       onDone: () => {
                         toast('Google Calendar is connected again.');
-                        void refresh();
+                        void syncNow();
                       },
                       onError: (m) => toast(m),
                     }),
@@ -96,7 +96,7 @@ export function GooglePage() {
               Reconnect
             </Button>
           ) : (
-            <Button class="set-btn" disabled={st.loading} onClick={() => void refresh()}>
+            <Button class="set-btn" disabled={st.loading} onClick={() => void syncNow()}>
               <RefreshCw size="2rem" />
               Sync now
             </Button>

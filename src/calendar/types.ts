@@ -68,6 +68,20 @@ export interface EventDraft {
 
 export type EditScope = 'this' | 'following' | 'all';
 
+/**
+ * The calendar service asked the app to slow down (Google: 429, or 403 with
+ * reason rateLimitExceeded or userRateLimitExceeded). `retryAfterMs` is the
+ * wait it named, when it named one.
+ */
+export class RateLimited extends Error {
+  constructor(
+    message: string,
+    readonly retryAfterMs: number | null,
+  ) {
+    super(message);
+  }
+}
+
 export interface CalendarSource {
   listCalendars(): Promise<CalendarInfo[]>;
   /** Occurrences overlapping [timeMin, timeMax), recurring events expanded. */

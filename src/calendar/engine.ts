@@ -6,7 +6,15 @@ import { addDays, addMonths, dateAt, diffDays, toISODate } from '../lib/date';
 import { currentTime, today } from '../lib/clock';
 import { fakeSource } from './fake';
 import { googleSource } from './google';
-import { eventKey, type CalEvent, type CalendarInfo, type CalendarSource, type EditScope, type EventDraft } from './types';
+import {
+  RateLimited,
+  eventKey,
+  type CalEvent,
+  type CalendarInfo,
+  type CalendarSource,
+  type EditScope,
+  type EventDraft,
+} from './types';
 
 /**
  * Calendar state for the wall. Events come from the household's Google
@@ -124,6 +132,34 @@ const visibleCalendars = () => calendars.value.filter((c) => !settings.value.hid
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
+/* ---------- Rate limits ---------- */
+
+/**
+ * Google asked the wall to slow down. The background sync (polls, page
+ * turns, coming back online or into view) holds off until `until`: a
+ * minute, doubling with each limit in a row up to half an hour, or longer
+ * when Google named a longer wait; one fetch runs when the pause ends.
+ * Saves are not held back, and Google accepting one resumes the sync.
+ */
+const PAUSE_MIN_MS = 60_000;
+const PAUSE_MAX_MS = 30 * 60_000;
+let pause = { until: 0, step: 0 };
+let resumeTimer: ReturnType<typeof setTimeout> | undefined;
+
+function pauseSync(limit: RateLimited): void {
+  const ms = Math.max(Math.min(PAUSE_MIN_MS * 2 ** pause.step, PAUSE_MAX_MS), limit.retryAfterMs ?? 0);
+  pause = { until: Date.now() + ms, step: pause.step + 1 };
+  clearTimeout(resumeTimer);
+  resumeTimer = setTimeout(() => void refresh(), ms);
+}
+
+function endPause(): void {
+  pause.until = 0;
+  clearTimeout(resumeTimer);
+}
+
+const limitIn = (reasons: unknown[]) => reasons.find((r): r is RateLimited => r instanceof RateLimited);
+
 async function fetchAll(): Promise<void> {
   const household = householdId.peek();
   if (!household) return;
@@ -143,17 +179,22 @@ async function fetchAll(): Promise<void> {
     const kept = events.value.filter((e) => failed.some((c) => c.id === e.calendarId));
     const fresh = results.flatMap((r) => (r.status === 'fulfilled' ? r.value : []));
     events.value = [...kept, ...fresh].sort((a, b) => a.start.getTime() - b.start.getTime());
-    const firstError = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
+    const errors = results.flatMap((r) => (r.status === 'rejected' ? [r.reason] : []));
     if (!failed.length) loaded = w;
     const far = await fetchFarCountdowns();
     if (stale()) return;
-    farCountdowns.value = far;
-    sync.value = firstError
-      ? { loading: false, lastSync: sync.value.lastSync, error: `${failed[0].name}: ${message(firstError.reason)}` }
+    farCountdowns.value = far.found;
+    const limit = limitIn([...errors, ...far.errors]);
+    if (limit) pauseSync(limit);
+    else pause.step = 0;
+    sync.value = errors.length
+      ? { loading: false, lastSync: sync.value.lastSync, error: `${failed[0].name}: ${message(errors[0])}` }
       : { loading: false, lastSync: Date.now(), error: null };
     saveSnapshot(household);
   } catch (e) {
-    if (!stale()) sync.value = { ...sync.value, loading: false, error: message(e) };
+    if (stale()) return;
+    if (e instanceof RateLimited) pauseSync(e);
+    sync.value = { ...sync.value, loading: false, error: message(e) };
   }
 }
 
@@ -166,6 +207,9 @@ function resetForHousehold(household: string | null): void {
     sync.value = { loading: false, lastSync: null, error: null };
   });
   farCache.clear();
+  // Rate limits are per Google account.
+  endPause();
+  pause.step = 0;
   loaded = fetchWindow();
   if (household) loadSnapshot(household);
 }
@@ -177,8 +221,11 @@ let queued: Promise<void> | null = null;
  * Re-fetch every shown calendar. A call made while a fetch is running gets
  * one more fetch after it (shared by every such call), so what it awaits
  * includes any change made before the call: a saved event, a wider window.
+ * While the sync is paused for a rate limit it does nothing; the fetch at
+ * the end of the pause covers it.
  */
 export function refresh(): Promise<void> {
+  if (Date.now() < pause.until) return Promise.resolve();
   if (!running) {
     running = fetchAll().finally(() => (running = null));
     return running;
@@ -188,6 +235,12 @@ export function refresh(): Promise<void> {
     return refresh();
   });
   return queued;
+}
+
+/** Fetch now even while the sync is paused: a person asked (Sync now), or Google just accepted their save. */
+export function syncNow(): Promise<void> {
+  endPause();
+  return refresh();
 }
 
 /** Make sure [from, to] is loaded (views call this when paging). */
@@ -391,9 +444,9 @@ const farCountdowns = signal<CalEvent[]>([]);
 const farCache = new Map<string, { at: number; ev: CalEvent | null }>();
 const FAR_TTL_MS = 60 * 60_000;
 
-/** The countdown events past the window, for fetchAll to show. */
-async function fetchFarCountdowns(): Promise<CalEvent[]> {
-  if (settings.value.countdownWindow !== 'always') return [];
+/** The countdown events past the window, for fetchAll to show, and why any of them could not be asked. */
+async function fetchFarCountdowns(): Promise<{ found: CalEvent[]; errors: unknown[] }> {
+  if (settings.value.countdownWindow !== 'always') return { found: [], errors: [] };
   const shown = new Set(visibleCalendars().map((c) => c.id));
   const loadedKeys = new Set(
     events.value.flatMap((e) => [metaKey(e.calendarId, e.id), metaKey(e.calendarId, e.seriesId ?? e.id)]),
@@ -411,7 +464,10 @@ async function fetchFarCountdowns(): Promise<CalEvent[]> {
   const stale = wanted.filter((k) => (farCache.get(k.metaId)?.at ?? -Infinity) <= now - FAR_TTL_MS);
   const found = await Promise.allSettled(stale.map((k) => source.nextOccurrence(k.calendarId, k.id, after)));
   found.forEach((r, i) => r.status === 'fulfilled' && farCache.set(stale[i].metaId, { at: now, ev: r.value }));
-  return wanted.flatMap((k) => farCache.get(k.metaId)?.ev ?? []);
+  return {
+    found: wanted.flatMap((k) => farCache.get(k.metaId)?.ev ?? []),
+    errors: found.flatMap((r) => (r.status === 'rejected' ? [r.reason] : [])),
+  };
 }
 
 /** Countdown events within the configured window, soonest first, one per series. */
@@ -461,7 +517,7 @@ export async function createEvent(
     countdown: opts.countdown,
     updatedAt: currentTime(),
   });
-  await refresh();
+  await syncNow();
 }
 
 export async function updateEvent(
@@ -495,7 +551,7 @@ export async function updateEvent(
     // "All events" applies to this occurrence too.
     if (ev.seriesId && metaDocs(ev).own) putOwn(ev, { profiles: [], countdown: undefined });
   }
-  await refresh();
+  await syncNow();
 }
 
 const sameIds = (a: string[], b: string[]) => a.length === b.length && a.every((x) => b.includes(x));
@@ -505,7 +561,7 @@ export async function deleteEvent(ev: CalEvent, scope: EditScope): Promise<void>
   const { own, ownKey, seriesKey } = metaDocs(ev);
   if (!seriesKey || scope === 'all') void removeDoc('eventMeta', seriesKey ?? ownKey).catch(() => {});
   if (seriesKey && own) void removeDoc('eventMeta', ownKey).catch(() => {});
-  await refresh();
+  await syncNow();
 }
 
 /** The series' editable repeat rule (null when it can't be represented), for the editor. */

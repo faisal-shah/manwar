@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { newEventId, type CalEvent, type EventDraft } from '../../src/calendar/types';
+import { RateLimited, newEventId, type CalEvent, type EventDraft } from '../../src/calendar/types';
 
 /** The session's token cache: dropping the current token makes the next one new. */
 const tokens = vi.hoisted(() => ({ n: 0, dropped: [] as string[] }));
@@ -28,7 +28,7 @@ interface Call {
 }
 
 let calls: Call[] = [];
-let routes: ((c: Call) => { status?: number; body?: unknown } | undefined)[] = [];
+let routes: ((c: Call) => { status?: number; body?: unknown; headers?: Record<string, string> } | undefined)[] = [];
 
 beforeEach(() => {
   calls = [];
@@ -47,7 +47,7 @@ beforeEach(() => {
       const res = r(c);
       if (res) {
         const status = res.status ?? 200;
-        return new Response(status === 204 ? null : JSON.stringify(res.body ?? {}), { status });
+        return new Response(status === 204 ? null : JSON.stringify(res.body ?? {}), { status, headers: res.headers });
       }
     }
     return new Response(JSON.stringify({ error: { message: `no route for ${c.method} ${c.path}` } }), { status: 404 });
@@ -1018,5 +1018,88 @@ describe('google calendar: writing events', () => {
       c.method === 'DELETE' ? { status: 403, body: { error: { code: 403, message: 'Forbidden' } } } : undefined,
     );
     await expect(googleSource.remove(timed, 'all')).rejects.toThrow('Google Calendar 403: Forbidden');
+  });
+});
+
+describe('google calendar: rate limits', () => {
+  // Bodies as the Calendar API's "Handle API errors" guide shows them.
+  const googleError = (status: number, domain: string, reason: string, message: string) => ({
+    status,
+    body: { error: { errors: [{ domain, reason, message }], code: status, message } },
+  });
+  const limited = (status: 403 | 429, reason = 'rateLimitExceeded') =>
+    googleError(status, 'usageLimits', reason, 'Rate Limit Exceeded');
+  const range = [new Date('2026-11-01T00:00'), new Date('2026-12-01T00:00')] as const;
+  const draft: EventDraft = {
+    title: 'Dentist',
+    allDay: false,
+    start: new Date('2026-11-06T09:00'),
+    end: new Date('2026-11-06T10:00'),
+    keepRecurrence: false,
+  };
+
+  it('fails a background read at once with the wait Google named, without asking again', async () => {
+    routes.push(() => limited(403));
+    const e = await googleSource.listEvents(CAL, ...range).catch((x) => x);
+    expect(e).toBeInstanceOf(RateLimited);
+    expect([e.retryAfterMs, calls.length]).toEqual([null, 1]);
+
+    routes.unshift(() => ({ ...limited(429), headers: { 'Retry-After': '120' } }));
+    const again = await googleSource.listCalendars().catch((x) => x);
+    expect([again instanceof RateLimited, again.retryAfterMs]).toEqual([true, 120_000]);
+    expect(again.message).toBe('Google Calendar is busy. Try again in 2 minutes.');
+  });
+
+  it('reads the per-user limit as a rate limit too', async () => {
+    routes.push(() => limited(403, 'userRateLimitExceeded'));
+    await expect(googleSource.listCalendars()).rejects.toBeInstanceOf(RateLimited);
+  });
+
+  it('keeps a 403 that is not about the rate an error of its own', async () => {
+    const notOrganizer = 'Shared properties can only be changed by the organizer of the event.';
+    routes.push(() => googleError(403, 'calendar', 'forbiddenForNonOrganizer', notOrganizer));
+    const e = await googleSource.listEvents(CAL, ...range).catch((x) => x);
+    expect(e).not.toBeInstanceOf(RateLimited);
+    expect([e.message, calls.length]).toEqual([`Google Calendar 403: ${notOrganizer}`, 1]);
+    // Calendar usage limits are not lifted by waiting a minute either.
+    routes.unshift(() => googleError(403, 'usageLimits', 'quotaExceeded', 'Calendar usage limits exceeded.'));
+    const quota = await googleSource.listCalendars().catch((x) => x);
+    expect([quota instanceof RateLimited, quota.message]).toEqual([
+      false,
+      'Google Calendar 403: Calendar usage limits exceeded.',
+    ]);
+  });
+
+  it('waits a moment and saves again when a save is rate limited, but never for long', async () => {
+    vi.useFakeTimers();
+    try {
+      let n = 0;
+      routes.push((c) => (c.method === 'POST' && n++ === 0 ? limited(403) : undefined));
+      routes.push((c) => (c.method === 'POST' ? { body: { id: 'e1' } } : undefined));
+      const saved = googleSource.insert(CAL, 'e1', draft);
+      await vi.advanceTimersByTimeAsync(2_000);
+      await saved;
+      expect(calls.map((c) => c.method)).toEqual(['POST', 'POST']);
+
+      // Google names a wait longer than a person should watch a spinner for: the save fails at once and says so.
+      calls = [];
+      routes.unshift(() => ({ ...limited(429), headers: { 'Retry-After': '30' } }));
+      const e = await googleSource.insert(CAL, 'e2', draft).catch((x) => x);
+      expect([e instanceof RateLimited, e.message, calls.length]).toEqual([
+        true,
+        'Google Calendar is busy. Try again in a minute.',
+        1,
+      ]);
+
+      // Still limited after the short waits: the save fails rather than spinning on.
+      calls = [];
+      routes[0] = () => limited(403, 'userRateLimitExceeded');
+      const out = googleSource.insert(CAL, 'e3', draft).catch((x) => x);
+      await vi.advanceTimersByTimeAsync(6_000);
+      expect(await out).toBeInstanceOf(RateLimited);
+      expect(calls).toHaveLength(3);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
