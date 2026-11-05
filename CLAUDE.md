@@ -173,6 +173,9 @@ generated from it: `node scripts/icons/render.mjs` after any brand change.
   claim. Reading claims refreshes an expired token, which fails offline, so
   the last household is remembered per user (`manwar.claims.v1`) and
   opened from it; with nothing remembered the screen waits for the network.
+  Only a refused sign-in (`isSignInRefused`: revoked, disabled, deleted)
+  signs the wall out; any other refresh failure (a failing token service,
+  rate limits) is treated like being offline.
   Show Firebase errors with `errorMessage()` (`data/errors.ts`): the
   Functions SDK appends " [403]" and reports a failed request as
   "internal [0]". A token refusal only a reconnect fixes sets

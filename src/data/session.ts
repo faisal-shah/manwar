@@ -2,7 +2,7 @@ import { signal } from '@preact/signals';
 import { onAuthStateChanged, signInWithCustomToken, signOut, type User } from 'firebase/auth';
 import { httpsCallable } from 'firebase/functions';
 import { demoMode, googleClientId, googleScopes } from '../config';
-import { errorMessage, isNetworkError, needsReconnect } from './errors';
+import { errorMessage, isSignInRefused, needsReconnect } from './errors';
 import { auth, functions } from './firebase';
 import { closeHousehold, openHousehold } from './store';
 
@@ -15,7 +15,8 @@ import { closeHousehold, openHousehold } from './store';
  * (`hid` claim).
  *
  * 'waiting': signed in on this tablet, but the sign-in cannot be checked
- * until the network is back (and no household is remembered for it).
+ * until the network (or Google's sign-in service) answers, and no household
+ * is remembered for it.
  */
 export type SessionState = 'loading' | 'waiting' | 'signedOut' | 'connecting' | 'signedIn' | 'error';
 
@@ -176,7 +177,8 @@ export async function disconnect(): Promise<void> {
  * The household id rides in the ID token's claims. Reading them refreshes an
  * expired token, which fails offline: a tablet that boots before the Wi-Fi is
  * up would never open its household. So the last household opened is
- * remembered for its user and used when the claims cannot be refreshed.
+ * remembered for its user and used when the claims cannot be refreshed for
+ * any reason but a refused sign-in (offline, or the token service failing).
  */
 const HOUSEHOLD_KEY = 'manwar.claims.v1';
 
@@ -211,7 +213,7 @@ function forgetHousehold(): void {
   }
 }
 
-/** The user's household from fresh claims, or the remembered one while the network is down; null without a hid claim. */
+/** The user's household from fresh claims, or the remembered one while they cannot be refreshed; null without a hid claim. */
 async function householdOf(user: User): Promise<Household | null> {
   try {
     const { claims } = await user.getIdTokenResult();
@@ -220,7 +222,7 @@ async function householdOf(user: User): Promise<Household | null> {
     rememberHousehold(h);
     return h;
   } catch (e) {
-    const h = isNetworkError(e) ? recallHousehold(user.uid) : null;
+    const h = isSignInRefused(e) ? null : recallHousehold(user.uid);
     if (h) return h;
     throw e;
   }
@@ -278,7 +280,7 @@ export function initSession(): void {
       h = await householdOf(user);
     } catch (e) {
       if (n !== seq) return;
-      if (isNetworkError(e)) {
+      if (!isSignInRefused(e)) {
         session.value = { state: 'waiting' };
         whenOnline(() => {
           if (n === seq && auth.currentUser) void signedInAs(auth.currentUser, n);

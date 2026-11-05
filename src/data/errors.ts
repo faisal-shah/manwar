@@ -27,6 +27,20 @@ export function isNetworkError(e: unknown): boolean {
   return e.code.startsWith('functions/') && / \[0\]$/.test(e.message);
 }
 
+/**
+ * Auth refused the stored sign-in itself (revoked, disabled, deleted): only
+ * connecting again helps. Anything else from a token refresh (a busy or
+ * failing server, rate limits) passes, so it must not sign the wall out.
+ */
+const REFUSED = new Set([
+  'auth/user-token-expired',
+  'auth/user-disabled',
+  'auth/user-not-found',
+  'auth/invalid-user-token',
+  'auth/invalid-refresh-token',
+]);
+export const isSignInRefused = (e: unknown): boolean => coded(e) && REFUSED.has(e.code);
+
 /** A Functions error only connecting Google again fixes (access revoked, account off the allowlist). */
 export function needsReconnect(e: unknown): boolean {
   return coded(e) && (e.code === 'functions/failed-precondition' || e.code === 'functions/permission-denied');
