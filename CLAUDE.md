@@ -336,7 +336,11 @@ sequenceDiagram
   header, the status line (household not syncing, calendar trouble) and a
   bottom tab bar. Tabs are `PhonePage`s (`phone/nav.ts`) listed in
   `phone/pages.ts`, each in `src/phone/<tab>/`; More's rows are
-  `MoreItem`s in `phone/more/index.tsx`. An inner view sets the header's
+  `MoreItem`s in `phone/more/index.tsx`, and the row open is `moreView`
+  (`phone/more/view.ts`, apart from the rows, so a row's module can open
+  another row without importing the list that imports it); each row's
+  view is keyed by its id, so one opened from another's view gets its own
+  Back entry and opening-tap guard. An inner view sets the header's
   back arrow through `PhonePage.back`, which a tap on the tab shown also
   runs (the tab goes to its top). Lists keeps its open list and More its
   view while another tab shows; Calendar comes back on today's agenda
@@ -431,6 +435,21 @@ sequenceDiagram
   the phone, the Tasks tab's star pill included): Give and Remove with a
   note (`Adjust`), the rewards they can redeem (`redeem`), the history
   with Undo (`HistoryList`), and the reward editor and redeemed dialog.
+- **People** (More, `phone/people/`): the household's people, to add,
+  edit, reorder and delete, through the same writes as the wall's
+  Settings > Profiles (`features/settings/profiles.ts`) and the same
+  editor (`useProfileEditor` and `ProfileFields` in
+  `settings/ProfileFields.tsx`; the two differ only in words and layout):
+  a save writes only the fields changed since the editor opened
+  (`changedFields` over `profileFields`), so a change another device made
+  to the others is kept, a name left as it opened is never refused as
+  taken (`draftProblem`), and a delete says what it archives and takes
+  the person off (`describeProfileDelete`) before it asks. Today, Tasks
+  and Stars with no people offer Add a person (`addFirstPerson`), which
+  opens the editor in More > People; the editor belongs to the view and
+  does not come back with it later. The shared task editor and claim
+  dialog say where people are added on this device (`addPeopleWhere`,
+  `ui/profile.tsx`).
 - **Calendar tab** (`phone/calendar/`): the agenda (`agenda.ts`, pure:
   the days from a start day, all-day rows first, the Now line on today,
   free days folded into one line) from today or a day gone to; scrolling
@@ -481,14 +500,17 @@ sequenceDiagram
   `core/sleep.ts` from the last command, the timer and the sleep window; a
   touch on the wall is not shared), said as "likely"; the note view offers
   Wake the wall when a note waits behind a sleeping screen.
-- **Shared with the wall through Firestore**: the timer (`timers/wall`,
-  `features/timer/state.ts`: each start is a new `run` written over the
-  last, and a stop is stamped under its run's id in `stopped`, so a stop
-  that lands late stops nothing newer; the wall writes at once, a phone
-  through `transaction()`, which also refuses a start over a timer the
-  phone had not seen; the wall's sleep hold is derived from the document;
-  a run started on a wall carries that tablet's id, `startedOn`, and only
-  that wall shows it, while one a phone starts shows on every wall) and
+- **Shared with the wall through Firestore**: the timer
+  (`features/timer/state.ts`: a wall's runs live in its own document,
+  `timers/<its id>` (`manwar.wallId.v1`, made once per tablet), so a
+  second tablet neither shows nor ends them, and a phone's in
+  `timers/wall` (`PHONE_TIMER`), shown on every wall; the run on screen is
+  the latest of those (`latestRun`). Each start is a new `run` written
+  over the last in its document, and a stop is stamped under its run's id
+  in `stopped`, so a stop that lands late stops nothing newer; the wall
+  writes at once, a phone through `transaction()`, which also refuses a
+  start over a timer the phone had not seen; the wall's sleep hold is
+  derived from the documents it shows) and
   the screen (`commands/display`: a phone asks the wall to sleep or wake
   through `transaction()`, so an offline phone is told at once rather
   than queueing a request the wall would no longer take;
@@ -590,7 +612,9 @@ generated from it: `node scripts/icons/render.mjs` after any brand change.
 - Firestore field paths cannot contain `*`; `lastDoneKey()` maps Up for Grabs to `any`.
 - Text the family types (names, titles, list items, recipe lines, messages)
   may be Arabic: render it in a `<bdi>` (or `dir="auto"` on its own block),
-  or its punctuation and leading numbers land on the wrong side. A box that
+  or its punctuation and leading numbers land on the wrong side. In a
+  string that cannot hold markup (a dialog title or body, a toast), wrap
+  the name in `isolate()` (`lib/text.ts`). A box that
   cuts the text with an ellipsis takes `dir="auto"` itself (an inner bdi
   shows an Arabic title's end, cut at its start); a line-clamped one aligns
   to `start`, since Chrome draws no clamp ellipsis on a right-to-left block
@@ -697,6 +721,10 @@ generated from it: `node scripts/icons/render.mjs` after any brand change.
   - Editing one occurrence of a repeating meal goes through
     `plan.editOccurrence`; moving it to another day shifts a weekly
     rule's weekdays with it.
+- `features/settings`: `profiles.ts` has the profile writes (save,
+  move, delete with what it archives) and `ProfileFields.tsx` the
+  editor (`useProfileEditor`, `ProfileFields`), shared by Settings >
+  Profiles and the phone's People.
 - `features/home`, `features/settings`, `features/messages`, `features/timer`:
   a running timer holds off scheduled sleep (`sleepHeldUntil` in
   `core/display.ts`).

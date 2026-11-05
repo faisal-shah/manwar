@@ -1,5 +1,4 @@
 import { ChevronRight, Ellipsis, Smartphone } from 'lucide-preact';
-import { stored } from '../../lib/stored';
 import { useBack } from '../../ui/back';
 import { useOpeningTapGuard } from '../../ui/overlays';
 import type { PhonePage } from '../nav';
@@ -10,6 +9,10 @@ import { wallScreenItem } from '../wallscreen';
 import type { MoreItem } from './items';
 import { ThisPhone } from './ThisPhone';
 import { starsItem } from '../stars';
+import { peopleItem } from '../people';
+import { moreView } from './view';
+
+export { moreView };
 
 /** The More tab's rows, in order. */
 export const MORE_ITEMS: MoreItem[] = [
@@ -18,20 +21,18 @@ export const MORE_ITEMS: MoreItem[] = [
   notesItem,
   mealsItem,
   wallScreenItem,
+  peopleItem,
   { id: 'phone', label: 'This phone', icon: Smartphone, View: ThisPhone },
 ];
 
-/** The open row's view, null for the list. Kept while another tab shows, and for the session (nav.ts). */
-export const moreView = stored<string | null>(
-  'manwar.phone.moreView.v1',
-  null,
-  (v): v is string | null => v === null || MORE_ITEMS.some((i) => i.id === v),
-  'session',
-);
+// An id no row has (kept by another version of the app) opens the list.
+const kept = moreView.peek();
+if (kept !== null && !MORE_ITEMS.some((i) => i.id === kept)) moreView.value = null;
 
 function MoreBody() {
   const open = MORE_ITEMS.find((i) => i.id === moreView.value);
-  if (open) return <MoreView item={open} />;
+  // Keyed: a row opened from another one's view (Add a person in Stars) is a view of its own.
+  if (open) return <MoreView key={open.id} item={open} />;
   return (
     <ul class="ph-menu">
       {MORE_ITEMS.map((i) => {

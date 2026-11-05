@@ -597,7 +597,7 @@ test('a second profile with the same name is refused; renaming one to its own na
   await openSettings(page, 'Profiles');
   await page.getByRole('button', { name: 'Add a profile' }).click();
   await page.getByRole('textbox', { name: 'Name' }).fill(' mamma ');
-  await expect(page.getByRole('alert')).toHaveText('Another profile is already called mamma.');
+  await expect(page.getByRole('alert')).toHaveText('Someone else is already called mamma.');
   await expect(page.getByRole('button', { name: 'Create profile' })).toBeDisabled();
   await page.getByRole('textbox', { name: 'Name' }).fill('Maryam');
   await expect(page.getByRole('button', { name: 'Create profile' })).toBeEnabled();

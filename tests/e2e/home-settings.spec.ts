@@ -110,7 +110,9 @@ test('deleting a profile sends the events only it had to the unassigned queue', 
   await openSettings(page, 'Profiles');
   await page.getByRole('button', { name: 'Edit Hashim' }).click();
   await page.getByRole('button', { name: 'Delete', exact: true }).click();
-  await expect(page.locator('.modal')).toContainText('4 events assigned only to Hashim! will wait in the unassigned queue');
+  await expect(page.locator('.modal')).toContainText(
+    '4 events assigned only to \u2068Hashim!\u2069 will wait in the unassigned queue',
+  );
   await page.getByRole('button', { name: 'Delete profile' }).click();
   // Thursday's class waits too, rather than going back to the series' Asiyah.
   await expect(badgeOf(page)).toHaveText('7');

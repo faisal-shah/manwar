@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { NOBODY, type EventMeta, type Reward, type Task } from '../../src/data/types';
+import { NOBODY, type EventMeta, type Profile, type Reward, type Task } from '../../src/data/types';
+import { changedFields } from '../../src/data/settings';
+import { isolate } from '../../src/lib/text';
 import {
   canHideTab,
   describeProfileDelete,
@@ -10,7 +12,11 @@ import {
   moveTarget,
   nameTaken,
   planProfileDelete,
+  profileFields,
+  draftProblem,
+  formatBirthday,
   setTabShown,
+  type ProfileDraft,
 } from '../../src/features/settings/logic';
 import { PIN_TRIES, pauseSecondsLeft, pinPause } from '../../src/core/pin';
 
@@ -121,10 +127,12 @@ describe('deleting a profile', () => {
   });
   it('explains the effect before deleting', () => {
     const text = describeProfileDelete('Kid', plan);
-    expect(text).toContain('1 task only Kid had will be archived.');
-    expect(text).toContain('Kid is taken off 2 shared tasks and rewards.');
-    expect(text).toContain('1 reward only Kid could redeem will be archived.');
-    expect(text).toContain('Kid is removed from 2 events; 1 event assigned only to Kid will wait in the unassigned queue.');
+    // The name is isolated: an Arabic one keeps its punctuation on its own side.
+    const kid = isolate('Kid');
+    expect(text).toContain(`1 task only ${kid} had will be archived.`);
+    expect(text).toContain(`${kid} is taken off 2 shared tasks and rewards.`);
+    expect(text).toContain(`1 reward only ${kid} could redeem will be archived.`);
+    expect(text).toContain(`${kid} is removed from 2 events; 1 event assigned only to ${kid} will wait in the unassigned queue.`);
     expect(text).toContain('Star history stays in the ledger.');
   });
   it('says only the closing line for a profile with nothing attached', () => {
@@ -171,5 +179,41 @@ describe('profile names', () => {
   it('lets a profile keep its own name', () => {
     expect(nameTaken('Sam', people, 'a')).toBe(false);
     expect(nameTaken('Sam', people, 'b')).toBe(true);
+  });
+});
+
+describe('profile edits', () => {
+  const opened = { name: 'Zaid', color: '#e11d48', emoji: undefined, birthday: '' };
+  const changes = (was: ProfileDraft, next: ProfileDraft) => changedFields(profileFields(was), profileFields(next));
+  it('names only the fields changed, the name trimmed', () => {
+    expect(changes(opened, { ...opened })).toEqual({});
+    expect(changes(opened, { ...opened, name: ' Zaid ' })).toEqual({});
+    expect(changes(opened, { ...opened, name: ' Zayd ' })).toEqual({ name: 'Zayd' });
+    expect(changes(opened, { ...opened, color: '#2563eb', birthday: '2019-03-07' })).toEqual({
+      color: '#2563eb',
+      birthday: '2019-03-07',
+    });
+  });
+  it('clears an emoji or birthday taken away (undefined: the store deletes it), and not one that was never there', () => {
+    const had = { ...opened, emoji: '🦁', birthday: '2019-03-07' };
+    expect(changes(had, { ...had, emoji: undefined, birthday: '' })).toEqual({ emoji: undefined, birthday: undefined });
+    expect(Object.keys(changes(had, { ...had, emoji: undefined, birthday: '' }))).toEqual(['emoji', 'birthday']);
+    expect(changes(opened, { ...opened, emoji: '', birthday: '' })).toEqual({});
+  });
+  it('refuses an empty name, and a name another profile has unless the editor left it as it was', () => {
+    const all = [
+      { id: 'a', name: 'Sam' },
+      { id: 'b', name: 'Samuel' },
+    ] as Profile[];
+    const samuel = { ...opened, name: 'Samuel' };
+    expect(draftProblem({ ...opened, name: '  ' }, opened, all, 'z')).toBe('empty');
+    expect(draftProblem({ ...opened, name: 'sam ' }, opened, all, 'z')).toBe('taken');
+    expect(draftProblem({ ...opened, name: 'Sami' }, opened, all, 'z')).toBeNull();
+    // a's editor opened on Samuel; the names were swapped elsewhere meanwhile (a is Sam now): a color change alone is saved.
+    expect(draftProblem({ ...samuel, color: '#000000' }, samuel, all, 'a')).toBeNull();
+    expect(draftProblem({ ...opened, name: 'Samuel' }, opened, all, 'a')).toBe('taken');
+  });
+  it('shows a birthday as month and day', () => {
+    expect(formatBirthday('2019-03-07')).toBe('Mar 7');
   });
 });

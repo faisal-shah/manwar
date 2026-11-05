@@ -1,3 +1,4 @@
+import { isPhone } from '../app/layout';
 import { profiles, settings } from '../data/store';
 import { EVERYONE, type Profile } from '../data/types';
 import { toggleAssignee } from '../lib/assignees';
@@ -29,6 +30,9 @@ export function Avatar({
     </span>
   );
 }
+
+/** Where this device adds the family's people: the wall's Settings, the phone's More. */
+export const addPeopleWhere = isPhone ? 'More, under People' : 'Settings, under Profiles';
 
 export const everyoneProfile = () => ({ name: 'Everyone', color: settings.value.familyColor, emoji: '👪' });
 

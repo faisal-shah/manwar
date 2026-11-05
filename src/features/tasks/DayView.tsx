@@ -6,7 +6,7 @@ import { progress } from '../../tasks/engine';
 import { occurrencesFor, todayOccurrences } from '../../tasks/state';
 import { Empty } from '../../ui/controls';
 import { NoProfiles } from '../../ui/NoProfiles';
-import { Avatar } from '../../ui/profile';
+import { Avatar, addPeopleWhere } from '../../ui/profile';
 import { StarPill } from '../rewards/StarPill';
 import { SECTION_META, buildColumns, defaultExpanded, isAllDone, sectionProgress, sectionsOf, type Column as Col } from './logic';
 import { TaskCard, UFG_COLOR } from './TaskCard';
@@ -57,7 +57,7 @@ export function NoColumns() {
   return profiles.value.length ? (
     <Empty emoji="👀">Every profile is hidden. Use Filter to show them.</Empty>
   ) : (
-    <NoProfiles>Add your family in Settings, under Profiles. Each person gets a column here.</NoProfiles>
+    <NoProfiles>Add your family in {addPeopleWhere}. Each person gets a column here.</NoProfiles>
   );
 }
 

@@ -3,7 +3,7 @@ import { useState } from 'preact/hooks';
 import { data, profileById } from '../../data/store';
 import type { Profile } from '../../data/types';
 import { monthShort } from '../../lib/date';
-import { plural, pluralWord } from '../../lib/text';
+import { isolate, plural, pluralWord } from '../../lib/text';
 import { editReward, redeem } from '../../features/rewards/actions';
 import { RewardEditorHost } from '../../features/rewards/Editor';
 import { Adjust, HistoryList, askAdjust } from '../../features/rewards/History';
@@ -16,9 +16,6 @@ import { Avatar } from '../../ui/profile';
 import '../../features/tasks/columns.css';
 import '../../features/rewards/rewards.css';
 import './stars.css';
-
-/** A name kept whole in a sentence of the other direction (an Arabic name in "...'s stars"). */
-export const isolate = (s: string) => `⁨${s}⁩`;
 
 /**
  * One person's stars on the phone: the balance, Give and Remove, the

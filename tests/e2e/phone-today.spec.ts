@@ -110,13 +110,13 @@ test('next up, dinner and the countdowns; tomorrow once today is over', async ({
   expect([...errors(), ...late.errors]).toEqual([]);
 });
 
-test('a new household says where people come from', async ({ browser }) => {
+test('a new household offers to add people', async ({ browser }) => {
   const household = `phtasks-${RUN}-today-empty`;
   const w = await wall(browser, household, '&seed=none');
   await expect(w.page.locator('.rail')).toBeVisible();
   const p = await phone(browser, household, '&seed=none');
   const page = p.page;
-  await expect(page.getByRole('region', { name: 'Tasks today' })).toContainText('No people yet. People are added at the wall');
+  await expect(page.getByRole('region', { name: 'Tasks today' })).toContainText('No people yet. Add a person');
   await phoneTab(page, 'Tasks');
   await expect(page.locator('.pt')).toContainText('No people yet');
   // Adding a task still works (Up for Grabs needs nobody).

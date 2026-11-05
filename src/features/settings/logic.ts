@@ -1,5 +1,6 @@
-import { NOBODY, type EventMeta, type Reward, type TabId, type Task } from '../../data/types';
-import { plural } from '../../lib/text';
+import { NOBODY, type EventMeta, type Profile, type Reward, type TabId, type Task } from '../../data/types';
+import { fromISODate, monthShort } from '../../lib/date';
+import { isolate, plural } from '../../lib/text';
 
 /* ---------- Tabs ---------- */
 
@@ -31,6 +32,40 @@ export function nameTaken(name: string, others: { id: string; name: string }[], 
   const n = name.trim().toLocaleLowerCase();
   return others.some((p) => p.id !== self && p.name.trim().toLocaleLowerCase() === n);
 }
+
+/** What a profile editor edits. An empty birthday is none. */
+export interface ProfileDraft {
+  name: string;
+  color: string;
+  emoji?: string;
+  birthday: string;
+}
+
+/** The profile fields a draft gives: the name trimmed, an empty emoji or birthday none. */
+export const profileFields = (d: ProfileDraft): Pick<Profile, 'name' | 'color' | 'emoji' | 'birthday'> => ({
+  name: d.name.trim(),
+  color: d.color,
+  emoji: d.emoji || undefined,
+  birthday: d.birthday || undefined,
+});
+
+/**
+ * Why `draft` cannot be saved (an empty name, or another profile's), or
+ * null. A name the editor left as it opened (`opened`) is not written, so
+ * another profile taking it meanwhile is no reason to refuse the rest.
+ */
+export function draftProblem(draft: ProfileDraft, opened: ProfileDraft, all: Profile[], id?: string): 'empty' | 'taken' | null {
+  const name = draft.name.trim();
+  if (!name) return 'empty';
+  if (name === opened.name.trim()) return null;
+  return nameTaken(name, all, id) ? 'taken' : null;
+}
+
+/** A birthday as the profile lists show it ("Mar 7"). */
+export const formatBirthday = (iso: string): string => {
+  const d = fromISODate(iso);
+  return `${monthShort(d.getMonth())} ${d.getDate()}`;
+};
 
 /** Move the item at `from` to `to`, returning the new order of ids. */
 export function moveId(ids: string[], from: number, to: number): string[] {
@@ -117,7 +152,8 @@ export function planProfileDelete(
 }
 
 /** The confirm text that explains a deletion before it happens. */
-export function describeProfileDelete(name: string, plan: ProfileDeletePlan): string {
+export function describeProfileDelete(profileName: string, plan: ProfileDeletePlan): string {
+  const name = isolate(profileName);
   const parts: string[] = [];
   if (plan.archiveTasks.length) parts.push(`${plural(plan.archiveTasks.length, 'task')} only ${name} had will be archived.`);
   const shared = plan.unassignTasks.length + plan.unassignRewards.length;

@@ -2,6 +2,33 @@
 Changelog
 =========
 
+0.2.1 (2026-11-05)
+==================
+
+Added
+-----
+
+- Phone: More > People adds, edits, reorders and deletes the family's
+  people, with the wall's rules (unique names, a delete that says what it
+  archives). Today, Tasks and Stars with no people offer Add a person.
+
+Changed
+-------
+
+- Saving a profile writes only the fields changed in the editor, so a
+  change another device made to the others meanwhile is kept.
+- A profile name already taken says "Someone else is already called ...";
+  a name left as the editor opened it is never refused, so another device
+  renaming someone meanwhile does not block saving the other fields.
+
+Fixed
+-----
+
+- An Arabic name in the profile delete confirmation and its messages
+  keeps its punctuation on its own side.
+- On the phone, the task editor and Who did it? say people are added in
+  More > People, not in the wall's Settings.
+
 0.2.0 (2026-11-05)
 ==================
 

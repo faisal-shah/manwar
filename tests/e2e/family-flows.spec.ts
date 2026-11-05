@@ -188,7 +188,7 @@ test('a profile deleted on one tablet closes its editor on the other, which cann
   await b.getByRole('button', { name: 'Delete', exact: true }).click();
   await b.getByRole('button', { name: 'Delete profile' }).click();
   await expect(a.getByRole('button', { name: 'Save', exact: true })).toHaveCount(0);
-  await expect(a.locator('.toast')).toContainText('Hashim! was deleted on another device.');
+  await expect(a.locator('.toast')).toContainText('\u2068Hashim!\u2069 was deleted on another device.');
   await expect(a.locator('.profile-row')).toHaveCount(3);
   await expect.poll(serverTitles(household, 'profiles', 'name')).toEqual(['Asiyah', 'Baba', 'Mamma']);
   expect(errors()).toEqual([]);

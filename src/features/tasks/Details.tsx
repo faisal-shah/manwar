@@ -4,7 +4,7 @@ import { stillOn } from '../../tasks/state';
 import { dateAt, formatLongDate, formatTime } from '../../lib/date';
 import { Button, IconButton } from '../../ui/controls';
 import { Modal, Popover, useCloseWhenGone } from '../../ui/overlays';
-import { Avatar } from '../../ui/profile';
+import { Avatar, addPeopleWhere } from '../../ui/profile';
 import { archiveTask, claimRequest, complete, detailsFor, editTask, fresh, skip, tapCheck } from './actions';
 import { SECTION_META, lateLabel, repeatSummary } from './logic';
 import { plural } from '../../lib/text';
@@ -150,7 +150,7 @@ function Claim({ r }: { r: NonNullable<typeof claimRequest.value> }) {
         {t.emoji} {t.title}
         {t.stars ? ` · ${plural(t.stars, 'star')}` : ''}
       </p>
-      {profiles.value.length === 0 && <p class="muted">Add your family in Settings, under Profiles, to give it to someone.</p>}
+      {profiles.value.length === 0 && <p class="muted">Add your family in {addPeopleWhere}, to give it to someone.</p>}
       <div class="tk-claim" role="group" aria-label="Who did it">
         {profiles.value.map((p) => (
           <button

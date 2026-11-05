@@ -16,6 +16,7 @@ import { TaskCard, UFG_COLOR } from '../../features/tasks/TaskCard';
 import { Empty, IconButton } from '../../ui/controls';
 import { Avatar } from '../../ui/profile';
 import type { PhonePage } from '../nav';
+import { addFirstPerson } from '../people';
 import { StarsHost } from '../stars/PersonStars';
 import { shownPerson } from './logic';
 import { tasksFor } from './state';
@@ -53,7 +54,10 @@ function TasksBody() {
     <div class="pt">
       {who === null ? (
         <Empty emoji="👪">
-          No people yet. People are added at the wall, in Settings, under Profiles. Then their tasks show here.
+          No people yet: their tasks show here once they are added.{' '}
+          <button type="button" class="ph-inline-link" onClick={addFirstPerson}>
+            Add a person
+          </button>
         </Empty>
       ) : (
         <>

@@ -28,6 +28,7 @@ import { hiddenPeople, notLoaded } from '../calendar/state';
 import { openPlan } from '../meals';
 import { moreView } from '../more';
 import { goPhone, type PhonePage } from '../nav';
+import { addFirstPerson } from '../people';
 import { showTasksOf } from '../tasks/state';
 import { capped, isNow, nextUp, type DayAgenda } from './logic';
 import '../../features/calendar/calendar.css';
@@ -197,7 +198,12 @@ function ProgressCard() {
     <section class="ph-card" aria-label="Tasks today">
       <CardHead icon={ListChecks} title="Tasks today" />
       {!people.length ? (
-        <p class="muted pd-empty">No people yet. People are added at the wall, in Settings, under Profiles.</p>
+        <p class="muted pd-empty">
+          No people yet.{' '}
+          <button type="button" class="ph-inline-link" onClick={addFirstPerson}>
+            Add a person
+          </button>
+        </p>
       ) : (
         <>
           {noTasks && (

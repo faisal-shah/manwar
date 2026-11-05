@@ -1,4 +1,5 @@
 import type { ReadOnly } from '../../calendar/types';
+import { isolate } from '../../lib/text';
 
 /** Pure text helpers for event fields (tests/unit/calendar-form.test.ts). */
 
@@ -29,9 +30,6 @@ export function plainText(s: string): string {
 /** A maps search for an event's location (a phone with Google Maps opens it there). */
 export const mapsUrl = (location: string): string =>
   `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location.trim())}`;
-
-/** A name set in a sentence as its own direction (Unicode first-strong isolate, as a <bdi> does). */
-const isolate = (s: string) => `\u2068${s}\u2069`;
 
 /** Why an event cannot be changed here, in a sentence (`calendar`: its calendar's name). */
 export function readOnlyText(why: ReadOnly, calendar: string, organizer?: string): string {

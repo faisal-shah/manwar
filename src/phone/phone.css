@@ -141,6 +141,14 @@ html[data-layout='phone'] {
   font-weight: 400;
   font-size: 2.2rem;
 }
+/* A button in a sentence (No tasks yet. Add a routine or chore). */
+.ph-inline-link {
+  display: inline;
+  color: var(--accent);
+  font-weight: 600;
+  text-align: left;
+  padding: 0.6rem 0;
+}
 /* Nothing there yet, and the button that adds it (Plan dinner). */
 .ph-none {
   display: flex;

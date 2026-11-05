@@ -6,7 +6,7 @@ import { currentTime, today } from '../../lib/clock';
 import { Button, Chips, Field, Segmented, Stepper, Toggle } from '../../ui/controls';
 import { Sheet, toast, useCloseWhenGone } from '../../ui/overlays';
 import { EmojiPicker, RepeatEditor } from '../../ui/pickers';
-import { ProfilePicker } from '../../ui/profile';
+import { ProfilePicker, addPeopleWhere } from '../../ui/profile';
 import { archiveTask, editing } from './actions';
 import {
   MAX_TASK_STARS,
@@ -160,7 +160,7 @@ function TaskEditor({ task, forList, onClose }: { task: Task | null; forList?: s
             </div>
           )}
           {!(chore && d.upForGrabs) && <ProfilePicker value={d.assignees} onChange={(assignees) => set({ assignees })} />}
-          {profiles.value.length === 0 && <span class="muted">Add your family in Settings, under Profiles.</span>}
+          {profiles.value.length === 0 && <span class="muted">Add your family in {addPeopleWhere}.</span>}
         </Field>
 
         <Field label="Stars">

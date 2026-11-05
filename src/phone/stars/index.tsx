@@ -7,6 +7,7 @@ import { formatStars } from '../../features/rewards/logic';
 import { Button } from '../../ui/controls';
 import { Avatar, everyoneProfile } from '../../ui/profile';
 import type { MoreItem } from '../more/items';
+import { addFirstPerson } from '../people';
 import { StarsHost } from './PersonStars';
 
 /**
@@ -22,7 +23,12 @@ function StarsView() {
       <section class="ph-card" aria-label="Stars">
         <h2 class="ph-card-title">Stars</h2>
         {people.length === 0 ? (
-          <p class="muted">No people yet. People are added at the wall, in Settings, under Profiles.</p>
+          <p class="muted">
+            No people yet.{' '}
+            <button type="button" class="ph-inline-link" onClick={addFirstPerson}>
+              Add a person
+            </button>
+          </p>
         ) : (
           <ul class="psv-people">
             {people.map((p) => (

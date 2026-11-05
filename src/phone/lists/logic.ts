@@ -1,5 +1,6 @@
 import type { List, ListItem } from '../../data/types';
 import { groupItems } from '../../features/lists/logic';
+import { isolate } from '../../lib/text';
 
 export interface ListSummary {
   /** The first open items in list order (sections as the list shows them). */
@@ -21,9 +22,6 @@ export function listSummary(list: List, items: ListItem[], max = 3): ListSummary
     done: view.done.length,
   };
 }
-
-/** Each name isolated (U+2068..U+2069), so an Arabic one keeps its commas and digits on the right side. */
-const isolate = (s: string) => `\u2068${s}\u2069`;
 
 /** The row's second line: "Bananas, Spinach, Onions +4", "All 3 done", "Nothing on it yet". */
 export function summaryLine(s: ListSummary): string {

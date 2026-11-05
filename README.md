@@ -71,7 +71,9 @@ A parent's phone opens the same address and gets a phone app for the jobs a
 parent does away from the wall: today at a glance, checking off a chore for a
 child, giving or taking stars and redeeming rewards, lists, the calendar
 (with adding events and assigning new ones), a note that pops up on the wall,
-the wall's timer, putting the wall to sleep or waking it, and the meal plan.
+the wall's timer, putting the wall to sleep or waking it, the meal plan, and
+the family's people (added, edited, reordered and deleted as in the wall's
+Settings → Profiles).
 
 Phones are paired from the wall only: **Settings → Phones → Add a phone**
 asks for the PIN and shows a code for ten minutes; scan it with the phone's

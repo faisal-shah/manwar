@@ -440,16 +440,15 @@ async function doubleTapOnto(p: Page, row: string, target: ReturnType<Page['loca
   await p.waitForTimeout(800);
 }
 
-test('a double tap on This phone or Stars and rewards presses nothing in the view it opens', async ({ browser }) => {
+// Every row's view is behind the same guard (MoreView), so two rows whose views have a button under them stand for all.
+test('a double tap on People or Stars and rewards presses nothing in the view it opens', async ({ browser }) => {
   const hh = name('guarded');
   const w = await wall(browser, hh);
   const p = await pairPhone(browser, w.page, hh);
   await p.page.locator('.ph-nav').getByRole('button', { name: 'More' }).click();
-  await doubleTapOnto(p.page, 'This phone', p.page.getByRole('button', { name: 'Use the wall layout here' }));
-  // Still the phone, and still on This phone: the second tap neither asked to switch the layout nor switched it.
+  await doubleTapOnto(p.page, 'People', p.page.getByRole('button', { name: 'Add a person' }));
+  // No editor opened over People.
   await expect(p.page.getByRole('dialog')).toHaveCount(0);
-  await expect(p.page.locator('html')).toHaveAttribute('data-layout', 'phone');
-  expect(await p.page.evaluate(() => localStorage.getItem('manwar.layout.v1'))).toBe('phone');
   await p.page.locator('.ph-back').click();
   await doubleTapOnto(p.page, 'Stars and rewards', p.page.locator('.psv-person').first());
   // No person's stars opened over the view.
