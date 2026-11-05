@@ -99,6 +99,8 @@ function MealsBody() {
                   tabIndex={entries.length ? undefined : 0}
                   onClick={() => openPlan(d, c.id)}
                 >
+                  {/* An empty cell shows what a tap does: Skylight's pale cells give no hint. */}
+                  {!entries.length && <Plus class="mg-hint" size="3rem" strokeWidth={1.8} aria-hidden="true" />}
                   {entries.length > 0 && (
                     <div class="mg-list">
                       {entries.map((e) => {
