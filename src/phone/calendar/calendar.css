@@ -104,6 +104,22 @@
 .phc-filter::-webkit-scrollbar {
   display: none;
 }
+/* A phone on its side: the events to assign and the chips share one line, leaving the height to the list. */
+@media (orientation: landscape) and (max-height: 500px) {
+  .phc-top {
+    flex-direction: row;
+    align-items: center;
+    padding-left: 1.6rem;
+  }
+  .phc-waiting {
+    flex: none;
+    margin: 0;
+  }
+  .phc-filter {
+    flex: 1;
+    min-width: 0;
+  }
+}
 .phc-chip {
   flex: none;
   display: inline-flex;
