@@ -168,6 +168,20 @@ test("the day's celebration plays once, not on every re-check", async ({ page })
   }
 });
 
+test('a Home card whose tasks were all skipped is not "All done!"', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('manwar.tasksFilter.v1', JSON.stringify({ skipped: false })));
+  await open(page, 'all-skipped', 'Home');
+  const baba = column(page, 'baba');
+  await expect(baba.locator('.tk-card').first()).toBeVisible({ timeout: 15_000 });
+  const titles = await baba.locator('.tk-card').evaluateAll((els) => els.map((e) => e.getAttribute('data-task')!));
+  for (const t of titles) {
+    await baba.locator(`.tk-card[data-task="${t}"] .tk-body`).click();
+    await page.getByTestId('task-details').getByRole('button', { name: 'Skip' }).click();
+    await expect(baba.locator(`.tk-card[data-task="${t}"]`)).toHaveCount(0);
+  }
+  await expect(baba.locator('.tp-empty')).toContainText('Nothing to do today.');
+});
+
 test("filling in yesterday's chore keeps it out of today's list", async ({ page }) => {
   await openTasks(page, 'backfill');
   const toys = card(page, 'hashim', 'Tidy toys');
