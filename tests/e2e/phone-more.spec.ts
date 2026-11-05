@@ -1,5 +1,5 @@
 import { expect as baseExpect, test, type Page } from '@playwright/test';
-import { FS, OWNER, phone, wall } from './phone-helpers';
+import { FS, newContext, OWNER, phone, wall } from './phone-helpers';
 
 /*
  * The phone's More rows that act on the wall: a note, the timer, the screen,
@@ -410,7 +410,7 @@ test('nothing runs off the side at 360 px with a larger text size, in light and 
   const hh = name('narrow');
   await wall(browser, hh);
   for (const theme of ['light', 'dark']) {
-    const ctx = await browser.newContext({
+    const ctx = await newContext(browser, {
       viewport: { width: 360, height: 780 },
       isMobile: true,
       hasTouch: true,

@@ -1,11 +1,11 @@
 import { expect as baseExpect, test } from '@playwright/test';
 import { devices, type Browser } from '@playwright/test';
 import { enterPin, setPin } from './phone-family';
-import { FS, NOW, OWNER, pairPhone, pairingCode, phone, redeem, wall } from './phone-helpers';
+import { FS, newContext, NOW, OWNER, pairingCode, pairPhone, phone, redeem, wall } from './phone-helpers';
 
 /** A phone on the pairing screen with nothing filled in (`pair=` empty, as a person typing the code sees it). */
 async function redeemLater(browser: Browser, household: string) {
-  const page = await (await browser.newContext({ ...devices['Pixel 7'], timezoneId: 'America/Chicago' })).newPage();
+  const page = await (await newContext(browser, { ...devices['Pixel 7'], timezoneId: 'America/Chicago' })).newPage();
   await page.goto(`/?demo=${household}&pair=&${NOW}`);
   return { page };
 }
@@ -137,6 +137,8 @@ test('Done puts the code away: a phone using it after that is told to make a new
   const code = await pairingCode(w.page);
   await w.page.locator('.pair-card').getByRole('button', { name: 'Done' }).click();
   await expect(w.page.locator('.pair-card')).toHaveCount(0);
+  // The code leaves the server (cancelPairing) as the card goes.
+  await expect.poll(async () => (await fetch(`${FS}/pairings/${code}`, { headers: OWNER })).status).toBe(404);
   const late = await redeem(browser, household, code, 'Late');
   await expect(late.page.locator('.ph-pair .error')).toContainText('expired or was already used');
   await expect(late.page.locator('.ph-nav')).toHaveCount(0);

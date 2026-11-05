@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { expect as baseExpect, test, devices, type Browser, type BrowserContextOptions, type Page } from '@playwright/test';
-import { NOW, pairPhone, wall, type Opened } from './phone-helpers';
+import { newContext, NOW, type Opened, pairPhone, wall } from './phone-helpers';
 
 /*
  * The phone's Calendar tab: the agenda, event details, adding and editing
@@ -66,7 +66,7 @@ async function seededWall(browser: Browser, household: string, now = NOW): Promi
 
 async function wallAt(browser: Browser, household: string, now: string): Promise<Opened> {
   const page = await (
-    await browser.newContext({ viewport: { width: 1600, height: 1000 }, timezoneId: 'America/Chicago' })
+    await newContext(browser, { viewport: { width: 1600, height: 1000 }, timezoneId: 'America/Chicago' })
   ).newPage();
   const errors = track(page);
   await page.goto(`/?demo=${household}&${now}`);
@@ -85,7 +85,7 @@ async function phoneCal(
   household: string,
   opts: { now?: string; init?: string; screen?: BrowserContextOptions } = {},
 ) {
-  const ctx = await browser.newContext({ ...(opts.screen ?? devices['Pixel 7']), timezoneId: 'America/Chicago' });
+  const ctx = await newContext(browser, { ...(opts.screen ?? devices['Pixel 7']), timezoneId: 'America/Chicago' });
   if (opts.init) await ctx.addInitScript(opts.init);
   const page = await ctx.newPage();
   const errors = track(page);

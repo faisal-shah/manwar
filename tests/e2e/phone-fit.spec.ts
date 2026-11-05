@@ -1,5 +1,5 @@
 import { expect as baseExpect, test, type Browser, type Page } from '@playwright/test';
-import { NOW, wall } from './phone-helpers';
+import { newContext, NOW, wall } from './phone-helpers';
 import { RUN, setPin, writeDoc } from './phone-family';
 
 /*
@@ -13,7 +13,7 @@ const expect = baseExpect.configure({ timeout: 15_000 });
 test.describe.configure({ timeout: 120_000 });
 
 async function smallPhone(browser: Browser, household: string): Promise<{ page: Page; errors: string[] }> {
-  const ctx = await browser.newContext({
+  const ctx = await newContext(browser, {
     viewport: { width: 360, height: 780 },
     deviceScaleFactor: 2,
     isMobile: true,

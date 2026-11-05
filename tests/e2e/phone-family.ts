@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { devices, expect, type Browser, type Page } from '@playwright/test';
-import { FS, OWNER, phone, wall, type Opened } from './phone-helpers';
+import { FS, newContext, type Opened, OWNER, phone, wall } from './phone-helpers';
 
 /*
  * Helpers for the phone's Today, Tasks and Stars specs: a wall and a phone
@@ -28,7 +28,7 @@ export async function wallAndPhone(
 
 /** A phone (Pixel 7) on `household` with its clock pinned at `now` (phone() pins the specs' usual 11:44). */
 export async function phoneAt(browser: Browser, household: string, now: string, extra = ''): Promise<Opened> {
-  const ctx = await browser.newContext({ ...devices['Pixel 7'], timezoneId: 'America/Chicago' });
+  const ctx = await newContext(browser, { ...devices['Pixel 7'], timezoneId: 'America/Chicago' });
   const page = await ctx.newPage();
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(String(e)));
