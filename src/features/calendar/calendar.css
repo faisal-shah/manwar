@@ -732,6 +732,15 @@
   font-weight: 600;
   white-space: nowrap;
 }
+/* Narrow cells (the Home pane) keep the event count whole and show only the plus. */
+.cal-week-cell {
+  container-type: inline-size;
+}
+@container (max-width: 22rem) {
+  .cal-week-add-label {
+    display: none;
+  }
+}
 .cal-week-add::after {
   content: '';
   position: absolute;

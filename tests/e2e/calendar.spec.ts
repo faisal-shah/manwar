@@ -326,6 +326,21 @@ test('a changed repeat rule applies to the series, not one occurrence', async ({
   expect(errors).toEqual([]);
 });
 
+test('keeps the event counts whole in the narrow Week cells on Home', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const errors = await open(page);
+  await page.locator('.rail button', { hasText: 'Home' }).click();
+  const pane = page.locator('.cal-pane');
+  await pane.locator('.cal-view-btn').click();
+  await page.getByRole('menuitemradio', { name: 'Week' }).click();
+  await expect(pane.locator('.cal-week-cell[data-day="2026-11-04"] .cal-week-count')).toHaveText(/events today/);
+  for (const count of await pane.locator('.cal-week-count').all())
+    expect(await count.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+  // The add button keeps its name for touch and screen readers.
+  await expect(pane.getByRole('button', { name: 'Add event' })).toHaveCount(7);
+  expect(errors).toEqual([]);
+});
+
 test('zooms the schedule hours with Ctrl + wheel', async ({ page }) => {
   const errors = await open(page);
   const grid = page.locator('.sched-grid');
