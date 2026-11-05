@@ -14,25 +14,53 @@ class GoogleError extends Error {
   }
 }
 
+/**
+ * A request Google has not answered in this long is given up. A connection
+ * that died without closing (the Wi-Fi dropped mid-request) otherwise holds
+ * its sync, and every sync queued behind it, for as long as the network
+ * stack takes to notice.
+ */
+const REQUEST_TIMEOUT_MS = 30_000;
+
+async function request(url: URL, init: RequestInit, token: string): Promise<{ res: Response; body: any }> {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, {
+      ...init,
+      signal: ctl.signal,
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...init.headers },
+    });
+    // A body that is not JSON (a proxy's error page) is no body; one cut off by the timeout is a timeout.
+    const body =
+      res.status === 204
+        ? null
+        : await res.json().catch((e) => {
+            if (ctl.signal.aborted) throw e;
+            return null;
+          });
+    return { res, body };
+  } catch (e) {
+    throw ctl.signal.aborted ? new Error('Google Calendar did not answer in time.') : e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /** Google Calendar API boundary: every response is validated here. */
 async function call<T>(path: string, init: RequestInit & { query?: Record<string, string> } = {}): Promise<T> {
   const url = new URL(API + path);
   for (const [k, v] of Object.entries(init.query ?? {})) url.searchParams.set(k, v);
   for (let attempt = 0; ; attempt++) {
     const token = await googleAccessToken();
-    const res = await fetch(url, {
-      ...init,
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...init.headers },
-    });
+    const { res, body } = await request(url, init, token);
     // A token Google no longer takes (expired early by the tablet's clock, or revoked): ask for a new one, once.
     if (res.status === 401 && attempt === 0) {
       dropGoogleToken(token);
       continue;
     }
-    if (res.status === 204) return undefined as T;
-    const body = await res.json().catch(() => null);
     if (!res.ok) throw new GoogleError(res.status, `Google Calendar ${res.status}: ${body?.error?.message ?? res.statusText}`);
-    return body as T;
+    return (res.status === 204 ? undefined : body) as T;
   }
 }
 
@@ -155,7 +183,9 @@ function draftBody(d: EventDraft, zones: Zones): Partial<GEvent> {
     location: d.location ?? '',
     // PATCH merges nested objects: clear the other kind of time, or a timed <-> all-day change is rejected.
     start: d.allDay ? { date: d.firstDay ?? toISODate(d.start), dateTime: null, timeZone: null } : timed(d.start, zones.start),
-    end: d.allDay ? { date: addDays(d.lastDay ?? toISODate(d.start), 1), dateTime: null, timeZone: null } : timed(d.end, zones.end),
+    end: d.allDay
+      ? { date: addDays(d.lastDay ?? toISODate(d.start), 1), dateTime: null, timeZone: null }
+      : timed(d.end, zones.end),
   };
   if (!d.keepReminders)
     body.reminders =

@@ -341,7 +341,11 @@ describe('google calendar: reading events', () => {
           start: at(h),
           end: at(h + 1),
         });
-      const evs = await listOne([invite('no', 'declined', 9), invite('maybe', 'tentative', 10), invite('new', 'needsAction', 11)]);
+      const evs = await listOne([
+        invite('no', 'declined', 9),
+        invite('maybe', 'tentative', 10),
+        invite('new', 'needsAction', 11),
+      ]);
       expect(evs.map((e) => e.id)).toEqual(['maybe', 'new']);
     });
 
@@ -381,7 +385,10 @@ describe('google calendar: reading events', () => {
       const [shared] = await listOne([priv], 'reader');
       expect(shared.title).toBe('Busy');
       routes = [];
-      const [busy] = await listOne([{ kind: 'calendar#event', id: 'fb', status: 'confirmed', start: at(9), end: at(10) }], 'freeBusyReader');
+      const [busy] = await listOne(
+        [{ kind: 'calendar#event', id: 'fb', status: 'confirmed', start: at(9), end: at(10) }],
+        'freeBusyReader',
+      );
       expect([busy.title, busy.editable]).toEqual(['Busy', false]);
       // On its own calendar an untitled private event is just untitled.
       routes = [];
@@ -622,7 +629,9 @@ describe('google calendar: writing events', () => {
 
     it('splits a moved occurrence where the series had it', async () => {
       routes.push((c) => (c.method === 'GET' ? { body: master(['RRULE:FREQ=WEEKLY;COUNT=10']) } : undefined));
-      routes.push((c) => (c.path.endsWith('/instances') ? { body: { items: [{ id: 'a' }, { id: 'b' }, { id: 'c' }] } } : undefined));
+      routes.push((c) =>
+        c.path.endsWith('/instances') ? { body: { items: [{ id: 'a' }, { id: 'b' }, { id: 'c' }] } } : undefined,
+      );
       routes.push((c) => (c.method === 'POST' ? { body: { id: 'swim2' } } : undefined));
       routes.push((c) => (c.method === 'PATCH' ? { body: { id: 'swim' } } : undefined));
       await googleSource.update(moved, { ...draft, start: moved.start, end: moved.end }, 'following');
@@ -686,7 +695,13 @@ describe('google calendar: writing events', () => {
         'following',
       );
       const post = calls.find((c) => c.method === 'POST')!.body;
-      expect(post).toMatchObject({ summary: 'Call with Nani and Nana', colorId: '5', attendees, reminders, guestsCanModify: true });
+      expect(post).toMatchObject({
+        summary: 'Call with Nani and Nana',
+        colorId: '5',
+        attendees,
+        reminders,
+        guestsCanModify: true,
+      });
       expect(post.start).toEqual({ date: null, dateTime: '2026-11-21T16:00:00.000Z', timeZone: 'Europe/London' });
       expect(post.end.timeZone).toBe('Europe/London');
       expect(Object.keys(post)).not.toContain('id');
@@ -723,7 +738,7 @@ describe('google calendar: writing events', () => {
       expect(calls[0].body).not.toHaveProperty('recurrence');
     });
 
-    it('a one-off event without a zone that starts to repeat gets the tablet\'s', async () => {
+    it("a one-off event without a zone that starts to repeat gets the tablet's", async () => {
       routes.push((c) => (c.method === 'PATCH' ? { body: { id: 'call' } } : undefined));
       const plain = { ...london, timeZone: undefined, endTimeZone: undefined };
       await googleSource.update(plain, { ...draft, keepRecurrence: false, repeat: { every: 1, unit: 'week' } }, 'all');
@@ -758,6 +773,31 @@ describe('google calendar: writing events', () => {
       const patch = calls.find((c) => c.method === 'PATCH')!.body;
       expect(patch.start).toEqual({ date: null, dateTime: '2026-10-31T16:30:00.000Z', timeZone: 'Europe/London' });
     });
+  });
+
+  it('gives up on a request Google does not answer, so later syncs are not held up', async () => {
+    vi.useFakeTimers();
+    try {
+      // A connection that died without closing: nothing comes back until the request is aborted.
+      vi.stubGlobal(
+        'fetch',
+        (_url: URL, init: RequestInit) =>
+          new Promise((_, reject) =>
+            init.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError'))),
+          ),
+      );
+      const pending = googleSource.listEvents(CAL, new Date('2026-11-01T00:00'), new Date('2026-12-01T00:00'));
+      const outcome = pending.then(
+        () => 'resolved',
+        (e: Error) => e.message,
+      );
+      await vi.advanceTimersByTimeAsync(29_000);
+      expect(await Promise.race([outcome, Promise.resolve('waiting')])).toBe('waiting');
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(await outcome).toBe('Google Calendar did not answer in time.');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('asks for a new token once when Google refuses the current one', async () => {
