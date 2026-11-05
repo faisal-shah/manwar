@@ -245,7 +245,7 @@ html[data-layout='phone'] .modal {
 html[data-layout='phone'] .modal h2 {
   font-size: 2.4rem;
 }
-/* The PIN keys shrink to the dialog on a narrow phone with large text, staying round. */
+/* The PIN keys shrink to the dialog on a narrow phone with large text, staying round and a finger wide. */
 html[data-layout='phone'] .pin-keys {
   grid-template-columns: repeat(3, minmax(0, 8rem));
   gap: 1.2rem;
@@ -254,6 +254,17 @@ html[data-layout='phone'] .pin-keys button {
   height: auto;
   aspect-ratio: 1;
   min-width: 0;
+  min-height: var(--touch);
+}
+/* A dialog's buttons share its width and keep their words on one line; they wrap as a whole when they cannot fit. */
+html[data-layout='phone'] .modal-actions {
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+html[data-layout='phone'] .modal-actions .btn {
+  flex: 1 1 auto;
+  padding: 0 1.4rem;
+  white-space: nowrap;
 }
 html[data-layout='phone'] .popover {
   left: 0 !important;
@@ -264,6 +275,11 @@ html[data-layout='phone'] .popover {
   max-height: 85dvh;
   border-radius: 2.4rem 2.4rem 0 0;
   padding-bottom: calc(2.4rem + env(safe-area-inset-bottom));
+}
+/* A popover is a bottom sheet here: dim what it covers, as a sheet does. */
+html[data-layout='phone'] .popover-scrim {
+  background: var(--scrim);
+  animation: fade-in 0.15s ease;
 }
 html[data-layout='phone'] .toasts {
   left: 1.2rem;

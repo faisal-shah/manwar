@@ -1,0 +1,65 @@
+/* More > Wall screen. */
+.pws-state {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.4rem;
+}
+.pws-state-text {
+  flex: 1;
+  min-width: 0;
+}
+.pws-state-text p {
+  margin: 0;
+}
+.pws-icon {
+  flex: none;
+  width: 5.6rem;
+  height: 5.6rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--star) 28%, var(--tint-base));
+  color: var(--on-tint);
+}
+.pws-state.asleep .pws-icon {
+  background: color-mix(in srgb, var(--accent) 30%, var(--tint-base));
+}
+.pws-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+}
+.pws-btn {
+  display: flex;
+  align-items: center;
+  gap: 1.6rem;
+  min-height: 8rem;
+  padding: 1.2rem 2rem;
+  border-radius: 1.8rem;
+  background: var(--surface-solid);
+  box-shadow: var(--shadow-soft);
+  text-align: left;
+  font-size: 2rem;
+  font-weight: 600;
+  color: var(--text);
+}
+.pws-btn:active {
+  background: var(--surface-strong);
+  transform: scale(0.98);
+}
+.pws-btn > span {
+  flex: 1;
+  min-width: 0;
+}
+.pws-btn small {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 1.45rem;
+  font-weight: 400;
+  color: var(--text-2);
+}
+.pws-note {
+  margin: 0.4rem 0.4rem 0;
+  font-size: 1.45rem;
+}

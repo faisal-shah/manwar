@@ -1,0 +1,174 @@
+/* More > Meals. Planned meals carry their category color in --c. */
+.pm-tonight {
+  background: color-mix(in srgb, var(--c) 16%, var(--surface-solid));
+}
+.pm-tonight-meal {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.8rem;
+}
+.pm-tonight-meal + .pm-tonight-meal {
+  margin-top: 1.2rem;
+}
+.pm-none {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.8rem 1.2rem;
+}
+.pm-none p {
+  margin: 0;
+  flex: 1 1 16rem;
+}
+.pm-meal {
+  display: flex;
+  align-items: center;
+  gap: 1.2rem;
+  width: 100%;
+  min-height: 5.6rem;
+  padding: 0.6rem 1rem;
+  border-radius: 1.2rem;
+  text-align: left;
+  color: var(--text);
+}
+.pm-meal:active {
+  background: color-mix(in srgb, var(--c) 20%, transparent);
+}
+.pm-meal-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.pm-title {
+  font-size: 1.8rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.pm-meal-text small {
+  color: var(--text-2);
+  font-size: 1.35rem;
+}
+.pm-meal.big {
+  padding: 0.4rem 0;
+}
+.pm-meal.big .pm-title {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 2.8rem;
+  line-height: 1.15;
+}
+.pm-emoji {
+  flex: none;
+  width: 5.6rem;
+  height: 5.6rem;
+  border-radius: 1.6rem;
+  background: color-mix(in srgb, var(--c) 40%, var(--tint-base));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 3rem;
+}
+.pm-repeat {
+  flex: none;
+  color: var(--text-2);
+}
+.pm-weeknav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  margin-top: 0.8rem;
+}
+.pm-weeknav .icon-btn {
+  width: var(--touch);
+  height: var(--touch);
+  color: var(--text);
+}
+.pm-week {
+  flex: 1;
+  min-height: var(--touch);
+  border-radius: 99rem;
+  font-weight: 600;
+  font-size: 1.7rem;
+  color: var(--text-2);
+}
+.pm-week.on {
+  color: var(--text);
+}
+.pm-day {
+  padding: 1rem 1.2rem 1.2rem 1.6rem;
+}
+.pm-day.today {
+  box-shadow:
+    inset 0 0 0 2px var(--today),
+    var(--shadow-soft);
+}
+.pm-day-head {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+.pm-day-head h3 {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 2.1rem;
+}
+.pm-today {
+  padding: 0.2rem 0.9rem;
+  border-radius: 99rem;
+  background: var(--today);
+  color: #fff;
+  font-size: 1.3rem;
+  font-weight: 700;
+}
+.pm-add {
+  width: var(--touch);
+  height: var(--touch);
+  margin-right: -0.4rem;
+  color: var(--accent);
+}
+.pm-meals {
+  display: flex;
+  flex-direction: column;
+  margin: 0.2rem -0.6rem 0;
+}
+.pm-day.empty {
+  padding-top: 0.4rem;
+  padding-bottom: 0.4rem;
+}
+.pm-day.empty h3 {
+  flex: 0 1 auto;
+  color: var(--text-2);
+}
+.pm-empty {
+  flex: 1;
+  min-width: 0;
+  font-size: 1.45rem;
+  text-align: end;
+}
+
+/* The shared Plan meal sheet and meal card on a phone. */
+html[data-layout='phone'] .meal-pop .mp-title {
+  font-size: 2.4rem;
+}
+
+/* The ingredients modal on a narrow screen: "On the list" goes under the line instead of squeezing it. */
+html[data-layout='phone'] .im-row {
+  flex-wrap: wrap;
+  row-gap: 0.4rem;
+  padding: 0.8rem 1.2rem;
+}
+html[data-layout='phone'] .im-text {
+  flex: 1 1 14rem;
+}
+html[data-layout='phone'] .im-tag {
+  margin-left: auto;
+}
+html[data-layout='phone'] .im-lead {
+  font-size: 1.7rem;
+}

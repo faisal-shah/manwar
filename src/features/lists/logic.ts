@@ -142,6 +142,32 @@ export function nextDefaultGrocery(lists: List[], removedId: string): List | nul
   return rest.find((l) => l.kind === 'grocery') ?? null;
 }
 
+/** 53-bit string hash (cyrb53), base 36. Not for secrets: only to name a document after its text. */
+function hash53(s: string): string {
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c6ce57;
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 2654435761);
+    h2 = Math.imul(h2 ^ c, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
+}
+
+/**
+ * Document id for a new grocery item: the same on every device for one list
+ * and one item key, so two phones adding "milk" at the same moment (neither
+ * has seen the other's yet) write one item instead of two. When an item on
+ * the list already has the id (one renamed since it was added), a fresh id
+ * from `fresh` is used instead.
+ */
+export function groceryItemId(listId: string, text: string, items: Pick<ListItem, 'id'>[], fresh: () => string): string {
+  const id = `${listId}-${hash53(itemKey(text))}`;
+  return items.some((i) => i.id === id) ? fresh() : id;
+}
+
 /** Fallback card colors when a list has none (Skylight: grocery green, to-do blue). */
 export const KIND_COLORS: Record<ListKind, string> = { grocery: '#B5E085', todo: '#93D1E5', other: '#F2B074' };
 

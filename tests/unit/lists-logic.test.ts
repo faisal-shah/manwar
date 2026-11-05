@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { List, ListItem } from '../../src/data/types';
 import {
   defaultGroceryList,
+  groceryItemId,
   groupItems,
   itemKey,
   moveBy,
@@ -183,5 +184,26 @@ describe('placeMerge', () => {
       ['Beans', null, -2],
       ['Gone', null, -1],
     ]);
+  });
+});
+
+describe('groceryItemId', () => {
+  const fresh = () => 'fresh';
+  it('is the same on every device for one list and one item, whatever the spelling', () => {
+    const id = groceryItemId('g', 'Milk', [], fresh);
+    expect(groceryItemId('g', 'milk', [], fresh)).toBe(id);
+    expect(groceryItemId('g', 'Milks', [], fresh)).toBe(id);
+    expect(id.startsWith('g-')).toBe(true);
+    expect(id).toMatch(/^[A-Za-z0-9-]+$/);
+  });
+  it('differs between items and between lists', () => {
+    expect(groceryItemId('g', 'Milk', [], fresh)).not.toBe(groceryItemId('g', 'Eggs', [], fresh));
+    expect(groceryItemId('g', 'Milk', [], fresh)).not.toBe(groceryItemId('h', 'Milk', [], fresh));
+    expect(groceryItemId('g', 'حليب', [], fresh)).not.toBe(groceryItemId('g', 'خبز', [], fresh));
+    expect(groceryItemId('g', '🍎', [], fresh)).not.toBe(groceryItemId('g', '🍌', [], fresh));
+  });
+  it('takes a fresh id when an item on the list already has it (renamed since)', () => {
+    const id = groceryItemId('g', 'Milk', [], fresh);
+    expect(groceryItemId('g', 'Milk', [{ id }], fresh)).toBe('fresh');
   });
 });

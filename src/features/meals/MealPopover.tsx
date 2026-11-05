@@ -1,4 +1,5 @@
 import { AlignLeft, BookOpen, CalendarDays, Pencil, Repeat as RepeatIcon, ShoppingCart, Trash2 } from 'lucide-preact';
+import { isPhone } from '../../app/layout';
 import { asParent } from '../../core/lock';
 import type { ISODate, MealEntry } from '../../data/types';
 import { formatLongDate } from '../../lib/date';
@@ -60,7 +61,7 @@ export function MealPopover({
             <Trash2 size="2.2rem" />
           </IconButton>
         </header>
-        {recipe && (
+        {recipe && (recipe.ingredients.length > 0 || !isPhone) && (
           <div class="mp-actions">
             {recipe.ingredients.length > 0 && (
               <button
@@ -74,16 +75,19 @@ export function MealPopover({
                 <ShoppingCart size="2.2rem" /> Add ingredients
               </button>
             )}
-            <button
-              type="button"
-              class="pill-btn"
-              onClick={() => {
-                onClose();
-                openRecipe(recipe.id);
-              }}
-            >
-              <BookOpen size="2.2rem" /> Open recipe
-            </button>
+            {/* The phone has no Recipes tab to open it on. */}
+            {!isPhone && (
+              <button
+                type="button"
+                class="pill-btn"
+                onClick={() => {
+                  onClose();
+                  openRecipe(recipe.id);
+                }}
+              >
+                <BookOpen size="2.2rem" /> Open recipe
+              </button>
+            )}
           </div>
         )}
         <ul class="mp-rows">

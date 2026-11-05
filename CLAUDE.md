@@ -81,7 +81,11 @@ flowchart LR
   `arrayRemove` for one element of a list), so another tablet's change to
   the other fields survives, and a document deleted elsewhere is not
   written back. Writes start from the store's current document, not the
-  copy an editor opened with. An editor or popover whose document is
+  copy an editor opened with. A new grocery item's id comes from its list
+  and its item key (`groceryItemId` in `lists/logic.ts`), so two devices
+  adding "milk" before either hears of the other write one item; an id
+  already taken on the list (an item renamed since) falls back to a fresh
+  one. An editor or popover whose document is
   deleted elsewhere closes itself through `useCloseWhenGone`
   (`ui/overlays.tsx`), with a toast for an editor, and refuses the PIN
   pad, confirmation or choice it had open (they asked about what is gone);
@@ -219,7 +223,9 @@ flowchart LR
   and dims (Fully Kiosk), sleep window blanks the screen, a tap wakes it and
   it stays awake until 3 minutes pass without a touch. "Sleep now" is kept in
   localStorage and the backlight is not touched until the settings load, so
-  a reload at night does not light the screen.
+  a reload at night does not light the screen. The rule itself (woken, then
+  Sleep now until the window's end or 7:00, then a timer's hold, then the
+  window) is pure in `core/sleep.ts`, shared with the phone's guess.
 - **Activity** (`core/activity.ts`): the one source of "someone is using the
   wall" (pointer, key and input events; the on-screen keyboard sends no
   pointer events). Idle return, relock, sleep and the update check read it.
@@ -289,7 +295,9 @@ sequenceDiagram
   laid out as a bottom sheet cover the spot that opened them, so they drop
   the rest of that double tap inside them, as dialogs do (`useOverlay`'s
   `content`); a view that opens in place of what was tapped spreads
-  `useOpeningTapGuard()` on its root. An overlay that a tap closes takes
+  `useOpeningTapGuard()` on its root (it drops the pointerdown, mousedown
+  and click, so no field under the second tap takes focus either). An
+  overlay that a tap closes takes
   the rest of that double tap with it (`swallowRestOfTap`, the very next
   tap only; not when Back or something else closed it), or it would press
   what was under (the tab bar, another task's circle). Call
@@ -345,6 +353,32 @@ sequenceDiagram
   while the browser is offline, and for the calendars listed in
   localStorage `manwar.demoCalendarDown.v1` (JSON ids, or `"all"`), for
   tests of sync failures, offline edits and the snapshot.
+- **Lists tab** (`phone/lists/`): every list as a row (its first open
+  items, the open count), and one list full screen on the wall's own body:
+  `ListItems` (`features/lists/ListCard.tsx`: Add item, sections, Done
+  group, item editor, long-press reorder) inside a `.list-card` the phone
+  lays out under its header. The Add item field keeps focus between items
+  (its Enter key is a return on the phone). The header's menu hides the
+  done items (the Done group's collapse), clears them with Undo
+  (`clearDone` returns them, `restoreItems` puts them back on lists that
+  still exist; the wall confirms instead), adds a section, opens
+  `ListEditor` (Delete list moves into the form on a phone; `onCreated`
+  opens a new list) and deletes the list. A list deleted on another device
+  closes with a toast; one deleted here (`deletedOnThisDevice`) or one
+  whose editor said so already does not repeat it.
+- **More rows**: Meals (`phone/meals/`: tonight's dinner with its
+  ingredients, the week by day and category from `weekByDay`, planning
+  through `PlanMealSheet` on `planTarget`, a meal's `MealPopover`, which
+  has no Open recipe on a phone), Note to the wall (`phone/notes/`: from
+  whom, remembered per phone, read aloud, the notes the wall shows or
+  holds, Dismiss; the draft survives Back), Wall timer (`phone/timer/`:
+  presets, any minutes, the countdown, Stop or Done; a timer replaced
+  elsewhere is a new view) and Wall screen (`phone/wallscreen/`: Sleep now,
+  Wake up, what was last asked and by whom). What the wall's screen is
+  doing is a guess (`wallAsleepGuess`, by the wall's own rule in
+  `core/sleep.ts` from the last command, the timer and the sleep window; a
+  touch on the wall is not shared), said as "likely"; the note view offers
+  Wake the wall when a note waits behind a sleeping screen.
 - **Shared with the wall through Firestore**: the timer (`timers/wall`,
   `features/timer/state.ts`; stopping stamps `stoppedAt`, and the wall's
   sleep hold is derived from the document) and the screen
@@ -463,7 +497,10 @@ generated from it: `node scripts/icons/render.mjs` after any brand change.
   spot keeps moving the row it started with.
 - `autoFocus` does nothing after the first focus on the page (the button
   that opened a sheet has it): focus a field with `useAutoFocus`
-  (`ui/controls.tsx`), a ref that calls `focus()` once it is mounted.
+  (`ui/controls.tsx`), a ref that calls `focus()` once it is mounted. Its
+  `on` defaults to true, so pass a boolean, never an optional prop that may
+  be undefined (a field that focuses as it mounts raises the keyboard, and
+  with a PIN set the PIN pad, wherever it appears).
 - Overlays (`Sheet`, `Modal`, `Popover`, the calendar `Menu`) portal to
   `document.body` and register through `useOverlay(onClose)`: its `scrim`
   handler lets the second tap of the double tap that opened the overlay

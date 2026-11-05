@@ -208,4 +208,56 @@ describe('back stack', () => {
     expect(f.length).toBe(1);
     expect(s.depth).toBe(0);
   });
+
+  it('moves nothing when one overlay closes as another opens (a menu item that opens a sheet)', () => {
+    const { f, s } = setup();
+    const closed: string[] = [];
+    s.open(() => closed.push('shell'));
+    s.open(() => closed.push('list'));
+    const menu = s.open(() => closed.push('menu'));
+    f.settle();
+    menu();
+    s.open(() => closed.push('editor'));
+    f.settle();
+    expect(f.depth).toBe(3);
+    f.pressBack();
+    f.pressBack();
+    f.pressBack();
+    expect(closed).toEqual(['editor', 'list', 'shell']);
+    expect(f.depth).toBe(0);
+  });
+
+  it('keeps one entry per holder when the next overlay opens after the close is given back', () => {
+    const { f, s } = setup();
+    const closed: string[] = [];
+    s.open(() => closed.push('shell'));
+    s.open(() => closed.push('list'));
+    const menu = s.open(() => closed.push('menu'));
+    f.settle();
+    menu();
+    // The menu's close is reconciled, then the sheet opens a microtask later (after the PIN check), before the traversal lands.
+    f.tick();
+    s.open(() => closed.push('editor'));
+    f.settle();
+    expect(f.depth).toBe(3);
+    f.pressBack();
+    f.pressBack();
+    f.pressBack();
+    expect(closed).toEqual(['editor', 'list', 'shell']);
+    expect(f.depth).toBe(0);
+  });
+
+  it('after a reload, opens nothing until its trip back over the old entries has landed', () => {
+    const f = fakeHistory();
+    f.h.push(1);
+    f.h.push(2);
+    const s = createBackStack(f.h, { later: f.later, held: 2 });
+    f.listen(() => s.popped());
+    s.open(() => {});
+    f.tick();
+    expect(f.depth).toBe(2);
+    f.settle();
+    expect(f.depth).toBe(1);
+    expect(s.depth).toBe(1);
+  });
 });

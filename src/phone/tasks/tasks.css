@@ -200,14 +200,3 @@ html[data-layout='phone'] .sheet-foot:has(> .btn-danger) > .btn {
   flex: 1 1 auto;
   padding: 0 1.4rem;
 }
-
-/* The PIN pad (it guards task and star changes on a phone signed in as the wall): three keys that fit any width. */
-html[data-layout='phone'] .pin-keys {
-  grid-template-columns: repeat(3, minmax(0, 8rem));
-  gap: 1rem 1.4rem;
-}
-html[data-layout='phone'] .pin-keys button {
-  height: auto;
-  aspect-ratio: 1;
-  min-height: 4.8rem;
-}

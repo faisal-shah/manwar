@@ -5,6 +5,7 @@ import type { List, ListItem, ListKind, ListSection } from '../../data/types';
 import { currentTime } from '../../lib/clock';
 import {
   defaultGroceryList,
+  groceryItemId,
   itemKey,
   nextDefaultGrocery,
   placeMerge,
@@ -110,7 +111,7 @@ export function addItem(list: List, text: string, sectionId: string | null, qty?
     }
   }
   const item: ListItem = {
-    id: newId(),
+    id: list.kind === 'grocery' ? groceryItemId(list.id, text, items, newId) : newId(),
     listId: list.id,
     sectionId: sectionId ?? undefined,
     text,
@@ -158,7 +159,9 @@ export function mergeItems(list: List, rows: MergeItem[]): () => void {
   /** What the undo puts back on each reopened item: only the fields the merge changed. */
   const reopened: { id: string; was: Partial<ListItem> }[] = [];
   const now = currentTime();
-  for (const { row, prior, order } of placeMerge(list, itemsByList.value.get(list.id) ?? [], rows)) {
+  const items = itemsByList.value.get(list.id) ?? [];
+  const taken = items.map((i) => ({ id: i.id }));
+  for (const { row, prior, order } of placeMerge(list, items, rows)) {
     if (prior) {
       const change: Partial<ListItem> = { done: false, order, ...(row.qty ? { qty: row.qty } : {}) };
       reopened.push({ id: prior.id, was: Object.fromEntries(Object.keys(change).map((k) => [k, prior[k as keyof ListItem]])) });
@@ -166,7 +169,7 @@ export function mergeItems(list: List, rows: MergeItem[]): () => void {
       continue;
     }
     const item: ListItem = {
-      id: newId(),
+      id: list.kind === 'grocery' ? groceryItemId(list.id, row.name, taken, newId) : newId(),
       listId: list.id,
       text: row.name,
       qty: row.qty,
@@ -175,6 +178,7 @@ export function mergeItems(list: List, rows: MergeItem[]): () => void {
       createdAt: now,
     };
     created.push(item.id);
+    taken.push({ id: item.id });
     b.put('listItems', item);
   }
   void b.commit();
@@ -188,12 +192,26 @@ export function mergeItems(list: List, rows: MergeItem[]): () => void {
   };
 }
 
-export function clearDone(list: List): number {
+/** Remove the list's checked-off items; returns them, for restoreItems (an undo). */
+export function clearDone(list: List): ListItem[] {
   const done = (itemsByList.value.get(list.id) ?? []).filter((i) => i.done);
   const b = batch();
   done.forEach((i) => b.remove('listItems', i.id));
   void b.commit();
-  return done.length;
+  return done;
+}
+
+/**
+ * Put removed items back as they were (an undo), onto lists that still
+ * exist: not onto one deleted since on another device.
+ */
+export function restoreItems(items: ListItem[]): void {
+  const live = new Set(lists.value.map((l) => l.id));
+  const back = items.filter((i) => live.has(i.listId));
+  if (!back.length) return;
+  const b = batch();
+  back.forEach((i) => b.put('listItems', i));
+  void b.commit();
 }
 
 /* ---------- Lists ---------- */
@@ -272,8 +290,13 @@ export function addSection(list: List, name: string): ListSection {
   return section;
 }
 
+/** Lists deleted on this device, so a view of one can tell its own delete from another device's. */
+const deletedHere = new Set<string>();
+export const deletedOnThisDevice = (id: string) => deletedHere.has(id);
+
 /** Delete a list and its items; if it was the default grocery list, the next grocery list (if any) takes over. */
 export function deleteList(list: List): void {
+  deletedHere.add(list.id);
   const b = batch().remove('lists', list.id);
   for (const it of itemsByList.value.get(list.id) ?? []) b.remove('listItems', it.id);
   if (list.isDefaultGrocery) {

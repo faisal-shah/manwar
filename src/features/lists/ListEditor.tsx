@@ -1,6 +1,7 @@
 import { useRef, useState } from 'preact/hooks';
 import type { TargetedEvent } from 'preact';
 import { ArrowDown, ArrowUp, Plus, X } from 'lucide-preact';
+import { isPhone } from '../../app/layout';
 import { asParent } from '../../core/lock';
 import { newId } from '../../data/store';
 import type { List, ListKind, ListSection } from '../../data/types';
@@ -19,8 +20,8 @@ const KINDS: { value: ListKind; label: string }[] = [
   { value: 'other', label: 'Other' },
 ];
 
-/** New list or edit list: title, emoji, kind, color, sections, default grocery list. */
-export function ListEditor({ list, onClose }: { list?: List; onClose: () => void }) {
+/** New list or edit list: title, emoji, kind, color, sections, default grocery list. `onCreated`: the new list, once added. */
+export function ListEditor({ list, onClose, onCreated }: { list?: List; onClose: () => void; onCreated?: (list: List) => void }) {
   const [title, setTitle] = useState(list?.title ?? '');
   const [kind, setKind] = useState<ListKind>(list?.kind ?? 'todo');
   const [emoji, setEmoji] = useState(list?.emoji);
@@ -57,9 +58,16 @@ export function ListEditor({ list, onClose }: { list?: List; onClose: () => void
       const named = sections.map((s) => ({ ...s, name: s.name.trim() })).filter((s) => s.name);
       const draft = { title: title.trim(), kind, emoji, color, sections: named, isDefaultGrocery: isDefault };
       if (list) updateList(list, draft);
-      else createList(draft);
+      const made = list ? null : createList(draft);
       onClose();
+      if (made) onCreated?.(made);
     });
+
+  const deleteButton = list && (
+    <Button variant="danger" onClick={async () => (await askDeleteList(list, items.length)) && onClose()}>
+      Delete list
+    </Button>
+  );
 
   return (
     <Sheet
@@ -67,11 +75,7 @@ export function ListEditor({ list, onClose }: { list?: List; onClose: () => void
       onClose={onClose}
       footer={
         <>
-          {list && (
-            <Button variant="danger" onClick={async () => (await askDeleteList(list, items.length)) && onClose()}>
-              Delete list
-            </Button>
-          )}
+          {!isPhone && deleteButton}
           <span style={{ flex: 1 }} />
           <Button onClick={onClose}>Cancel</Button>
           <Button variant="primary" disabled={!title.trim()} onClick={save}>
@@ -190,6 +194,8 @@ export function ListEditor({ list, onClose }: { list?: List; onClose: () => void
             onChange={(v) => !list?.isDefaultGrocery && setIsDefault(v)}
           />
         </SettingRow>
+        {/* A phone's footer is too narrow for three buttons: Delete list ends the form instead. */}
+        {isPhone && deleteButton && <div class="list-editor-delete">{deleteButton}</div>}
       </div>
     </Sheet>
   );
