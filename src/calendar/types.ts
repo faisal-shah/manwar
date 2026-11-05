@@ -97,8 +97,11 @@ export interface CalendarSource {
   /**
    * Add an event under an id the app chose (newEventId), so a save retried
    * after a lost response updates the event instead of adding it twice.
+   * `earlier` are other calendars a failed save of this id went to: one of
+   * them may hold the event, which is then moved here rather than added
+   * again.
    */
-  insert(calendarId: string, id: string, draft: EventDraft): Promise<void>;
+  insert(calendarId: string, id: string, draft: EventDraft, earlier: string[]): Promise<void>;
   update(ev: CalEvent, draft: EventDraft, scope: EditScope): Promise<{ newSeriesId?: string }>;
   remove(ev: CalEvent, scope: EditScope): Promise<void>;
 }

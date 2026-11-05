@@ -100,7 +100,9 @@ flowchart LR
   whole family. Countdowns past the window (setting Always) come from
   `CalendarSource.nextOccurrence`. New events get their id from
   `newEventId()` once per editor, so a retried save updates instead of
-  duplicating. The snapshot names its household; a change of household
+  duplicating; the engine remembers which calendars a failed save of an id
+  went to, and a retry to another calendar moves the event from there
+  (`events.move`) instead of adding a second copy. The snapshot names its household; a change of household
   clears everything and drops another household's snapshot, and a fetch
   that outlives its household is discarded.
 - **Google mapping** (`calendar/google.ts`, the API boundary): working

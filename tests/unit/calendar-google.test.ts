@@ -904,16 +904,47 @@ describe('google calendar: writing events', () => {
         : undefined,
     );
     routes.push((c) => (c.method === 'PATCH' ? { body: { id } } : undefined));
-    await googleSource.insert(CAL, id, draft);
+    await googleSource.insert(CAL, id, draft, []);
     expect(calls[0].body).toMatchObject({ id, summary: 'Dentist' });
     // The response was lost and the parent taps Add again, with the title fixed.
-    await googleSource.insert(CAL, id, { ...draft, title: 'Dentist (Asiyah)' });
+    await googleSource.insert(CAL, id, { ...draft, title: 'Dentist (Asiyah)' }, []);
     expect(calls.map((c) => `${c.method} ${c.path}`)).toEqual([
       `POST /calendars/${CAL}/events`,
       `POST /calendars/${CAL}/events`,
       `PATCH /calendars/${CAL}/events/${id}`,
     ]);
     expect(calls[2].body.summary).toBe('Dentist (Asiyah)');
+  });
+
+  it('moves the event a lost save added to another calendar, rather than adding it twice', async () => {
+    const SCHOOL = 'school.calendar@group.calendar.google.com';
+    const draft: EventDraft = {
+      ...allDayDraft,
+      allDay: false,
+      start: new Date('2026-11-06T09:00'),
+      end: new Date('2026-11-06T10:00'),
+    };
+    const notFound = { status: 404, body: { error: { code: 404, message: 'Not Found' } } };
+    // The first save went to the family calendar and landed; its answer was lost. The parent picks School and retries.
+    routes.push((c) => (c.path === `/calendars/${CAL}/events/e1/move` ? { body: { id: 'e1' } } : undefined));
+    routes.push((c) => (c.method === 'PATCH' ? { body: { id: 'e1' } } : undefined));
+    await googleSource.insert(SCHOOL, 'e1', draft, [CAL]);
+    expect(calls.map((c) => `${c.method} ${c.path}`)).toEqual([
+      `POST /calendars/${CAL}/events/e1/move`,
+      `PATCH /calendars/${SCHOOL}/events/e1`,
+    ]);
+    expect(calls[0].query).toEqual({ destination: SCHOOL });
+    expect(calls[1].body.summary).toBe('Dentist');
+
+    // The first save never reached Google: nothing to move, so the event is added where the parent chose.
+    calls = [];
+    routes.unshift((c) => (c.path.endsWith('/move') ? notFound : undefined));
+    routes.push((c) => (c.method === 'POST' ? { body: { id: 'e2' } } : undefined));
+    await googleSource.insert(SCHOOL, 'e2', draft, [CAL, SCHOOL]);
+    expect(calls.map((c) => `${c.method} ${c.path}`)).toEqual([
+      `POST /calendars/${CAL}/events/e2/move`,
+      `POST /calendars/${SCHOOL}/events`,
+    ]);
   });
 
   describe('the requests each scope sends', () => {
@@ -955,12 +986,17 @@ describe('google calendar: writing events', () => {
     });
 
     it('adds a new repeating event with every field set', async () => {
-      await googleSource.insert(CAL, 'new1', {
-        ...draft('2026-11-09', false),
-        keepReminders: false,
-        reminderMinutes: null,
-        repeat: { every: 1, unit: 'week', weekdays: [3, 1] },
-      });
+      await googleSource.insert(
+        CAL,
+        'new1',
+        {
+          ...draft('2026-11-09', false),
+          keepReminders: false,
+          reminderMinutes: null,
+          repeat: { every: 1, unit: 'week', weekdays: [3, 1] },
+        },
+        [],
+      );
       expect(calls[0].body).toEqual({
         id: 'new1',
         summary: 'Piano',
@@ -1076,7 +1112,7 @@ describe('google calendar: rate limits', () => {
       let n = 0;
       routes.push((c) => (c.method === 'POST' && n++ === 0 ? limited(403) : undefined));
       routes.push((c) => (c.method === 'POST' ? { body: { id: 'e1' } } : undefined));
-      const saved = googleSource.insert(CAL, 'e1', draft);
+      const saved = googleSource.insert(CAL, 'e1', draft, []);
       await vi.advanceTimersByTimeAsync(2_000);
       await saved;
       expect(calls.map((c) => c.method)).toEqual(['POST', 'POST']);
@@ -1084,7 +1120,7 @@ describe('google calendar: rate limits', () => {
       // Google names a wait longer than a person should watch a spinner for: the save fails at once and says so.
       calls = [];
       routes.unshift(() => ({ ...limited(429), headers: { 'Retry-After': '30' } }));
-      const e = await googleSource.insert(CAL, 'e2', draft).catch((x) => x);
+      const e = await googleSource.insert(CAL, 'e2', draft, []).catch((x) => x);
       expect([e instanceof RateLimited, e.message, calls.length]).toEqual([
         true,
         'Google Calendar is busy. Try again in a minute.',
@@ -1094,7 +1130,7 @@ describe('google calendar: rate limits', () => {
       // Still limited after the short waits: the save fails rather than spinning on.
       calls = [];
       routes[0] = () => limited(403, 'userRateLimitExceeded');
-      const out = googleSource.insert(CAL, 'e3', draft).catch((x) => x);
+      const out = googleSource.insert(CAL, 'e3', draft, []).catch((x) => x);
       await vi.advanceTimersByTimeAsync(6_000);
       expect(await out).toBeInstanceOf(RateLimited);
       expect(calls).toHaveLength(3);

@@ -392,16 +392,32 @@ export const googleSource: CalendarSource = {
     return g.recurrence ?? [];
   },
 
-  async insert(calendarId, id, draft) {
+  async insert(calendarId, id, draft, earlier) {
     const cal = encodeURIComponent(calendarId);
+    const path = `/calendars/${cal}/events/${encodeURIComponent(id)}`;
     // A new event is in the tablet's time zone.
     const body = draftBody(draft, zonesOf(true));
+    // A failed save to another calendar may have added the event there (its answer lost): move it here (events.move).
+    for (const from of earlier) {
+      if (from === calendarId) continue;
+      try {
+        await call(`/calendars/${encodeURIComponent(from)}/events/${encodeURIComponent(id)}/move`, {
+          method: 'POST',
+          query: { destination: calendarId },
+        });
+      } catch (e) {
+        if (e instanceof GoogleError && (e.status === 404 || e.status === 410)) continue;
+        throw e;
+      }
+      await call(path, { method: 'PATCH', body: JSON.stringify(body) });
+      return;
+    }
     try {
       await call<GEvent>(`/calendars/${cal}/events`, { method: 'POST', body: JSON.stringify({ ...body, id }) });
     } catch (e) {
       // A retry after a lost response: the event exists already, so bring it up to date instead of adding it twice.
       if (!(e instanceof GoogleError && e.status === 409)) throw e;
-      await call(`/calendars/${cal}/events/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(body) });
+      await call(path, { method: 'PATCH', body: JSON.stringify(body) });
     }
   },
 

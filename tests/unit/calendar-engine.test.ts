@@ -189,6 +189,32 @@ describe('saving an edited occurrence', () => {
   });
 });
 
+describe('adding an event', () => {
+  const draft = { title: 'Dentist', allDay: false, start: new Date(day(2, '16:30')), end: new Date(day(2, '17:30')) };
+  beforeEach(() => {
+    source.listCalendars = async () => [CAL];
+    source.listEvents = async () => [];
+  });
+
+  it('tells a retry to another calendar where the failed save went', async () => {
+    const sent: string[][] = [];
+    let fail = true;
+    source.insert = async (cal, _id, _d, earlier) => {
+      sent.push([cal, ...earlier]);
+      if (fail) throw new Error('Google Calendar did not answer in time.');
+    };
+    await expect(engine.createEvent('fam', 'e1', draft, ['asiyah'])).rejects.toThrow('did not answer');
+    expect(metaDoc('e1')).toBeUndefined();
+    fail = false;
+    await engine.createEvent('school', 'e1', draft, ['asiyah']);
+    expect(sent).toEqual([['fam'], ['school', 'fam']]);
+    expect(store.data.eventMeta.value.map((m) => m.id)).toEqual([engine.metaKey('school', 'e1')]);
+    // A later event starts with nothing to move.
+    await engine.createEvent('fam', 'e2', draft, ['asiyah']);
+    expect(sent.at(-1)).toEqual(['fam']);
+  });
+});
+
 describe('triage queue', () => {
   it('keeps a series whose next occurrence alone was assigned', () => {
     const [a, b, c] = [swim(1), swim(8), swim(15)];

@@ -501,6 +501,13 @@ export function defaultCalendarId(): string {
   return (w.find((c) => c.id === chosen) ?? w.find((c) => c.primary) ?? w[0])?.id ?? '';
 }
 
+/**
+ * Calendars a save of each new event id went to without an answer. The
+ * request may have landed, so a retry to another calendar (the parent
+ * picked a different one) moves the event from there.
+ */
+const triedIn = new Map<string, Set<string>>();
+
 /** Add an event; `id` comes from newEventId() once per editor, so retrying a failed save is safe. */
 export async function createEvent(
   calendarId: string,
@@ -509,7 +516,12 @@ export async function createEvent(
   profileIds: string[],
   opts: { countdown?: boolean } = {},
 ): Promise<void> {
-  await source.insert(calendarId, id, draft);
+  const tried = triedIn.get(id) ?? new Set<string>();
+  const earlier = [...tried];
+  tried.add(calendarId);
+  triedIn.set(id, tried);
+  await source.insert(calendarId, id, draft, earlier);
+  triedIn.delete(id);
   // Firestore writes apply to the local cache at once; awaiting the server ack would hang offline.
   void put('eventMeta', {
     id: metaKey(calendarId, id),
