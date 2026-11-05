@@ -22,3 +22,19 @@ export function isAllowedAccount(email: string, allowed: string[]): boolean {
   const e = normalizeEmail(email);
   return allowed.some((a) => normalizeEmail(a) === e);
 }
+
+/** Calendar access the wall needs: read and write events, list the account's calendars. */
+export const REQUIRED_SCOPES = [
+  'https://www.googleapis.com/auth/calendar.events',
+  'https://www.googleapis.com/auth/calendar.calendarlist.readonly',
+];
+
+/**
+ * Required scopes missing from a token response's space-separated `scope`.
+ * Google's consent screen lets people untick each permission, and the
+ * connection then succeeds without calendar access.
+ */
+export function missingScopes(granted: string | undefined): string[] {
+  const have = new Set((granted ?? '').split(/\s+/).filter(Boolean));
+  return REQUIRED_SCOPES.filter((s) => !have.has(s));
+}

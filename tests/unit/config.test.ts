@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { googleClientId } from '../../src/config';
+import { REQUIRED_SCOPES } from '../../functions/src/policy';
+import { googleClientId, googleScopes } from '../../src/config';
 
 /** The web app and the Functions read the OAuth client id from separate files; they must agree. */
 describe('config', () => {
@@ -11,4 +12,6 @@ describe('config', () => {
       .map((l) => [l.slice(0, l.indexOf('=')), l.slice(l.indexOf('=') + 1)]),
   );
   it('uses one OAuth client id', () => expect(env.GOOGLE_OAUTH_CLIENT_ID).toBe(googleClientId));
+  it('asks Google for every scope connectGoogle requires', () =>
+    expect(REQUIRED_SCOPES.filter((s) => !googleScopes.includes(s))).toEqual([]));
 });

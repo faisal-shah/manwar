@@ -4,7 +4,7 @@ import { getFirestore } from 'firebase-admin/firestore';
 import { defineSecret, defineString } from 'firebase-functions/params';
 import { HttpsError, onCall, type CallableOptions } from 'firebase-functions/v2/https';
 import { OAuth2Client } from 'google-auth-library';
-import { householdIdFor, isAllowedAccount, parseAccountList } from './policy.js';
+import { householdIdFor, isAllowedAccount, missingScopes, parseAccountList } from './policy.js';
 
 initializeApp();
 const db = getFirestore();
@@ -56,11 +56,21 @@ export const connectGoogle = onCall<{ code?: unknown }>(opts, async (req) => {
     throw new HttpsError('permission-denied', 'Google rejected the sign-in. Try connecting again.');
   }
   if (!tokens.id_token || !tokens.access_token) throw new HttpsError('internal', 'Google returned no identity.');
-  const ticket = await client.verifyIdToken({ idToken: tokens.id_token, audience: CLIENT_ID.value() });
-  const p = ticket.getPayload();
+  let p;
+  try {
+    p = (await client.verifyIdToken({ idToken: tokens.id_token, audience: CLIENT_ID.value() })).getPayload();
+  } catch {
+    throw new HttpsError('permission-denied', 'Google rejected the sign-in. Try connecting again.');
+  }
   if (!p?.sub || !p.email || p.email_verified !== true)
     throw new HttpsError('permission-denied', 'The Google account has no verified email.');
   if (!allowed(p.email)) throw new HttpsError('permission-denied', NOT_ALLOWED);
+  // Checked before anything is stored: a grant without calendar access is no connection.
+  if (missingScopes(tokens.scope).length)
+    throw new HttpsError(
+      'failed-precondition',
+      'Manwar needs to see and edit your calendars. Connect again and leave both calendar permissions ticked.',
+    );
 
   const hid = householdIdFor(p.sub);
   const ref = tokenDoc(hid);

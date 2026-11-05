@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { householdIdFor, isAllowedAccount, normalizeEmail, parseAccountList } from './policy.js';
+import {
+  REQUIRED_SCOPES,
+  householdIdFor,
+  isAllowedAccount,
+  missingScopes,
+  normalizeEmail,
+  parseAccountList,
+} from './policy.js';
 
 describe('policy', () => {
   it('derives a household id from the Google subject id', () => {
@@ -16,6 +23,15 @@ describe('policy', () => {
       'c@example.org',
     ]);
     expect(parseAccountList('')).toEqual([]);
+  });
+  it('finds calendar permissions left unticked on the consent screen', () => {
+    const all = ['openid', 'email', ...REQUIRED_SCOPES].join(' ');
+    expect(missingScopes(all)).toEqual([]);
+    expect(missingScopes(`openid email ${REQUIRED_SCOPES[1]}`)).toEqual([REQUIRED_SCOPES[0]]);
+    expect(missingScopes('openid email')).toEqual(REQUIRED_SCOPES);
+    expect(missingScopes(undefined)).toEqual(REQUIRED_SCOPES);
+    // A narrower scope with the same prefix does not count.
+    expect(missingScopes('https://www.googleapis.com/auth/calendar.events.readonly')).toContain(REQUIRED_SCOPES[0]);
   });
   it('allows only listed accounts', () => {
     const list = parseAccountList('jane.doe@gmail.com, team@example.com');
