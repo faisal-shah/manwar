@@ -463,6 +463,8 @@
 }
 .ev-card .ev-time {
   font-size: 1.5rem;
+  /* A narrow Week cell cuts "11:45 AM - 12:15 PM" mid-letter otherwise. */
+  text-overflow: ellipsis;
 }
 
 /* ---------- Day labels and weather ---------- */
