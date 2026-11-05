@@ -198,11 +198,13 @@ test('unchecking takes back the stars it earned, even after the value changed', 
     { method: 'PATCH', headers: AUTH, body: JSON.stringify({ fields: { stars: { integerValue: '5' } } }) },
   );
   expect(res.ok).toBe(true);
-  await expect(card(page, 'asiyah', 'Breakfast').locator('.tk-stars')).toHaveText('5');
-  await page.waitForTimeout(600);
+  // Hashim's Breakfast is not done, so it shows the new value; Asiyah's keeps what it earned.
+  await expect(card(page, 'hashim', 'Breakfast').locator('.tk-stars')).toHaveText('5');
+  await expect(card(page, 'asiyah', 'Breakfast').locator('.tk-stars')).toHaveText('2');
   await card(page, 'asiyah', 'Breakfast').locator('.tk-check').click();
   await expect(page.locator('.toast', { hasText: 'Breakfast unchecked' })).toContainText('2 stars taken back');
   await expect(stars(page, 'asiyah')).toHaveText('128');
+  await expect(card(page, 'asiyah', 'Breakfast').locator('.tk-stars')).toHaveText('5');
 });
 
 test('a late chore in the week grid is open and checks off as today', async ({ page }) => {

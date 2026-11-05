@@ -21,7 +21,9 @@ export function TaskCard({ o, day, color, compact }: { o: Occurrence; day: strin
   const sub = subtitle(t, settings.value.timeFormat);
   const claimer = o.profileId === UP_FOR_GRABS && done ? profileById.value.get(o.state!.by) : undefined;
   const late = o.lateDays > 0 && !done;
-  const meta = late || sub || t.stars > 0 || claimer || skipped;
+  // A checked card shows the stars it earned, which a later edit of the task does not change.
+  const stars = done ? o.state!.stars : t.stars;
+  const meta = late || sub || stars > 0 || claimer || skipped;
   return (
     <div
       class={`tk-card${big ? ' big' : ' compact'}${done ? ' done' : ''}${skipped ? ' skipped' : ''}`}
@@ -59,10 +61,10 @@ export function TaskCard({ o, day, color, compact }: { o: Occurrence; day: strin
                 {sub}
               </span>
             )}
-            {t.stars > 0 && (
+            {stars > 0 && (
               <span class={`tk-stars${done ? ' earned' : ''}`}>
                 <Star size="1.3rem" strokeWidth={2.4} />
-                {t.stars}
+                {stars}
               </span>
             )}
             {claimer && <span class="tk-chip">🏠 {claimer.name}</span>}
