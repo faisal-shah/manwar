@@ -180,6 +180,38 @@ test('idle return closes a Settings sheet left open', async ({ page }) => {
   await expect(rail(page, 'Home')).toHaveClass(/on/);
 });
 
+test('idle return closes whatever was left open: an editor, and a PIN pad without running what it guarded', async ({ page }) => {
+  await page.clock.install();
+  await open(page);
+  await setIdleReturn(page);
+  await page.getByRole('button', { name: 'Close' }).click();
+
+  // A chore editor left open on the Tasks tab (Home shows tasks too, so it would come along).
+  await rail(page, 'Tasks').click();
+  await page.locator('.fab').click();
+  await expect(page.locator('.sheet')).toBeVisible();
+  await page.clock.runFor('01:20');
+  await expect(rail(page, 'Home')).toHaveClass(/on/);
+  await expect(page.locator('.sheet')).toHaveCount(0);
+
+  // A kid asked for the PIN and walked away.
+  const key = (d: string) => page.locator('.pin-setup .pin-keys button', { hasText: new RegExp(`^${d}$`) });
+  await openSettings(page, 'Parental lock');
+  await page.getByRole('button', { name: /Set a PIN/ }).click();
+  for (const d of '1357') await key(d).click();
+  await expect(page.locator('.pin-setup')).toContainText('Enter the PIN again');
+  for (const d of '1357') await key(d).click();
+  await page.getByRole('button', { name: 'Lock now' }).click();
+  await rail(page, 'Tasks').click();
+  await page.locator('.fab').click();
+  const pad = page.locator('.modal', { hasText: 'Parent PIN' });
+  await expect(pad).toBeVisible();
+  await page.clock.runFor('01:20');
+  await expect(pad).toHaveCount(0);
+  await expect(rail(page, 'Home')).toHaveClass(/on/);
+  await expect(page.locator('.sheet')).toHaveCount(0);
+});
+
 test('someone using the wall keeps scheduled sleep off until they stop', async ({ page }) => {
   await page.clock.install();
   await open(page);

@@ -33,14 +33,23 @@ function useOpeningTap(): (e: MouseEvent) => boolean {
   };
 }
 
+/** The onClose of every overlay on screen, for closeOverlays(). */
+const onScreen = new Set<{ current: () => void }>();
+
 /**
  * Every overlay (sheet, dialog, popover, menu) calls this. `scrim` closes it
  * on a tap outside, letting the rest of the opening double tap through;
  * `content`, for a centered dialog's box (onClickCapture), drops that tap
- * inside it.
+ * inside it. The overlay also closes on idle return (closeOverlays).
  */
 export function useOverlay(onClose: () => void): { scrim: (e: MouseEvent) => void; content: (e: MouseEvent) => void } {
   const openingTap = useOpeningTap();
+  const close = useRef(onClose);
+  close.current = onClose;
+  useEffect(() => {
+    onScreen.add(close);
+    return () => void onScreen.delete(close);
+  }, []);
   return {
     scrim: (e) => {
       if (!openingTap(e)) onClose();
@@ -51,6 +60,11 @@ export function useOverlay(onClose: () => void): { scrim: (e: MouseEvent) => voi
       e.preventDefault();
     },
   };
+}
+
+/** Close every overlay on screen, as if tapped away (idle return): a PIN request among them is refused. */
+export function closeOverlays(): void {
+  for (const c of [...onScreen]) c.current();
 }
 
 /** Tap handler for a full-screen layer that is not an overlay to close (the sleep screen), with the same double-tap rule. */
