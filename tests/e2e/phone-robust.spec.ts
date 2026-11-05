@@ -1,12 +1,14 @@
 import { expect as baseExpect, test, type Page } from '@playwright/test';
 import {
   chip,
+  enterPin,
   phoneAt,
   phoneCard,
   phoneProgress,
   phoneStars,
   phoneTab,
   serverField,
+  setPin,
   wallAndPhone,
   wallStars,
 } from './phone-family';
@@ -172,4 +174,70 @@ test('at midnight the Tasks tab moves to the new day and closes details about th
   // Back still leaves the tabs in order.
   await expect.poll(() => page.evaluate(() => (history.state as { manwarBack?: number } | null)?.manwarBack ?? 0)).toBe(0);
   expect([...errors(), ...late.errors]).toEqual([]);
+});
+
+test("a task deleted at the wall closes the phone's editor; a person deleted closes their stars", async ({ browser }) => {
+  const { w, p, errors } = await wallAndPhone(browser, 'gone-open', { tab: 'Tasks' });
+  const page = p.page;
+  await phoneCard(page, 'Breakfast').locator('.tk-body').click();
+  await page.getByRole('button', { name: 'Edit task' }).click();
+  const editor = page.getByRole('dialog', { name: 'Edit task' });
+  await expect(editor).toBeVisible();
+  await w.page.locator('[data-column="asiyah"] .tk-card[data-task="Breakfast"] .tk-body').click();
+  await w.page.getByRole('button', { name: 'Delete task' }).click();
+  await w.page.getByRole('dialog', { name: 'Delete "Breakfast"?' }).getByRole('button', { name: 'Delete' }).click();
+  await expect(editor).toHaveCount(0);
+  await expect(page.locator('.toast', { hasText: '"Breakfast" was deleted on another device.' })).toBeVisible();
+
+  await chip(page, 'hashim').click();
+  await phoneStars(page).click();
+  const sheet = page.getByRole('dialog', { name: /Hashim!.*'s stars/ });
+  await expect(sheet).toBeVisible();
+  await w.page.locator('.rail button', { hasText: 'Settings' }).click();
+  await w.page.locator('.set-menu button', { hasText: /^Profiles$/ }).click();
+  await w.page.getByRole('button', { name: 'Edit Hashim!' }).click();
+  await w.page.getByRole('button', { name: 'Delete', exact: true }).click();
+  await w.page.getByRole('button', { name: 'Delete profile' }).click();
+  await expect(sheet).toHaveCount(0);
+  await expect(chip(page, 'asiyah')).toHaveAttribute('aria-pressed', 'true');
+  // Both gave their history entries back: only the Tasks tab holds one.
+  await expect.poll(() => page.evaluate(() => (history.state as { manwarBack?: number } | null)?.manwarBack ?? 0)).toBe(1);
+  expect(errors()).toEqual([]);
+});
+
+test('stars given offline on the phone reach the wall once back online, once', async ({ browser }) => {
+  const { household, w, p, errors } = await wallAndPhone(browser, 'offline-stars', { tab: 'Tasks' });
+  const page = p.page;
+  await phoneStars(page).click();
+  const s = page.getByRole('dialog', { name: /Asiyah.*'s stars/ });
+  await page.context().setOffline(true);
+  await s.getByRole('button', { name: 'Give', exact: true }).click();
+  await s.getByRole('button', { name: 'Give 5' }).click();
+  await expect(s.locator('.ps-num')).toContainText('133');
+  await expect(s.locator('.hist-entry[data-reason="give"]').first()).toContainText('+5');
+  await page.context().setOffline(false);
+  await expect(wallStars(w.page, 'asiyah')).toHaveText('133', { timeout: 30_000 });
+  await expect.poll(() => serverField(household, 'profiles/asiyah', 'stars')).toBe(133);
+  // Offline, the browser reports each request it could not make.
+  expect(errors().filter((e) => !/ERR_INTERNET_DISCONNECTED/.test(e))).toEqual([]);
+});
+
+test('Back on the PIN pad cancels what it asked for', async ({ browser }) => {
+  const { household, p, errors } = await wallAndPhone(browser, 'back-pin', { tab: 'Tasks' });
+  await setPin(household);
+  const page = p.page;
+  await phoneCard(page, 'Feed the fish').locator('.tk-body').click();
+  await page.getByTestId('task-details').getByRole('button', { name: 'Skip' }).click();
+  const pad = page.getByRole('dialog', { name: 'Parent PIN' });
+  await expect(pad).toBeVisible();
+  await page.goBack();
+  await expect(pad).toHaveCount(0);
+  await expect(phoneCard(page, 'Feed the fish')).not.toHaveClass(/skipped/);
+  await expect(page.locator('.ph-head h1')).toHaveText('Tasks');
+  // The pad still works after: the skip goes through with the PIN.
+  await phoneCard(page, 'Feed the fish').locator('.tk-body').click();
+  await page.getByTestId('task-details').getByRole('button', { name: 'Skip' }).click();
+  await enterPin(page);
+  await expect(phoneCard(page, 'Feed the fish')).toHaveClass(/skipped/);
+  expect(errors()).toEqual([]);
 });
