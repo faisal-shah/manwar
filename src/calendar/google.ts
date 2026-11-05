@@ -54,14 +54,18 @@ interface GTime {
 interface GEvent {
   id: string;
   status?: string;
+  eventType?: string;
   summary?: string;
   description?: string;
   location?: string;
+  visibility?: string;
+  locked?: boolean;
   start: GTime;
   end: GTime;
   recurringEventId?: string;
   recurrence?: string[];
   organizer?: { email?: string; self?: boolean };
+  attendees?: { email?: string; self?: boolean; responseStatus?: string }[];
   guestsCanModify?: boolean;
   reminders?: { useDefault?: boolean; overrides?: { method: string; minutes: number }[] };
   originalStartTime?: GTime;
@@ -75,25 +79,49 @@ function parseTime(t: GTime): { at: Date; allDay: boolean } {
   throw new Error('Google Calendar: event without a start/end time');
 }
 
+/**
+ * Event types that are not family events: the working location (Home,
+ * Office) Google shows as a chip over a work day, and work focus blocks.
+ * Out of office, birthdays and events Gmail added (flights, bookings) stay.
+ */
+const OFF_WALL_TYPES = new Set(['workingLocation', 'focusTime']);
+
+/** Is the event on the household's schedule? Not cancelled stubs, the types above, or invitations it declined. */
+function onWall(g: GEvent): boolean {
+  if (g.status === 'cancelled' || !g.start || !g.end) return false;
+  if (g.eventType && OFF_WALL_TYPES.has(g.eventType)) return false;
+  return !g.attendees?.some((a) => a.self && a.responseStatus === 'declined');
+}
+
+/** Types whose times and text the API does not let anyone change (birthdays, events from Gmail). */
+const FIXED_TYPES = new Set(['birthday', 'fromGmail']);
+
 function toCalEvent(calendarId: string, g: GEvent, role: AccessRole): CalEvent {
   const s = parseTime(g.start);
   const e = parseTime(g.end);
   const popup =
     g.reminders?.useDefault === false ? (g.reminders.overrides?.find((o) => o.method === 'popup')?.minutes ?? null) : undefined;
+  // Free/busy access, and private events on a calendar shared read-only, come without their details.
+  const detailsHidden = role === 'freeBusyReader' || (role === 'reader' && g.visibility === 'private');
+  const fixed = !!g.eventType && FIXED_TYPES.has(g.eventType);
   return {
     key: eventKey(calendarId, g.id),
     calendarId,
     id: g.id,
     seriesId: g.recurringEventId,
-    title: g.summary?.trim() || '(No title)',
+    title: g.summary?.trim() || (detailsHidden ? 'Busy' : '(No title)'),
     allDay: s.allDay,
     start: s.at,
     end: e.at,
     location: g.location || undefined,
     description: g.description || undefined,
-    organizer: g.organizer && !g.organizer.self ? g.organizer.email : undefined,
+    // Gmail adds its events under a placeholder organizer, not someone who invited the family.
+    organizer: g.organizer && !g.organizer.self && g.eventType !== 'fromGmail' ? g.organizer.email : undefined,
     editable:
-      (role === 'owner' || role === 'writer') && (!g.organizer || g.organizer.self === true || g.guestsCanModify === true),
+      (role === 'owner' || role === 'writer') &&
+      !fixed &&
+      g.locked !== true &&
+      (!g.organizer || g.organizer.self === true || g.guestsCanModify === true),
     reminderMinutes: popup,
   };
 }
@@ -177,10 +205,7 @@ export const googleSource: CalendarSource = {
           ...(pageToken ? { pageToken } : {}),
         },
       });
-      for (const g of r.items ?? []) {
-        if (g.status === 'cancelled' || !g.start || !g.end) continue;
-        out.push(toCalEvent(calendarId, g, roles.get(calendarId) ?? 'reader'));
-      }
+      for (const g of r.items ?? []) if (onWall(g)) out.push(toCalEvent(calendarId, g, roles.get(calendarId) ?? 'reader'));
       pageToken = r.nextPageToken;
     } while (pageToken);
     return out;
@@ -196,15 +221,17 @@ export const googleSource: CalendarSource = {
       if (e instanceof GoogleError && (e.status === 404 || e.status === 410)) return null;
       throw e;
     }
-    if (g.status === 'cancelled' || !g.start || !g.end) return null;
+    if (g.status === 'cancelled') return null;
     if (!g.recurrence?.length) {
+      if (!onWall(g)) return null;
       const ev = toCalEvent(calendarId, g, role);
       return ev.end > after ? ev : null;
     }
+    // A few instances, so one the household declined does not end the countdown.
     const r = await call<{ items?: GEvent[] }>(`/calendars/${cal}/events/${encodeURIComponent(id)}/instances`, {
-      query: { timeMin: after.toISOString(), maxResults: '1' },
+      query: { timeMin: after.toISOString(), maxResults: '10' },
     });
-    const next = r.items?.find((i) => i.status !== 'cancelled' && i.start && i.end);
+    const next = r.items?.find(onWall);
     return next ? toCalEvent(calendarId, next, role) : null;
   },
 

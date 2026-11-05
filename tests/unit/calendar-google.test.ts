@@ -274,6 +274,121 @@ describe('google calendar: reading events', () => {
     ]);
   });
 
+  describe('what belongs on the wall', () => {
+    const at = (h: number) => ({ dateTime: `2026-11-05T${String(h).padStart(2, '0')}:00:00-06:00`, timeZone: 'America/Chicago' });
+
+    it('leaves out working locations and focus time, keeps out of office, birthdays and Gmail events', async () => {
+      const evs = await listOne([
+        base({
+          id: 'wl',
+          eventType: 'workingLocation',
+          summary: 'Home',
+          transparency: 'transparent',
+          visibility: 'public',
+          workingLocationProperties: { type: 'homeOffice', homeOffice: {} },
+          start: { date: '2026-11-05' },
+          end: { date: '2026-11-06' },
+        }),
+        base({
+          id: 'ft',
+          eventType: 'focusTime',
+          summary: 'Focus time',
+          focusTimeProperties: { autoDeclineMode: 'declineOnlyNewConflictingInvitations', chatStatus: 'doNotDisturb' },
+          start: at(9),
+          end: at(11),
+        }),
+        base({
+          id: 'ooo',
+          eventType: 'outOfOffice',
+          summary: 'Out of office',
+          outOfOfficeProperties: { autoDeclineMode: 'declineAllConflictingInvitations' },
+          start: at(12),
+          end: at(17),
+        }),
+        base({
+          id: 'BIRTHDAY_c1_20261105',
+          eventType: 'birthday',
+          summary: "Grandma's birthday",
+          birthdayProperties: { type: 'birthday', contact: 'people/c1' },
+          recurringEventId: 'BIRTHDAY_c1',
+          start: { date: '2026-11-05' },
+          end: { date: '2026-11-06' },
+        }),
+        base({
+          id: 'gmail1',
+          eventType: 'fromGmail',
+          summary: 'Flight to Istanbul (TK 6)',
+          organizer: { email: 'unknownorganizer@calendar.google.com', displayName: 'Unknown Organizer' },
+          start: { dateTime: '2026-11-05T21:00:00-06:00', timeZone: 'America/Chicago' },
+          end: { dateTime: '2026-11-06T17:05:00+03:00', timeZone: 'Europe/Istanbul' },
+        }),
+      ]);
+      expect(evs.map((e) => e.id)).toEqual(['ooo', 'BIRTHDAY_c1_20261105', 'gmail1']);
+    });
+
+    it('leaves out invitations the household declined and keeps ones it has not answered', async () => {
+      const invite = (id: string, responseStatus: string, h: number) =>
+        base({
+          id,
+          summary: `Party ${id}`,
+          organizer: { email: 'neighbor@example.com' },
+          creator: { email: 'neighbor@example.com' },
+          attendees: [
+            { email: 'neighbor@example.com', organizer: true, responseStatus: 'accepted' },
+            { email: CAL, self: true, responseStatus },
+          ],
+          start: at(h),
+          end: at(h + 1),
+        });
+      const evs = await listOne([invite('no', 'declined', 9), invite('maybe', 'tentative', 10), invite('new', 'needsAction', 11)]);
+      expect(evs.map((e) => e.id)).toEqual(['maybe', 'new']);
+    });
+
+    it('does not offer edits Google refuses: birthdays, Gmail events, locked copies', async () => {
+      const evs = await listOne([
+        base({
+          id: 'bday',
+          eventType: 'birthday',
+          summary: 'Hashim turns 7',
+          birthdayProperties: { type: 'birthday', contact: 'people/c2' },
+          start: { date: '2026-11-05' },
+          end: { date: '2026-11-06' },
+        }),
+        base({ id: 'locked', summary: 'Room booking', locked: true, start: at(8), end: at(9) }),
+        base({ id: 'plain', summary: 'Dentist', start: at(10), end: at(11) }),
+        base({
+          id: 'resto',
+          eventType: 'fromGmail',
+          summary: 'Dinner reservation',
+          organizer: { email: 'unknownorganizer@calendar.google.com' },
+          start: at(18),
+          end: at(20),
+        }),
+      ]);
+      expect(evs.map((e) => [e.id, e.editable])).toEqual([
+        ['bday', false],
+        ['locked', false],
+        ['plain', true],
+        ['resto', false],
+      ]);
+      // Gmail adds its events under a placeholder organizer, not someone who invited the family.
+      expect(evs.find((e) => e.id === 'resto')!.organizer).toBeUndefined();
+    });
+
+    it('calls an event whose details are hidden from the household Busy', async () => {
+      const priv = base({ id: 'p', visibility: 'private', start: at(9), end: at(10) });
+      const [shared] = await listOne([priv], 'reader');
+      expect(shared.title).toBe('Busy');
+      routes = [];
+      const [busy] = await listOne([{ kind: 'calendar#event', id: 'fb', status: 'confirmed', start: at(9), end: at(10) }], 'freeBusyReader');
+      expect([busy.title, busy.editable]).toEqual(['Busy', false]);
+      // On its own calendar an untitled private event is just untitled.
+      routes = [];
+      const [own] = await listOne([priv], 'owner');
+      expect(own.title).toBe('(No title)');
+    });
+
+  });
 
   describe('next occurrence (countdowns past the window)', () => {
     const after = new Date('2026-11-04T00:00');
@@ -320,7 +435,38 @@ describe('google calendar: reading events', () => {
       );
       const ev = await googleSource.nextOccurrence(CAL, 'bday', after);
       expect([ev?.id, ev?.seriesId]).toEqual(['bday_20270814', 'bday']);
-      expect(calls.at(-1)!.query).toMatchObject({ timeMin: after.toISOString(), maxResults: '1' });
+      expect(calls.at(-1)!.query).toMatchObject({ timeMin: after.toISOString() });
+    });
+    it('skips an occurrence the household declined', async () => {
+      const inst = (day: string, responseStatus: string) =>
+        base({
+          id: `class_${day.replace(/-/g, '')}`,
+          recurringEventId: 'class',
+          summary: 'Art class',
+          organizer: { email: 'teacher@school.example' },
+          attendees: [{ email: CAL, self: true, responseStatus }],
+          start: { dateTime: `${day}T16:00:00-06:00` },
+          end: { dateTime: `${day}T17:00:00-06:00` },
+        });
+      routes.push((c) =>
+        c.path === `/calendars/${CAL}/events/class`
+          ? {
+              body: base({
+                id: 'class',
+                summary: 'Art class',
+                recurrence: ['RRULE:FREQ=WEEKLY'],
+                start: { dateTime: '2026-09-03T16:00:00-05:00' },
+                end: { dateTime: '2026-09-03T17:00:00-05:00' },
+              }),
+            }
+          : undefined,
+      );
+      routes.push((c) =>
+        c.path === `/calendars/${CAL}/events/class/instances`
+          ? { body: { items: [inst('2026-11-05', 'declined'), inst('2026-11-12', 'accepted')] } }
+          : undefined,
+      );
+      expect((await googleSource.nextOccurrence(CAL, 'class', after))?.id).toBe('class_20261112');
     });
     it('treats an event deleted meanwhile as none', async () => {
       routes.push((c) =>
