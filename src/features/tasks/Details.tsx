@@ -101,7 +101,7 @@ export function DetailsHost() {
               onClick={() => {
                 close();
                 if (skipped) tapCheck(o, d.day, d.anchor);
-                else skip(o);
+                else skip(o, d.day);
               }}
             >
               <SkipForward size="2rem" /> {skipped ? 'Unskip' : 'Skip'}
@@ -136,6 +136,7 @@ export function ClaimHost() {
         {t.emoji} {t.title}
         {t.stars ? ` · ${t.stars} ${t.stars === 1 ? 'star' : 'stars'}` : ''}
       </p>
+      {profiles.value.length === 0 && <p class="muted">Add your family in Settings, under Profiles, to give it to someone.</p>}
       <div class="tk-claim" role="group" aria-label="Who did it">
         {profiles.value.map((p) => (
           <button

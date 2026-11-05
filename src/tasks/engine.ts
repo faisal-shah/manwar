@@ -1,5 +1,5 @@
 import { UP_FOR_GRABS, lastDoneKey, type ISODate, type PartOfDay, type Task, type TaskState } from '../data/types';
-import { addDays, diffDays, hhmmToMinutes, toISODate } from '../lib/date';
+import { addDays, diffDays, fromISODate, hhmmToMinutes, toISODate } from '../lib/date';
 import { lastOccurrenceOnOrBefore, occursOn } from '../lib/repeat';
 
 /**
@@ -35,8 +35,32 @@ export interface Occurrence {
   state?: TaskState;
 }
 
+/**
+ * Days back the task views reach. Late chores carry over at most this long,
+ * and older days are neither shown nor changed: the store loads task states
+ * only this far back (plus a margin), so a check-off there could not be seen.
+ */
+export const HISTORY_DAYS = 60;
+
+/** The first day the task views show and change. */
+export const firstHistoryDay = (todayISO: ISODate) => addDays(todayISO, -HISTORY_DAYS);
+
 export const taskStateId = (taskId: string, date: ISODate, part: PartOfDay | null, profileId: string) =>
   `${taskId}_${date}_${part ?? 'x'}_${profileId === UP_FOR_GRABS ? 'any' : profileId}`;
+
+/**
+ * When a check-off or skip made at `now` while viewing `day` counts as made:
+ * now on today, otherwise (a parent filling in another day) the same time of
+ * day on that day. A chore shows on the day it was done or skipped, so a
+ * stamp of now would also put yesterday's chore in today's list.
+ */
+export function madeAt(day: ISODate, now: number): number {
+  const d = new Date(now);
+  if (day === toISODate(d)) return now;
+  const at = fromISODate(day);
+  at.setHours(d.getHours(), d.getMinutes(), d.getSeconds(), d.getMilliseconds());
+  return at.getTime();
+}
 
 /** Part of the day a time falls in: before noon, before 6 PM, after. */
 export function partOfDay(minutes: number): PartOfDay {
@@ -65,6 +89,8 @@ export function afterDoneDue(task: Task, profileId: string): ISODate {
   const r = task.repeatAfterDone!;
   return last ? addUnit(last, r.every, r.unit) : task.date;
 }
+
+const maxDate = (a: ISODate, b: ISODate) => (a > b ? a : b);
 
 const owners = (t: Task) => (t.upForGrabs || t.assignees.length === 0 ? [UP_FOR_GRABS] : t.assignees);
 
@@ -96,7 +122,8 @@ export function occurrencesOn(day: ISODate, tasks: Task[], states: Map<string, T
     }
     for (const p of owners(task)) {
       if (task.repeatAfterDone) {
-        const due = afterDoneDue(task, p);
+        // Overdue for longer than the history reaches: due on its first day, so the check-off is stored where it shows.
+        const due = maxDate(afterDoneDue(task, p), firstHistoryDay(todayISO));
         if (due === day || (day === todayISO && due < todayISO)) {
           const st = states.get(taskStateId(task.id, due, null, p));
           if (due === day || !st) add(task, p, due, null);
@@ -108,7 +135,7 @@ export function occurrencesOn(day: ISODate, tasks: Task[], states: Map<string, T
         continue;
       }
       if (day !== todayISO) continue;
-      const last = lastOccurrenceOnOrBefore(task.repeat, task.date, addDays(todayISO, -1), 60);
+      const last = lastOccurrenceOnOrBefore(task.repeat, task.date, addDays(todayISO, -1), HISTORY_DAYS - 1);
       if (last && !states.has(taskStateId(task.id, last, null, p))) add(task, p, last, null);
     }
   }
