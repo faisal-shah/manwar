@@ -134,7 +134,6 @@ export function EventEditor({ req, onClose }: { req: EditorRequest; onClose: () 
           <input
             class="input"
             name="title"
-            dir="auto"
             value={form.title}
             placeholder="Event title"
             autoFocus={!ev}
@@ -259,7 +258,6 @@ export function EventEditor({ req, onClose }: { req: EditorRequest; onClose: () 
           <input
             class="input"
             name="location"
-            dir="auto"
             value={form.location}
             onInput={(e) => set({ location: (e.target as HTMLInputElement).value })}
           />
@@ -269,7 +267,6 @@ export function EventEditor({ req, onClose }: { req: EditorRequest; onClose: () 
           <textarea
             class="input"
             name="notes"
-            dir="auto"
             value={form.notes}
             onInput={(e) => set({ notes: (e.target as HTMLTextAreaElement).value })}
           />

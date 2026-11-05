@@ -535,3 +535,40 @@ test('eight people in the progress strip: each pill shows a whole name or none',
   const counts = await page.locator('.cal-prog-count').evaluateAll((els) => els.map((el) => el.getBoundingClientRect().width));
   for (const w of counts) expect(w).toBeGreaterThan(0);
 });
+
+test('Arabic typed into a field runs right to left; an empty field keeps its placeholder on the left', async ({ page }) => {
+  await open(page);
+  const dir = (l: Locator) => l.evaluate((el) => getComputedStyle(el).direction);
+  await rail(page, 'Lists').click();
+  const add = page.getByRole('textbox', { name: 'Add item to Grocery List' }).first();
+  expect(await dir(add)).toBe('ltr');
+  await add.fill('خبز');
+  expect(await dir(add)).toBe('rtl');
+  await add.fill('2 بيض');
+  expect(await dir(add)).toBe('rtl');
+  await add.fill('Milk');
+  expect(await dir(add)).toBe('ltr');
+  await add.fill('');
+
+  await rail(page, 'Recipes').click();
+  const search = page.getByRole('textbox', { name: 'Search recipes' });
+  await search.fill('عدس');
+  expect(await dir(search)).toBe('rtl');
+  await search.fill('');
+
+  await rail(page, 'Tasks').click();
+  await page.locator('.fab').click();
+  const sheet = page.locator('.sheet');
+  const title = sheet.getByRole('textbox', { name: 'Title' });
+  await title.fill('ترتيب الغرفة');
+  expect(await dir(title)).toBe('rtl');
+  const notes = sheet.locator('textarea');
+  await notes.fill('اجمع الألعاب');
+  expect(await dir(notes)).toBe('rtl');
+  // The row around the field keeps its own direction: the emoji button stays on the left (one read, as the sheet slides in).
+  const order = await title.evaluate((el) => {
+    const btn = el.parentElement!.querySelector('.tk-ed-emoji')!;
+    return btn.getBoundingClientRect().right <= el.getBoundingClientRect().left;
+  });
+  expect(order).toBe(true);
+});

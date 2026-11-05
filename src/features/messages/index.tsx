@@ -55,7 +55,6 @@ function Composer() {
       <Field label="Message">
         <textarea
           class="input message-input"
-          dir="auto"
           aria-label="Message"
           maxLength={MAX_MESSAGE_LENGTH}
           placeholder="Write a note for the family"

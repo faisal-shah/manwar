@@ -9,6 +9,7 @@ import './styles/base.css';
 import './ui/ui.css';
 import './app/shell.css';
 import { App } from './app/App';
+import { installAutoDirection } from './ui/bidi';
 import { initSession } from './data/session';
 import { startApp } from './app/start';
 import { buildId, canonicalHost, forwardedHosts } from './config';
@@ -20,6 +21,7 @@ if (forwardedHosts.includes(location.hostname))
 
 document.documentElement.dataset.build = buildId;
 
+installAutoDirection();
 initSession();
 startApp();
 render(<App />, document.getElementById('app')!);

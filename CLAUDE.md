@@ -279,7 +279,11 @@ generated from it: `node scripts/icons/render.mjs` after any brand change.
 - Firestore field paths cannot contain `*`; `lastDoneKey()` maps Up for Grabs to `any`.
 - Text the family types (names, titles, list items, recipe lines, messages)
   may be Arabic: render it in a `<bdi>` (or `dir="auto"` on its own block),
-  or its punctuation and leading numbers land on the wrong side.
+  or its punctuation and leading numbers land on the wrong side. Fields
+  need nothing: `installAutoDirection` (`ui/bidi.ts`, a Preact
+  `options.vnode` hook installed in `main.tsx`) gives every text `<input>`
+  and `<textarea>` `dir="auto"`, so typed Arabic runs right to left and an
+  empty field's placeholder stays at the left; an explicit `dir` wins.
 - Column rows that scroll sideways (`.pcols`, `.tp-cards`) snap. A vertical
   scroller inside one contains the y axis only (`overscroll-behavior-y`), or
   a sideways swipe on the cards never pages the row; `useStartInView`
