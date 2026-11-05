@@ -26,12 +26,14 @@ const portal = (node: ComponentChildren) => createPortal(node, document.body);
  */
 export const DOUBLE_TAP_MS = 450;
 const DOUBLE_TAP_REM = 6;
-let lastDown = { x: -1e9, y: -1e9, at: -1e9 };
+/** The latest pointerdown; `seq` counts them, so the one right after a tap can be told from later ones. */
+let lastDown = { x: -1e9, y: -1e9, at: -1e9, seq: 0 };
 if (typeof window !== 'undefined')
-  window.addEventListener('pointerdown', (e) => (lastDown = { x: e.clientX, y: e.clientY, at: performance.now() }), {
-    capture: true,
-    passive: true,
-  });
+  window.addEventListener(
+    'pointerdown',
+    (e) => (lastDown = { x: e.clientX, y: e.clientY, at: performance.now(), seq: lastDown.seq + 1 }),
+    { capture: true, passive: true },
+  );
 
 /** Whether a tap is the rest of a double tap that began at `from`. */
 function restOfTap(from: { x: number; y: number; at: number }, e: MouseEvent): boolean {
@@ -55,7 +57,8 @@ export function swallowRestOfTap(): void {
   const left = DOUBLE_TAP_MS - (performance.now() - from.at);
   if (left <= 0) return;
   const onClick = (e: MouseEvent) => {
-    if (!restOfTap(from, e)) return;
+    // Only the very next tap (the second of a double tap), not taps made since.
+    if (lastDown.seq !== from.seq + 1 || !restOfTap(from, e)) return;
     e.stopPropagation();
     e.preventDefault();
   };
