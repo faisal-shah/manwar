@@ -1,3 +1,4 @@
+import { computed } from '@preact/signals';
 import { House, ListChecks, Plus } from 'lucide-preact';
 import { useEffect, useLayoutEffect, useRef } from 'preact/hooks';
 import { profileById, profiles } from '../../data/store';
@@ -28,6 +29,15 @@ import './tasks.css';
  * skipping, the claim dialog, details, the editor and the celebrations are
  * the wall's own (features/tasks).
  */
+/** Whose tasks show: the person picked, while they are there (shownPerson). */
+const shown = computed(() =>
+  shownPerson(
+    tasksFor.value,
+    profiles.value.map((p) => p.id),
+    todayOccurrences.value.some((o) => o.profileId === UP_FOR_GRABS),
+  ),
+);
+
 function TasksBody() {
   const day = today.value;
   // This tab shows today alone: at midnight, details or a claim still open are about a list that is gone.
@@ -38,11 +48,7 @@ function TasksBody() {
   const occ = todayOccurrences.value;
   const people = profiles.value;
   const ufg = occ.filter((o) => o.profileId === UP_FOR_GRABS);
-  const who = shownPerson(
-    tasksFor.value,
-    people.map((p) => p.id),
-    ufg.length > 0,
-  );
+  const who = shown.value;
   return (
     <div class="pt">
       {who === null ? (
@@ -206,13 +212,8 @@ function UpForGrabs({ occ }: { occ: Occurrence[] }) {
 
 /** The header's +: a new task for the person shown (or up for grabs). */
 function AddTask() {
-  const who = shownPerson(
-    tasksFor.value,
-    profiles.value.map((p) => p.id),
-    todayOccurrences.value.some((o) => o.profileId === UP_FOR_GRABS),
-  );
   return (
-    <IconButton label="Add task" class="ph-add" onClick={() => editTask('new', who ?? undefined)}>
+    <IconButton label="Add task" class="ph-add" onClick={() => editTask('new', shown.peek() ?? undefined)}>
       <Plus size="2.6rem" />
     </IconButton>
   );

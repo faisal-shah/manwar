@@ -129,6 +129,23 @@ test('the person picked is remembered, and a deleted one falls back to the first
   expect(errors()).toEqual([]);
 });
 
+test("a task deleted from the phone's details leaves the wall, and Undo brings it back", async ({ browser }) => {
+  const { w, p, errors } = await wallAndPhone(browser, 'delete', { tab: 'Tasks' });
+  const page = p.page;
+  await phoneCard(page, 'Reading').locator('.tk-body').click();
+  await page.getByTestId('task-details').getByRole('button', { name: 'Delete task' }).click();
+  await page.getByRole('dialog', { name: 'Delete "Reading"?' }).getByRole('button', { name: 'Delete' }).click();
+  await expect(page.getByTestId('task-details')).toHaveCount(0);
+  await expect(phoneCard(page, 'Reading')).toHaveCount(0);
+  await expect(wallCard(w.page, 'asiyah', 'Reading')).toHaveCount(0);
+  await expect(wallCard(w.page, 'mamma', 'Reading')).toHaveCount(0);
+  await page.locator('.toast', { hasText: 'Deleted "Reading"' }).getByRole('button', { name: 'Undo' }).click();
+  await expect(phoneCard(page, 'Reading')).toBeVisible();
+  await expect(wallCard(w.page, 'mamma', 'Reading')).toBeVisible();
+  await backSettled(page, 1);
+  expect(errors()).toEqual([]);
+});
+
 test('a task deleted on the wall while the phone shows its details closes them', async ({ browser }) => {
   const { w, p, errors } = await wallAndPhone(browser, 'gone', { tab: 'Tasks' });
   const page = p.page;

@@ -98,6 +98,12 @@ test('every screen and overlay fits 360 px with large text', async ({ browser })
   await page.locator('.ph-nav button', { hasText: 'Tasks' }).click();
   await expect(page.locator('.pt .tk-card').first()).toBeVisible();
   await check('Tasks');
+  // A name cut with an ellipsis takes its own direction, so an Arabic one keeps its start.
+  await page.locator('.pt-chip[data-person="p6"]').click();
+  const name = page.locator('.pt .pcol-name');
+  await expect(name).toHaveText('عائشة بنت محمد');
+  expect(await name.evaluate((el) => getComputedStyle(el).direction)).toBe('rtl');
+  await page.locator('.pt-chip[data-person="asiyah"]').click();
 
   await page.locator('.pt .tk-card[data-task="Feed the fish"] .tk-body').click();
   await expect(page.getByTestId('task-details')).toBeVisible();

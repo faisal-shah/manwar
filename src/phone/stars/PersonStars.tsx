@@ -65,7 +65,9 @@ function PersonStars({ p, onClose }: { p: Profile; onClose: () => void }) {
 
         <h3 class="ps-title serif">Rewards</h3>
         {rewards.length === 0 ? (
-          <p class="muted">Nothing for {isolate(p.name)} to work toward yet.</p>
+          <p class="muted">
+            Nothing for <bdi>{p.name}</bdi> to work toward yet.
+          </p>
         ) : (
           <ul class="ps-rewards">
             {rewards.map((v) => (
