@@ -72,19 +72,35 @@ flowchart LR
   good on an error, so `listen()` in the store reports it (`loadError`,
   shown on the loading screen) and subscribes again after 30 seconds.
 - **Calendar events** live in the household's Google calendars. `calendar/engine.ts`
-  fetches the loaded window (`ensureRange` widens it), caches a snapshot in
-  localStorage for offline display, polls every 3 minutes, and joins each
+  fetches a window around today (six weeks back, four months ahead, widened
+  to the days the latest view asked for with `ensureRange`), caches a snapshot
+  in localStorage for offline display, polls every 3 minutes, and joins each
   event with `EventMeta` (Firestore `eventMeta`, keyed by
-  `metaKey(calendarId, seriesId ?? id)`; instance keys override series keys).
+  `metaKey(calendarId, seriesId ?? id)`). An occurrence's own document
+  overrides its series' document field by field (empty `profiles` = inherit);
+  write through `assign`/`setCountdown`/`updateEvent`, which touch only the
+  document they mean to change. `refresh()` called during a fetch gets one
+  more fetch after it, and a calendar that fails keeps its last events.
   Events with no meta are **unassigned** and listed in `unassigned` (the
   triage queue, badge on the Calendar rail item). `[EVERYONE]` means the
-  whole family.
+  whole family. Countdowns past the window (setting Always) come from
+  `CalendarSource.nextOccurrence`. New events get their id from
+  `newEventId()` once per editor, so a retried save updates instead of
+  duplicating.
 - **Tasks**: `tasks/engine.ts` is pure (occurrences from schedules; late
   chores; Up for Grabs; repeat-after-done via `Task.lastDone`), unit-tested.
   `tasks/state.ts` has the reactive views and the writes. Stars use an
   append-only ledger (`ledger` collection) plus `Profile.stars` kept equal
   to the sum by `batch().stars()` in the same batch. Undo writes a reversing
-  entry and marks the original `undoneAt`.
+  entry and marks the original `undoneAt`. Every write there reads the
+  current state from the store (never the caller's copy) and holds its keys
+  through `exclusive()` until `onSnapshotsInSync` fires, since the local
+  snapshot lags the write by milliseconds and a second tap in between would
+  award or charge twice; writes return null when they did nothing.
+  Check-offs on another day are stamped on that day (`madeAt`).
+  `HISTORY_DAYS` bounds the task views, late carry-over, the writes and the
+  store's `taskStates` query. Two devices completing the same occurrence in
+  the same instant can still both award (the balance is an increment).
 - **Parental lock** (`core/lock.ts`): with a PIN set, only checking off tasks
   is open; wrap every other mutation in `asParent(() => ...)` or
   `await requireParent()`. Repeated wrong PINs pause the pad
@@ -144,7 +160,10 @@ generated from it: `node scripts/icons/render.mjs` after any brand change.
 
 - Preact 11: element attribute types are `import type { ButtonHTMLAttributes } from 'preact'`, not `JSX.HTMLAttributes`.
 - Firestore field paths cannot contain `*`; `lastDoneKey()` maps Up for Grabs to `any`.
-- Overlays (`Sheet`, `Modal`, `Popover`) portal to `document.body`.
+- Overlays (`Sheet`, `Modal`, `Popover`) portal to `document.body`. Their
+  scrims close through `useScrimClose`, which lets the second tap of the
+  double tap that opened them through; use it for any custom scrim. In
+  e2e tests, close by tapping away from the control that opened it.
 - The Google connection uses the Google Identity Services popup code flow
   (`redirect_uri` 'postmessage'), so only the page origin must be registered.
   Google returns a refresh token on the first consent only; `connectGoogle`
@@ -152,7 +171,7 @@ generated from it: `node scripts/icons/render.mjs` after any brand change.
   "Enable Popups" must be on for the consent window.
 - Sessions (`data/session.ts`): the household id is the ID token's `hid`
   claim. Reading claims refreshes an expired token, which fails offline, so
-  the last household is remembered per user (`manwar.household.v1`) and
+  the last household is remembered per user (`manwar.claims.v1`) and
   opened from it; with nothing remembered the screen waits for the network.
   Show Firebase errors with `errorMessage()` (`data/errors.ts`): the
   Functions SDK appends " [403]" and reports a failed request as
@@ -179,6 +198,18 @@ generated from it: `node scripts/icons/render.mjs` after any brand change.
   `logic.ts`, `plan.ts`, `ingredients.ts` (unit-tested); the ingredients
   modal merges into the default grocery list without duplicates;
   `MealCategoriesEditor` is mounted by Settings.
+  - "Already on the list" (`itemKey`) and recipe search ignore case,
+    accents and Arabic diacritics (`lib/text.ts` `fold`); an emoji-only
+    item is its own key. Ingredient lines lose pasted bullets and "1."
+    numbering (`stripMarker`) on save and on display.
+  - The `isDefaultGrocery` flag only ever passes to a grocery list (on
+    delete, or to a new grocery list when none has it); with none, the
+    next Add to grocery list makes a "Grocery List".
+  - `IngredientsHost` is mounted once in `app/tabs.tsx` `Overlays`, so
+    `openIngredients` works from any tab (the planned-meal toast).
+  - Editing one occurrence of a repeating meal goes through
+    `plan.editOccurrence`; moving it to another day shifts a weekly
+    rule's weekdays with it.
 - `features/home`, `features/settings`, `features/messages`, `features/timer`:
   a running timer holds off scheduled sleep (`sleepHeldUntil` in
   `core/display.ts`).

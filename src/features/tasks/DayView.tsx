@@ -16,18 +16,22 @@ export function DayView() {
   const day = selectedDay.value;
   const occ = day === today.value ? todayOccurrences.value : occurrencesFor(day);
   const cols = buildColumns(occ, profiles.value, taskFilter.value);
-  if (!cols.length)
-    return profiles.value.length ? (
-      <Empty emoji="👀">Every profile is hidden. Use Filter to show them.</Empty>
-    ) : (
-      <NoProfiles>Add the people in your family to give them routines and chores.</NoProfiles>
-    );
+  if (!cols.length) return <NoColumns />;
   return (
     <div class="pcols" data-count={cols.length}>
       {cols.map((c) => (
         <DayColumn key={c.id} col={c} day={day} />
       ))}
     </div>
+  );
+}
+
+/** No column to show: a new household with no profiles yet (with a button to Settings > Profiles), or every column filtered out. */
+export function NoColumns() {
+  return profiles.value.length ? (
+    <Empty emoji="👀">Every profile is hidden. Use Filter to show them.</Empty>
+  ) : (
+    <NoProfiles>Add your family in Settings, under Profiles. Each person gets a column here.</NoProfiles>
   );
 }
 

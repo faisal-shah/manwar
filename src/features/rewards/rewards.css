@@ -4,6 +4,10 @@
   height: 100%;
   min-height: 0;
 }
+/* Cards can scroll clear of the + button (whichever column is under it). */
+.rw-tab .pcol-body {
+  padding-bottom: 9rem;
+}
 .rw-col .star-pill {
   flex: none;
   padding: 0 1.6rem;

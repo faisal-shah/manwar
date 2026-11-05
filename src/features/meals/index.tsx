@@ -11,7 +11,6 @@ import { today } from '../../lib/clock';
 import { dayShort, formatLongDate, fromISODate } from '../../lib/date';
 import { Empty } from '../../ui/controls';
 import { Popover } from '../../ui/overlays';
-import { IngredientsHost } from './IngredientsModal';
 import { MealCategoriesEditor } from './MealCategoriesEditor';
 import { MealPopover } from './MealPopover';
 import { PlanMealSheet } from './PlanMealSheet';
@@ -25,6 +24,9 @@ const openPlan = (date: ISODate, category: MealCategoryId) =>
   void asParent(() => (planTarget.value = { date, category }), 'Enter the PIN to plan meals.');
 
 const SWIPE_PX = 110;
+
+/** Shorter titles as a cell fills up: two lines each for two meals, one line from three. */
+const density = (n: number) => (n > 2 ? ' crowded' : n === 2 ? ' pair' : '');
 
 /** Seven day columns by the visible meal categories; swipe sideways to change week. */
 function MealsBody() {
@@ -89,7 +91,7 @@ function MealsBody() {
               return (
                 <div
                   key={`${d}|${c.id}`}
-                  class={`mg-cell${entries.length ? ' planned' : ''}${selected ? ' selected' : ''}`}
+                  class={`mg-cell${entries.length ? ' planned' : ''}${density(entries.length)}${selected ? ' selected' : ''}`}
                   style={{ '--c': c.color }}
                   data-cell={`${d}|${c.id}`}
                   role={entries.length ? undefined : 'button'}
@@ -97,24 +99,28 @@ function MealsBody() {
                   tabIndex={entries.length ? undefined : 0}
                   onClick={() => openPlan(d, c.id)}
                 >
-                  {entries.map((e) => {
-                    const emoji = mealEmoji(e);
-                    return (
-                      <button
-                        type="button"
-                        class="mg-entry"
-                        key={e.id}
-                        onClick={(ev) => {
-                          ev.stopPropagation();
-                          popover.value = { entry: e, date: d, anchor: ev.currentTarget.getBoundingClientRect() };
-                        }}
-                      >
-                        {emoji && <span class="mg-emoji">{emoji}</span>}
-                        <span class="mg-title">{e.title}</span>
-                        {e.repeat && <RepeatIcon class="mg-repeat" size="1.8rem" aria-label="Repeats" />}
-                      </button>
-                    );
-                  })}
+                  {entries.length > 0 && (
+                    <div class="mg-list">
+                      {entries.map((e) => {
+                        const emoji = mealEmoji(e);
+                        return (
+                          <button
+                            type="button"
+                            class="mg-entry"
+                            key={e.id}
+                            onClick={(ev) => {
+                              ev.stopPropagation();
+                              popover.value = { entry: e, date: d, anchor: ev.currentTarget.getBoundingClientRect() };
+                            }}
+                          >
+                            {emoji && <span class="mg-emoji">{emoji}</span>}
+                            <span class="mg-title">{e.title}</span>
+                            {e.repeat && <RepeatIcon class="mg-repeat" size="1.8rem" aria-label="Repeats" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                   {entries.length > 0 && (
                     <button
                       type="button"
@@ -145,7 +151,6 @@ function MealsBody() {
         />
       )}
       {pop && <MealPopover entry={pop.entry} date={pop.date} anchor={pop.anchor} onClose={() => (popover.value = null)} />}
-      <IngredientsHost />
     </>
   );
 }

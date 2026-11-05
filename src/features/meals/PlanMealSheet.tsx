@@ -47,7 +47,8 @@ export function PlanMealSheet({
   onClose: () => void;
 }) {
   const editing = !!entry;
-  const [tab, setTab] = useState<'recipes' | 'entry'>(entry ? 'entry' : 'recipes');
+  // With no recipes yet, a typed entry is the only way to plan; start there.
+  const [tab, setTab] = useState<'recipes' | 'entry'>(entry || !recipes.value.length ? 'entry' : 'recipes');
   const [day, setDay] = useState(date);
   const [cat, setCat] = useState(category);
   const [repeat, setRepeat] = useState<Repeat | undefined>(entry?.repeat);
@@ -185,7 +186,11 @@ export function PlanMealSheet({
             {inCat.map(recipeRow)}
             {!inCat.length && (
               <p class="muted pick-empty">
-                {query.trim() ? 'No recipe matches.' : `No ${categoryById.value.get(cat)?.name.toLowerCase()} recipes yet.`}
+                {!recipes.value.length
+                  ? 'No recipes yet. Plan a new entry, and turn on Save to recipes to keep it.'
+                  : query.trim()
+                    ? 'No recipe matches.'
+                    : `No ${categoryById.value.get(cat)?.name.toLowerCase()} recipes yet.`}
               </p>
             )}
             {others.length > 0 && <h4 class="pick-head">Other recipes</h4>}

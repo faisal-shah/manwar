@@ -2,7 +2,7 @@ import { computed, effect, signal } from '@preact/signals';
 import { settings } from '../../data/store';
 import { addDays, minutesOfDay, startOfWeek } from '../../lib/date';
 import { now, today } from '../../lib/clock';
-import { partOfDay, type Section } from '../../tasks/engine';
+import { firstHistoryDay, partOfDay, type Section } from '../../tasks/engine';
 import { DEFAULT_FILTER, type TaskFilter } from './logic';
 
 /** Tasks tab view state: Day or Week, paging, the filter and section toggles. */
@@ -16,6 +16,8 @@ export const weekOffset = signal(0);
 export const weekOwner = signal<string | null>(null);
 
 export const selectedDay = computed(() => addDays(today.value, dayOffset.value));
+/** Paging stops at the first day of the task history. */
+export const firstDay = computed(() => firstHistoryDay(today.value));
 export const weekStart = computed(() => startOfWeek(addDays(today.value, weekOffset.value * 7), settings.value.weekStart));
 export const weekDays = computed(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart.value, i)));
 

@@ -123,8 +123,12 @@ export function CelebrationHost() {
     return () => clearTimeout(t);
   }, [c?.key]);
   if (!c) return null;
+  // A tap landing just as the rain starts is part of the completing tap, not a dismissal.
+  const dismiss = () => {
+    if (Date.now() - c.key >= 600) celebration.value = null;
+  };
   return (
-    <div class="fx-celebrate" role="alert" onClick={() => (celebration.value = null)} style={{ '--c': c.color }}>
+    <div class="fx-celebrate" role="alert" onClick={dismiss} style={{ '--c': c.color }}>
       {drops.map((d) => (
         <span
           class="fx-drop"

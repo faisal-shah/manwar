@@ -1,6 +1,7 @@
 import type { CalEvent, EventDraft } from '../../calendar/types';
 import type { HHMM, ISODate, Repeat } from '../../data/types';
 import { addDays, dateAt, diffDays, minutesToHHMM, toISODate } from '../../lib/date';
+import { plainText } from './text';
 
 /** Pure event-editor form logic (tests/unit/calendar-form.test.ts). */
 
@@ -18,7 +19,10 @@ export interface Form {
   /** 'default' (calendar's own reminders), 'none', or minutes before as a string. */
   reminder: string;
   location: string;
+  /** Notes as plain text (a Google description may be HTML). */
   notes: string;
+  /** The event's own description, written back as it was unless the notes are edited. */
+  description?: { raw: string; shown: string };
   countdown: boolean;
 }
 
@@ -61,7 +65,8 @@ export function formFromEvent(ev: CalEvent, profiles: string[], countdown: boole
     calendarId: ev.calendarId,
     reminder: ev.reminderMinutes === undefined ? 'default' : ev.reminderMinutes === null ? 'none' : String(ev.reminderMinutes),
     location: ev.location ?? '',
-    notes: ev.description ?? '',
+    notes: ev.description ? plainText(ev.description) : '',
+    description: ev.description ? { raw: ev.description, shown: plainText(ev.description) } : undefined,
     countdown,
   };
 }
@@ -83,7 +88,7 @@ export function draftFromForm(f: Form, keepRecurrence: boolean): EventDraft {
     repeat: f.repeat,
     keepRecurrence,
     location: f.location.trim() || undefined,
-    description: f.notes.trim() || undefined,
+    description: f.description && f.notes === f.description.shown ? f.description.raw : f.notes.trim() || undefined,
     reminderMinutes,
   };
   if (f.allDay)
@@ -95,6 +100,23 @@ export function draftFromForm(f: Form, keepRecurrence: boolean): EventDraft {
       lastDay: f.endDate,
     };
   return { ...base, start: dateAt(f.startDate, f.startTime), end: dateAt(f.endDate, f.endTime) };
+}
+
+/**
+ * Switch between all-day and timed. An all-day event read back has no real
+ * times (midnight to midnight), so turning it timed starts at 9 AM for an hour
+ * on its days instead of offering an empty or inverted range.
+ */
+export function setAllDay(f: Form, allDay: boolean): Form {
+  if (allDay || f.allDay === allDay || f.startTime !== '00:00' || f.endTime !== '00:00') return { ...f, allDay };
+  return { ...f, allDay, startTime: '09:00', endTime: '10:00' };
+}
+
+/** Same repeat rule (weekday order does not matter). */
+export function sameRepeat(a: Repeat | undefined, b: Repeat | undefined): boolean {
+  if (!a || !b) return a === b;
+  const days = (r: Repeat) => [...(r.weekdays ?? [])].sort().join(',');
+  return a.every === b.every && a.unit === b.unit && days(a) === days(b) && (a.until ?? '') === (b.until ?? '');
 }
 
 /** Move the start and keep the duration. */

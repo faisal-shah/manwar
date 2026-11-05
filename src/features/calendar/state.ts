@@ -130,8 +130,21 @@ export const dayPopup = signal<{ day: ISODate; anchor: DOMRect } | null>(null);
 export const countdownPopup = signal<DOMRect | null>(null);
 export const triageOpen = signal(false);
 
+/**
+ * When the editor last closed after saving. The + button sits right under
+ * the editor's Save button, so the second tap of a double tap on Save must
+ * not open a fresh editor.
+ */
+let savedAt = -Infinity;
+const REOPEN_GUARD_MS = 500;
+
+export function editorSaved(): void {
+  savedAt = performance.now();
+}
+
 /** Open the event editor (asks for the parent PIN first when the lock is on). */
 export function openEditor(req: EditorRequest = {}): void {
+  if (performance.now() - savedAt < REOPEN_GUARD_MS) return;
   void asParent(() => {
     detailReq.value = null;
     dayPopup.value = null;

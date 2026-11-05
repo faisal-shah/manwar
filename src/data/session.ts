@@ -178,7 +178,7 @@ export async function disconnect(): Promise<void> {
  * up would never open its household. So the last household opened is
  * remembered for its user and used when the claims cannot be refreshed.
  */
-const HOUSEHOLD_KEY = 'manwar.household.v1';
+const HOUSEHOLD_KEY = 'manwar.claims.v1';
 
 interface Household {
   uid: string;
@@ -263,7 +263,7 @@ function demoToken(): string {
 export function initSession(): void {
   if (!demoMode) void loadGis().catch(() => {});
   let seq = 0;
-  onAuthStateChanged(auth, (user) => void signedInAs(user, ++seq));
+  onAuthStateChanged(auth, (user) => signedInAs(user, ++seq));
 
   async function signedInAs(user: User | null, n: number): Promise<void> {
     if (!user) {

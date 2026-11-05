@@ -1,6 +1,7 @@
 import { batch as signalBatch, computed, signal, type Signal } from '@preact/signals';
 import {
   collection,
+  deleteField,
   deleteDoc,
   doc,
   increment,
@@ -22,6 +23,7 @@ import { db } from './firebase';
 import { addDays } from '../lib/date';
 import { currentTime } from '../lib/clock';
 import { toISODate } from '../lib/date';
+import { HISTORY_DAYS } from '../tasks/engine';
 import { DEFAULT_SETTINGS, mergeSettings } from './settings';
 import type {
   EventMeta,
@@ -148,8 +150,9 @@ export function openHousehold(id: string): void {
   for (const name of NAMES) {
     listen(name, (onError) => {
       let q: Query = colRef(name);
-      // Bounded history for the two collections that grow without limit (the window moves on each listen).
-      const since = toISODate(new Date(currentTime() - 62 * 86_400_000));
+      // Bounded history for the two collections that grow without limit. Task states reach as far
+      // back as the task views do, plus a margin; the window moves on each listen.
+      const since = toISODate(new Date(currentTime() - (HISTORY_DAYS + 2) * 86_400_000));
       if (name === 'taskStates') q = query(q, where('date', '>=', since));
       if (name === 'ledger') q = query(q, orderBy('at', 'desc'), limit(1000));
       return onSnapshot(
@@ -202,6 +205,24 @@ export function put<K extends CollectionName>(name: K, value: Collections[K]): P
 
 export function patch<K extends CollectionName>(name: K, id: string, partial: Partial<Collections[K]>): Promise<void> {
   return updateDoc(docRef(name, id), partial as object);
+}
+
+/**
+ * Save what an editor shows: create the document when it is new, otherwise
+ * update only `fields` (undefined deletes the field). Fields the editor does
+ * not show (a redemption, a check-off, archived) are never overwritten, even
+ * when a change made elsewhere has not reached this device yet.
+ */
+export function saveEdited<K extends CollectionName>(
+  name: K,
+  value: Collections[K],
+  isNew: boolean,
+  fields: readonly (keyof Collections[K] & string)[],
+): Promise<void> {
+  if (isNew) return put(name, value);
+  const partial: Record<string, unknown> = {};
+  for (const f of fields) partial[f] = value[f] === undefined ? deleteField() : value[f];
+  return updateDoc(docRef(name, value.id), partial);
 }
 
 export function remove(name: CollectionName, id: string): Promise<void> {

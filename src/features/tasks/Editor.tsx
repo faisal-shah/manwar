@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks';
-import { data, newId, put } from '../../data/store';
+import { data, newId, profiles, saveEdited } from '../../data/store';
 import type { PartOfDay, Task } from '../../data/types';
 import { currentTime, today } from '../../lib/clock';
 import { Button, Chips, Field, Segmented, Stepper, Toggle } from '../../ui/controls';
@@ -45,8 +45,23 @@ function TaskEditor({ task, onClose }: { task: Task | null; onClose: () => void 
     const problem = validateDraft(d);
     if (problem) return setError(problem);
     const order = task?.order ?? Math.max(0, ...data.tasks.value.map((t) => t.order)) + 1;
-    const out = taskFrom(d, task ?? { id: newId(), order, createdAt: currentTime() });
-    void put('tasks', out);
+    // The stored task, not the copy the editor opened with: a check-off meanwhile may have moved lastDone.
+    const base = (task && data.tasks.value.find((t) => t.id === task.id)) ?? task;
+    const out = taskFrom(d, base ?? { id: newId(), order, createdAt: currentTime() });
+    void saveEdited('tasks', out, !task, [
+      'kind',
+      'title',
+      'emoji',
+      'notes',
+      'assignees',
+      'upForGrabs',
+      'stars',
+      'date',
+      'time',
+      'repeat',
+      'repeatAfterDone',
+      'parts',
+    ]);
     toast(task ? `Saved "${out.title}"` : `Added "${out.title}"`);
     onClose();
   };
@@ -137,6 +152,7 @@ function TaskEditor({ task, onClose }: { task: Task | null; onClose: () => void 
             </div>
           )}
           {!(chore && d.upForGrabs) && <ProfilePicker value={d.assignees} onChange={(assignees) => set({ assignees })} />}
+          {profiles.value.length === 0 && <span class="muted">Add your family in Settings, under Profiles.</span>}
         </Field>
 
         <Field label="Stars">

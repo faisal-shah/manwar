@@ -126,6 +126,36 @@ describe('editOccurrence', () => {
     expect(datesOf(after, '2026-11-01', '2026-11-14')).toEqual(['06:Tacos', '13:Tacos']);
   });
 
+  // As the Plan meal sheet makes them: weekly with the weekday spelled out.
+  const fridays = entry({ id: 's', date: '2026-11-06', repeat: { every: 1, unit: 'week', weekdays: [5] } });
+
+  it('moves this and following to the new weekday', () => {
+    const after = apply([fridays], editOccurrence(fridays, '2026-11-13', 'following', { date: '2026-11-14' }, ids()));
+    expect(datesOf(after, '2026-11-01', '2026-11-30')).toEqual(['06:Pizza', '14:Pizza', '21:Pizza', '28:Pizza']);
+  });
+
+  it('moves every occurrence by the same number of days', () => {
+    const after = apply([fridays], editOccurrence(fridays, '2026-11-13', 'all', { date: '2026-11-14' }, ids()));
+    expect(datesOf(after, '2026-11-01', '2026-11-30')).toEqual(['07:Pizza', '14:Pizza', '21:Pizza', '28:Pizza']);
+    const monthly = entry({ id: 'm', date: '2026-10-15', repeat: { every: 1, unit: 'month' } });
+    const later = apply([monthly], editOccurrence(monthly, '2026-11-15', 'all', { date: '2026-11-17' }, ids()));
+    expect(datesOf(later, '2026-10-01', '2026-12-31')).toEqual(['17:Pizza', '17:Pizza', '17:Pizza']);
+  });
+
+  it('keeps a repeat chosen in the same edit as given', () => {
+    const weekdays = { every: 1, unit: 'week' as const, weekdays: [1 as const, 3 as const] };
+    const after = apply(
+      [fridays],
+      editOccurrence(fridays, '2026-11-13', 'following', { date: '2026-11-16', repeat: weekdays }, ids()),
+    );
+    expect(datesOf(after, '2026-11-01', '2026-11-21')).toEqual(['06:Pizza', '16:Pizza', '18:Pizza']);
+  });
+
+  it('turning the repeat off for every time leaves one meal on the day being edited', () => {
+    const after = apply([fridays], editOccurrence(fridays, '2026-11-20', 'all', { repeat: undefined }, ids()));
+    expect(datesOf(after, '2026-11-01', '2026-11-30')).toEqual(['20:Pizza']);
+  });
+
   it('respects until when continuing a series', () => {
     const short = entry({ id: 's', date: '2026-11-06', repeat: { every: 1, unit: 'week', weekdays: [5], until: '2026-11-13' } });
     expect(nextOccurrenceAfter(short, '2026-11-13')).toBeNull();

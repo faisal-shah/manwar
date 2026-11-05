@@ -6,6 +6,7 @@ import {
   itemKey,
   moveBy,
   nextDefaultGrocery,
+  placeMerge,
   reorder,
   topOrder,
 } from '../../src/features/lists/logic';
@@ -126,9 +127,9 @@ describe('default grocery list', () => {
     expect(defaultGroceryList([todo])).toBeNull();
   });
 
-  it('hands the flag to another grocery list, else any list', () => {
+  it('hands the flag to another grocery list, never to a to-do or other list', () => {
     expect(nextDefaultGrocery([todo, g1, g2], 'g1')?.id).toBe('g2');
-    expect(nextDefaultGrocery([todo, g1], 'g1')?.id).toBe('t');
+    expect(nextDefaultGrocery([todo, g1], 'g1')).toBeNull();
     expect(nextDefaultGrocery([g1], 'g1')).toBeNull();
   });
 });
@@ -142,5 +143,45 @@ describe('itemKey', () => {
     expect(itemKey('Garlic cloves, minced')).toBe(itemKey('garlic clove'));
     expect(itemKey('Glass')).toBe('glass');
     expect(itemKey('Milk')).not.toBe(itemKey('Oat milk'));
+  });
+
+  it('gives emoji-only and punctuation-only items their own key, not an empty one', () => {
+    expect(itemKey('🍎')).not.toBe(itemKey('🍌'));
+    expect(itemKey('🍎')).toBe(itemKey(' 🍎 '));
+    expect(itemKey('!!!')).not.toBe('');
+    expect(itemKey('🥚 Eggs')).toBe(itemKey('eggs'));
+  });
+
+  it('ignores accents and Arabic diacritics without splitting words', () => {
+    expect(itemKey('Jalapeño')).toBe(itemKey('jalapeno'));
+    expect(itemKey('Crème fraîche')).toBe(itemKey('creme fraiche'));
+    expect(itemKey('حَلِيب')).toBe(itemKey('حليب'));
+    expect(itemKey('حَلِيب')).not.toContain(' ');
+  });
+});
+
+describe('placeMerge', () => {
+  it('stacks new rows above the open unsectioned items with distinct orders, and reopens done ones atop their own section', () => {
+    const items = [
+      item('Pepper', { order: 0 }),
+      item('Salt', { order: 1 }),
+      item('Kale', { order: 4, sectionId: 'prod' }),
+      item('Oil', { order: 7, done: true, doneAt: 1 }),
+      item('Leek', { order: 9, done: true, doneAt: 1, sectionId: 'prod' }),
+    ];
+    const placed = placeMerge(list(), items, [
+      { name: 'Rice' },
+      { name: 'Oil', reopenId: 'oil' },
+      { name: 'Leek', reopenId: 'leek' },
+      { name: 'Beans' },
+      { name: 'Gone', reopenId: 'deleted-meanwhile' },
+    ]);
+    expect(placed.map((p) => [p.row.name, p.prior?.id ?? null, p.order])).toEqual([
+      ['Rice', null, -4],
+      ['Oil', 'oil', -3],
+      ['Leek', 'leek', 3],
+      ['Beans', null, -2],
+      ['Gone', null, -1],
+    ]);
   });
 });

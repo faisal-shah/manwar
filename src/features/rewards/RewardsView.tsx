@@ -5,9 +5,10 @@ import { data, profileById, profiles } from '../../data/store';
 import type { Profile } from '../../data/types';
 import { monthShort } from '../../lib/date';
 import { Button } from '../../ui/controls';
-import { NoProfiles } from '../../ui/NoProfiles';
+import { useScrimClose } from '../../ui/overlays';
 import { Avatar } from '../../ui/profile';
-import { editReward, redeem, redeemed, unredeem } from './actions';
+import { NoColumns } from '../tasks/DayView';
+import { editReward, redeem, redeemed, unredeem, type Redeemed } from './actions';
 import { formatStars, longDay, rewardsFor, type RewardView } from './logic';
 import { StarPill } from './StarPill';
 
@@ -15,7 +16,7 @@ export const hideRedeemed = signal(false);
 
 /** One column per profile: balance and the rewards they can redeem. */
 export function RewardsView() {
-  if (!profiles.value.length) return <NoProfiles>Add the people in your family to give them stars and rewards.</NoProfiles>;
+  if (!profiles.value.length) return <NoColumns />;
   return (
     <div class="pcols" data-count={profiles.value.length}>
       {profiles.value.map((p) => (
@@ -97,12 +98,16 @@ const BURST = Array.from({ length: 30 }, (_, i) => ({
 /** Centered dialog over a gold glow with a star burst: Done, or Undo to refund. */
 export function RedeemedHost() {
   const r = redeemed.value;
-  if (!r) return null;
+  return r ? <RedeemedDialog key={r.entry.id} r={r} /> : null;
+}
+
+function RedeemedDialog({ r }: { r: Redeemed }) {
   const p = profileById.value.get(r.profileId);
   const close = () => (redeemed.value = null);
+  const scrimClose = useScrimClose(close);
   return createPortal(
     <div class="rw-celebrate" style={{ '--c': p?.color ?? 'var(--accent)' }}>
-      <div class="scrim top" onClick={close} />
+      <div class="scrim top" onClick={scrimClose} />
       <div class="rw-glow" aria-hidden="true" />
       <div class="rw-burst" aria-hidden="true">
         {BURST.map((b) => (
@@ -115,7 +120,8 @@ export function RedeemedHost() {
         </span>
         <h2 class="serif">Great work! {r.reward.title} redeemed</h2>
         <p class="muted">
-          By {p?.name ?? 'someone'} for {r.reward.cost.toLocaleString()} stars on {longDay(r.at)}.
+          By {p?.name ?? 'someone'} for {(-r.entry.delta).toLocaleString()} {r.entry.delta === -1 ? 'star' : 'stars'} on{' '}
+          {longDay(r.entry.at)}.
         </p>
         <Button variant="primary" onClick={close}>
           Done

@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import type { CalEvent } from '../../src/calendar/types';
-import { draftFromForm, formFromEvent, formProblem, newForm, shiftStart, type Form } from '../../src/features/calendar/form';
+import {
+  draftFromForm,
+  formFromEvent,
+  formProblem,
+  newForm,
+  sameRepeat,
+  setAllDay,
+  shiftStart,
+  type Form,
+} from '../../src/features/calendar/form';
+import { plainText } from '../../src/features/calendar/text';
 
 const at = (s: string) => new Date(s).getTime();
 
@@ -63,5 +73,66 @@ describe('event editor form', () => {
       'default',
       true,
     ]);
+  });
+  it('gives an all-day event real times when it becomes timed', () => {
+    const ev: CalEvent = {
+      key: 'c::b',
+      calendarId: 'c',
+      id: 'b',
+      title: "Hashim's birthday",
+      allDay: true,
+      start: new Date('2026-11-16T00:00'),
+      end: new Date('2026-11-17T00:00'),
+      editable: true,
+    };
+    const f = setAllDay(formFromEvent(ev, ['hashim'], false), false);
+    expect([f.allDay, f.startDate, f.startTime, f.endDate, f.endTime]).toEqual([
+      false,
+      '2026-11-16',
+      '09:00',
+      '2026-11-16',
+      '10:00',
+    ]);
+    expect(formProblem(f)).toBeNull();
+    // A timed event keeps its times through a round trip.
+    const t = valid({ startTime: '14:00', endTime: '15:30' });
+    expect(setAllDay(setAllDay(t, true), false)).toEqual(t);
+  });
+  it('compares repeat rules regardless of weekday order', () => {
+    expect(sameRepeat({ every: 1, unit: 'week', weekdays: [4, 6] }, { every: 1, unit: 'week', weekdays: [6, 4] })).toBe(true);
+    expect(sameRepeat({ every: 1, unit: 'week', weekdays: [4] }, { every: 1, unit: 'week', weekdays: [4, 6] })).toBe(false);
+    expect(sameRepeat({ every: 1, unit: 'day' }, { every: 1, unit: 'day', until: '2026-12-31' })).toBe(false);
+    expect(sameRepeat(undefined, { every: 1, unit: 'day' })).toBe(false);
+    expect(sameRepeat(undefined, undefined)).toBe(true);
+  });
+});
+
+describe('event notes', () => {
+  const html =
+    '<b>Field trip</b><br>Bring:<ul><li>water</li><li>a hat</li></ul>Don&#39;t forget &quot;permission&quot; slips &amp; lunch&nbsp;money.<br>Write &amp;lt;3 on the card.';
+  it('shows Google HTML descriptions as plain text', () => {
+    expect(plainText(html)).toBe(
+      'Field trip\nBring:\n- water\n- a hat\nDon\'t forget "permission" slips & lunch money.\nWrite &lt;3 on the card.',
+    );
+    expect(plainText('Plain notes stay as they are')).toBe('Plain notes stay as they are');
+    expect(plainText('&#x1F382; party &bogus;')).toBe('🎂 party &bogus;');
+  });
+  const ev: CalEvent = {
+    key: 'c::t',
+    calendarId: 'c',
+    id: 't',
+    title: 'Field trip',
+    allDay: false,
+    start: new Date('2026-11-06T09:00'),
+    end: new Date('2026-11-06T15:00'),
+    description: html,
+    editable: true,
+  };
+  it('edits the plain text and keeps the original HTML when the notes are not changed', () => {
+    const f = formFromEvent(ev, ['asiyah'], false);
+    expect(f.notes).toBe(plainText(html));
+    expect(draftFromForm({ ...f, title: 'Field trip!' }, false).description).toBe(html);
+    expect(draftFromForm({ ...f, notes: 'Only water' }, false).description).toBe('Only water');
+    expect(draftFromForm({ ...f, notes: '  ' }, false).description).toBeUndefined();
   });
 });

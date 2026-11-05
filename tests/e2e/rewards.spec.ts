@@ -6,7 +6,7 @@ const run = `${Date.now().toString(36)}`;
 const PIN = '1234';
 
 /** Sets the parent PIN the way core/lock.ts stores it, straight into the Firestore emulator. */
-async function setPin(demo: string, pin: string) {
+async function setPin(demo: string, pin: string, relockMinutes = 2) {
   const salt = 'e2e-salt';
   const pinHash = createHash('sha256').update(`${salt}:${pin}`).digest('hex');
   const url =
@@ -19,7 +19,11 @@ async function setPin(demo: string, pin: string) {
       fields: {
         lock: {
           mapValue: {
-            fields: { salt: { stringValue: salt }, pinHash: { stringValue: pinHash }, relockMinutes: { integerValue: '2' } },
+            fields: {
+              salt: { stringValue: salt },
+              pinHash: { stringValue: pinHash },
+              relockMinutes: { integerValue: String(relockMinutes) },
+            },
           },
         },
       },
@@ -29,10 +33,10 @@ async function setPin(demo: string, pin: string) {
 }
 
 /** Opens a fresh demo household with a parent PIN, on the given tab. */
-async function open(page: Page, name: string, tab: 'Rewards' | 'Tasks') {
+async function open(page: Page, name: string, tab: 'Rewards' | 'Tasks', relockMinutes = 2) {
   const demo = `e2e-rewards-${run}-${name}`;
   // Set the PIN before the first load so the app never runs without it (no snapshot race).
-  await setPin(demo, PIN);
+  await setPin(demo, PIN, relockMinutes);
   await page.goto(`/?demo=${demo}&${NOW}`);
   await expect(page.locator('.shell')).toBeVisible({ timeout: 20_000 });
   await page.locator('.rail button', { hasText: tab }).click();
@@ -133,4 +137,29 @@ test('with a PIN set, kids check off tasks but adding needs the PIN', async ({ p
   await expect(pad).toBeVisible();
   await pad.getByRole('button', { name: 'Cancel' }).click();
   await expect(page.getByRole('dialog', { name: 'Add task' })).toHaveCount(0);
+});
+
+test('undoing a redemption from its dialog refunds only with the PIN', async ({ page }) => {
+  // Relock at once, as if the parent walked away with the dialog still up.
+  await open(page, 'unredeem', 'Rewards', 0);
+  await reward(page, 'asiyah', 'Ice cream trip')
+    .getByRole('button', { name: /Redeem/ })
+    .click();
+  await enterPin(page);
+  const dialog = page.getByRole('dialog', { name: 'Reward redeemed' });
+  await expect(dialog).toBeVisible();
+  await expect(stars(page, 'asiyah')).toHaveText('78');
+  await page.waitForTimeout(1200);
+
+  await dialog.getByRole('button', { name: 'Undo' }).click();
+  const pad = page.getByRole('dialog', { name: 'Parent PIN' });
+  await expect(pad).toBeVisible();
+  await pad.getByRole('button', { name: 'Cancel' }).click();
+  await expect(dialog).toBeVisible();
+  await expect(stars(page, 'asiyah')).toHaveText('78');
+
+  await dialog.getByRole('button', { name: 'Undo' }).click();
+  await enterPin(page);
+  await expect(dialog).toHaveCount(0);
+  await expect(stars(page, 'asiyah')).toHaveText('128');
 });

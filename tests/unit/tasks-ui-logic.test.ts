@@ -166,7 +166,24 @@ describe('weekRows', () => {
     const recent = task({ date: '2026-11-02' });
     const out = rows([old, recent], map());
     expect(statuses(out.find((x) => x.task.id === old.id)!)).toEqual(['-', '-', '-', 'open', '-', '-', '-']);
-    expect(statuses(out.find((x) => x.task.id === recent.id)!)).toEqual(['-', 'missed', '-', '-', '-', '-', '-']);
+    // Still in today's list as late: open (checked off as today's), not missed.
+    const r = out.find((x) => x.task.id === recent.id)!;
+    expect(statuses(r)).toEqual(['-', 'open', '-', '-', '-', '-', '-']);
+    expect(r.cells[1]!.late).toBe(true);
+    expect(out.find((x) => x.task.id === old.id)!.cells[3]!.late).toBe(true);
+  });
+  it('marks a superseded occurrence missed, not late', () => {
+    const daily = task({ date: '2026-10-01', repeat: { every: 1, unit: 'day' } });
+    const r = rows([daily], map())[0];
+    expect(statuses(r)).toEqual(['missed', 'missed', 'missed', 'open', 'upcoming', 'upcoming', 'upcoming']);
+    expect(r.cells.some((c) => c?.late)).toBe(false);
+  });
+  it('shows a chore due before the week on the day it was checked off', () => {
+    const old = task({ date: '2026-10-28' });
+    const doneMon = map(st(old, '2026-10-28', null, 'a', { at: noon('2026-11-02') }));
+    expect(statuses(rows([old], doneMon)[0])).toEqual(['-', 'done', '-', '-', '-', '-', '-']);
+    const doneToday = map(st(old, '2026-10-28', null, 'a', { at: noon(TODAY) }));
+    expect(statuses(rows([old], doneToday)[0])).toEqual(['-', '-', '-', 'done', '-', '-', '-']);
   });
   it('shows a late chore completed today as done on its due day only', () => {
     const recent = task({ date: '2026-11-02' });

@@ -11,7 +11,7 @@ import { plannedToast } from '../meals/PlanMealSheet';
 import { categoryById, planMeal, visibleCategories } from '../meals/state';
 import { CategoryBadge, CategoryPicker, DayPicker, RepeatRow } from '../meals/ui';
 import { deleteRecipe, recipeEditor } from './state';
-import { displayUrl, instructionSteps } from './text';
+import { displayUrl, ingredientRows, instructionSteps } from './text';
 
 /** "This recipe" or "This recipe and planned meals", as on Skylight. Resolves true when deleted. */
 export async function askDeleteRecipe(recipe: Recipe): Promise<boolean> {
@@ -36,6 +36,7 @@ export async function askDeleteRecipe(recipe: Recipe): Promise<boolean> {
 export function RecipeView({ recipe }: { recipe: Recipe }) {
   const cat = categoryById.value.get(recipe.category);
   const steps = instructionSteps(recipe.instructions);
+  const ingredients = ingredientRows(recipe.ingredients);
   const [planning, setPlanning] = useState(false);
   return (
     <article class="recipe-card scroll" style={cat ? { '--c': cat.color } : undefined} aria-label={recipe.name}>
@@ -76,18 +77,16 @@ export function RecipeView({ recipe }: { recipe: Recipe }) {
         ) : null}
         {recipe.sourceUrl && (
           <span class="rc-source">
-            <Link size="2.2rem" /> {displayUrl(recipe.sourceUrl)}
+            <Link size="2.2rem" /> <span>{displayUrl(recipe.sourceUrl)}</span>
           </span>
         )}
       </div>
-      <div class={`rc-cols${recipe.ingredients.length && steps.length ? '' : ' single'}`}>
-        {recipe.ingredients.length > 0 && (
+      <div class={`rc-cols${ingredients.length && steps.length ? '' : ' single'}`}>
+        {ingredients.length > 0 && (
           <section>
             <h3>Ingredients</h3>
             <ul class="rc-ingredients">
-              {recipe.ingredients.map((i) => (
-                <li>{i}</li>
-              ))}
+              {ingredients.map((r) => (r.heading ? <li class="rc-ing-head">{r.text}</li> : <li>{r.text}</li>))}
             </ul>
           </section>
         )}
@@ -104,7 +103,7 @@ export function RecipeView({ recipe }: { recipe: Recipe }) {
             </ol>
           </section>
         )}
-        {!recipe.ingredients.length && !steps.length && (
+        {!ingredients.length && !steps.length && (
           <p class="muted">No ingredients or instructions yet. Tap the pencil to add them.</p>
         )}
       </div>

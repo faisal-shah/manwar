@@ -68,12 +68,12 @@ test('a first-run household shows how to add people, and the button opens Profil
   await open(page, '&seed=none');
   await rail(page, 'Tasks').click();
   const prompt = page.locator('.no-profiles');
-  await expect(prompt).toContainText('Add the people in your family');
+  await expect(prompt).toContainText('Add your family in Settings, under Profiles.');
   await expect(page.getByText('Every profile is hidden')).toHaveCount(0);
   await page.getByRole('tab', { name: 'Week' }).click();
   await expect(prompt).toBeVisible();
   await rail(page, 'Rewards').click();
-  await expect(prompt).toContainText('stars and rewards');
+  await expect(prompt).toBeVisible();
   await rail(page, 'Home').click();
   await expect(page.locator('.home-tasks .no-profiles')).toBeVisible();
 
@@ -135,7 +135,7 @@ test('a tablet that boots offline with an expired sign-in still opens its househ
 test('with no household remembered, an offline boot waits and opens once the network is back', async ({ page }) => {
   await open(page);
   await expireSignIn(page);
-  await page.evaluate(() => localStorage.removeItem('manwar.household.v1'));
+  await page.evaluate(() => localStorage.removeItem('manwar.claims.v1'));
   await page.route(TOKEN_REFRESH, (r) => r.abort('internetdisconnected'));
   await page.reload();
   await expect(page.locator('.connect')).toContainText('Waiting for the network to open the household', {

@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks';
-import { data, newId, put } from '../../data/store';
+import { data, newId, saveEdited } from '../../data/store';
 import { EVERYONE, type Reward } from '../../data/types';
 import { currentTime } from '../../lib/clock';
 import { Button, Chips, Field, Toggle } from '../../ui/controls';
@@ -33,6 +33,8 @@ function RewardEditor({ reward, onClose }: { reward: Reward | null; onClose: () 
     if (who.length === 0) return setError('Choose who can redeem it.');
     const bad = validateCost(cost);
     if (bad) return setError(bad);
+    // The stored reward, not the copy the editor opened with: a redemption meanwhile is kept.
+    const base = (reward && data.rewards.value.find((r) => r.id === reward.id)) ?? reward;
     const out: Reward = {
       id: reward?.id ?? newId(),
       title: title.trim(),
@@ -40,12 +42,12 @@ function RewardEditor({ reward, onClose }: { reward: Reward | null; onClose: () 
       cost,
       profiles: who.includes(EVERYONE) ? [] : who,
       renews,
-      redeemedBy: reward?.redeemedBy ?? {},
+      redeemedBy: base?.redeemedBy ?? {},
       order: reward?.order ?? Math.max(0, ...data.rewards.value.map((r) => r.order)) + 1,
       createdAt: reward?.createdAt ?? currentTime(),
-      archived: reward?.archived,
+      archived: base?.archived,
     };
-    void put('rewards', out);
+    void saveEdited('rewards', out, !reward, ['title', 'emoji', 'cost', 'profiles', 'renews']);
     toast(reward ? `Saved "${out.title}"` : `Added "${out.title}"`);
     onClose();
   };

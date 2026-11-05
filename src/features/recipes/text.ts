@@ -1,4 +1,6 @@
 import type { Recipe } from '../../data/types';
+import { fold } from '../../lib/text';
+import { isHeading, stripMarker } from '../meals/ingredients';
 
 /**
  * Instructions as numbered steps for reading across the kitchen. Several
@@ -11,7 +13,7 @@ export function instructionSteps(text: string): string[] {
     .map((l) =>
       l
         .trim()
-        .replace(/^(?:step\s*)?\d+\s*[.):-]\s*/i, '')
+        .replace(/^(?:[-–—*•·◦▪]+\s*|(?:step\s*)?\d+\s*[.):-]\s*)/i, '')
         .trim(),
     )
     .filter((l) => l && !/^instructions:?$/i.test(l));
@@ -22,12 +24,21 @@ export function instructionSteps(text: string): string[] {
     .filter(Boolean);
 }
 
-/** Ingredients typed one per line, blank lines dropped. */
-export const ingredientLines = (text: string): string[] =>
-  text
-    .split('\n')
-    .map((l) => l.trim())
-    .filter(Boolean);
+/**
+ * Ingredient lines for display: markers dropped, "For the sauce:" lines as
+ * headings (without the colon), and a leading "Ingredients" heading dropped,
+ * since the column already says so.
+ */
+export function ingredientRows(lines: string[]): { text: string; heading: boolean }[] {
+  const rows = lines
+    .map(stripMarker)
+    .filter(Boolean)
+    .map((l) => (isHeading(l) ? { text: l.replace(/:$/, '').trim(), heading: true } : { text: l, heading: false }));
+  return rows[0]?.heading && /^ingredients$/i.test(rows[0].text) ? rows.slice(1) : rows;
+}
+
+/** Ingredients typed or pasted one per line: bullets and list numbers dropped, blank lines dropped. */
+export const ingredientLines = (text: string): string[] => text.split('\n').map(stripMarker).filter(Boolean);
 
 /** Validates an optional source URL typed into the recipe editor. Returns an error message or null. */
 export function sourceUrlError(value: string): string | null {
@@ -41,22 +52,28 @@ export function sourceUrlError(value: string): string | null {
   }
 }
 
-/** "example.com/recipes/biryani" for showing a source without the scheme. */
+/** "example.com/recipes/biryani" for showing a source without the scheme, the path readable ("كبسة", not "%D9%83..."). */
 export function displayUrl(url: string): string {
   try {
     const u = new URL(url);
-    return (u.host + u.pathname).replace(/\/$/, '');
+    let path = u.pathname;
+    try {
+      path = decodeURIComponent(path);
+    } catch {
+      // A malformed escape: show the path as stored.
+    }
+    return (u.host + path).replace(/\/$/, '');
   } catch {
     return url;
   }
 }
 
-/** Search: name first, then ingredient matches. Case-insensitive. */
+/** Search: name first, then ingredient matches. Ignores case and diacritics (Arabic harakat, accents). */
 export function searchRecipes(recipes: Recipe[], query: string): Recipe[] {
-  const q = query.trim().toLowerCase();
+  const q = fold(query.trim());
   const sorted = [...recipes].sort((a, b) => a.name.localeCompare(b.name));
   if (!q) return sorted;
-  const byName = sorted.filter((r) => r.name.toLowerCase().includes(q));
-  const byIngredient = sorted.filter((r) => !byName.includes(r) && r.ingredients.some((i) => i.toLowerCase().includes(q)));
+  const byName = sorted.filter((r) => fold(r.name).includes(q));
+  const byIngredient = sorted.filter((r) => !byName.includes(r) && r.ingredients.some((i) => fold(i).includes(q)));
   return [...byName, ...byIngredient];
 }

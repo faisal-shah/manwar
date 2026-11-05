@@ -6,6 +6,7 @@ import { describeRepeat } from '../../lib/repeat';
 import { IconButton } from '../../ui/controls';
 import { Popover, choose, toast } from '../../ui/overlays';
 import { openRecipe } from '../recipes/state';
+import { ingredientRows } from '../recipes/text';
 import { openIngredients } from './IngredientsModal';
 import { SCOPES } from './PlanMealSheet';
 import { categoryById, changeOccurrence, mealEmoji, planTarget, recipeOf } from './state';
@@ -106,7 +107,11 @@ export function MealPopover({
           {!entry.notes && recipe && recipe.ingredients.length > 0 && (
             <li>
               <AlignLeft size="2.4rem" />
-              <span class="mp-notes">{recipe.ingredients.join('\n')}</span>
+              <span class="mp-notes">
+                {ingredientRows(recipe.ingredients)
+                  .map((r) => r.text)
+                  .join('\n')}
+              </span>
             </li>
           )}
         </ul>

@@ -58,7 +58,7 @@ export function CalendarPage() {
         </Row>
         <ToggleRow
           label="Start on today"
-          hint={`Otherwise the schedule starts on ${dayLong(s.weekStart)}`}
+          hint={`Otherwise it starts on ${dayLong(s.weekStart)}, or later in the week so today stays in view`}
           {...flag('scheduleStartToday')}
         />
       </Group>

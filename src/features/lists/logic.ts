@@ -1,4 +1,5 @@
 import type { List, ListItem, ListKind, ListSection } from '../../data/types';
+import { fold } from '../../lib/text';
 
 /**
  * Pure list logic: grouping for display, ordering, reordering and the
@@ -82,6 +83,39 @@ export function reorder(
   return out;
 }
 
+export interface MergeItem {
+  name: string;
+  qty?: string;
+  /** A checked-off item that comes back instead of a new one. */
+  reopenId?: string;
+}
+
+/**
+ * Where each merged row goes: new rows at the top of the unsectioned group,
+ * checked-off ones (`prior`, when still on the list) back at the top of
+ * their own section, each group's rows in the given order above the items
+ * already open there, with distinct orders.
+ */
+export function placeMerge(
+  list: List,
+  items: ListItem[],
+  rows: MergeItem[],
+): { row: MergeItem; prior?: ListItem; order: number }[] {
+  const byId = new Map(items.map((i) => [i.id, i]));
+  const placed = rows.map((row) => {
+    const prior = row.reopenId ? byId.get(row.reopenId) : undefined;
+    return { row, prior, section: prior ? sectionOf(list, prior) : null };
+  });
+  const next = new Map<string | null, number>();
+  for (const p of placed) next.set(p.section, (next.get(p.section) ?? 0) + 1);
+  for (const [s, n] of next) next.set(s, topOrder(list, items, s) - n + 1);
+  return placed.map(({ row, prior, section }) => {
+    const order = next.get(section)!;
+    next.set(section, order + 1);
+    return prior ? { row, prior, order } : { row, order };
+  });
+}
+
 /** Move an item one place up (-1) or down (+1) within its section. Empty when already at that end. */
 export function moveBy(group: ListItem[], id: string, delta: -1 | 1, sectionId: string | null): OrderPatch[] {
   const idx = group.findIndex((i) => i.id === id);
@@ -96,10 +130,16 @@ export function defaultGroceryList(lists: List[]): List | null {
   return sorted.find((l) => l.isDefaultGrocery) ?? sorted.find((l) => l.kind === 'grocery') ?? null;
 }
 
-/** Which list becomes the default after `removedId` is deleted: the first remaining grocery list, else the first list. */
+/**
+ * Which list becomes the default after `removedId` is deleted: the first
+ * remaining grocery list, else none. Never a to-do or other list: the flag
+ * would then outrank any grocery list made later, and ingredients would keep
+ * landing on, say, the packing list. With none, the next "Add to grocery
+ * list" makes a Grocery List (state.ensureGroceryList).
+ */
 export function nextDefaultGrocery(lists: List[], removedId: string): List | null {
   const rest = [...lists].filter((l) => l.id !== removedId).sort((a, b) => a.order - b.order || a.createdAt - b.createdAt);
-  return rest.find((l) => l.kind === 'grocery') ?? rest[0] ?? null;
+  return rest.find((l) => l.kind === 'grocery') ?? null;
 }
 
 /** Fallback card colors when a list has none (Skylight: grocery green, to-do blue). */
@@ -116,18 +156,19 @@ function singular(w: string): string {
 }
 
 /**
- * Key for "is this already on the list": case-insensitive, ignores
- * parentheticals, text after a comma, punctuation and a plural last word
- * ("Onions" = "onion", "Basmati rice (aged)" = "basmati rice").
+ * Key for "is this already on the list": case- and accent-insensitive,
+ * ignores parentheticals, text after a comma, punctuation, emoji and a
+ * plural last word ("Onions" = "onion", "Basmati rice (aged)" = "basmati
+ * rice"). Text with no letters or digits ("🍎") is its own key.
  */
 export function itemKey(text: string): string {
-  const words = text
-    .toLowerCase()
+  const words = fold(text)
     .replace(/\([^)]*\)/g, ' ')
     .split(',')[0]
     .replace(/[^\p{L}\p{N}\s]/gu, ' ')
     .split(/\s+/)
     .filter(Boolean);
-  if (words.length) words[words.length - 1] = singular(words[words.length - 1]);
+  if (!words.length) return text.trim().replace(/\s+/g, ' ');
+  words[words.length - 1] = singular(words[words.length - 1]);
   return words.join(' ');
 }

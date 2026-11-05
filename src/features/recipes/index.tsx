@@ -6,7 +6,6 @@ import type { TabDef } from '../../app/tab';
 import { asParent } from '../../core/lock';
 import type { Recipe } from '../../data/types';
 import { Empty } from '../../ui/controls';
-import { IngredientsHost } from '../meals/IngredientsModal';
 import { categories, categoryById } from '../meals/state';
 import { CategoryBadge, CategoryPicker } from '../meals/ui';
 import { RecipeEditor } from './RecipeEditor';
@@ -83,7 +82,6 @@ function RecipesBody() {
         </div>
       )}
       {ed && <RecipeEditor recipe={ed.recipe} onClose={() => (recipeEditor.value = null)} />}
-      <IngredientsHost />
     </div>
   );
 }

@@ -1,9 +1,18 @@
 import { googleAccessToken } from '../data/session';
 import { addDays, diffDays, fromISODate, toISODate } from '../lib/date';
-import { endSeriesBefore, toRRule } from './rrule';
+import { endSeriesBefore, recurrenceCount, toRRule, withCount } from './rrule';
 import { eventKey, type AccessRole, type CalEvent, type CalendarInfo, type CalendarSource, type EventDraft } from './types';
 
 const API = 'https://www.googleapis.com/calendar/v3';
+
+class GoogleError extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+  ) {
+    super(message);
+  }
+}
 
 /** Google Calendar API boundary: every response is validated here. */
 async function call<T>(path: string, init: RequestInit & { query?: Record<string, string> } = {}): Promise<T> {
@@ -16,14 +25,24 @@ async function call<T>(path: string, init: RequestInit & { query?: Record<string
   });
   if (res.status === 204) return undefined as T;
   const body = await res.json().catch(() => null);
-  if (!res.ok) throw new Error(`Google Calendar ${res.status}: ${body?.error?.message ?? res.statusText}`);
+  if (!res.ok) throw new GoogleError(res.status, `Google Calendar ${res.status}: ${body?.error?.message ?? res.statusText}`);
   return body as T;
 }
 
+/** DELETE that treats an event already gone (deleted on a phone meanwhile) as done. */
+async function del(path: string): Promise<void> {
+  try {
+    await call(path, { method: 'DELETE' });
+  } catch (e) {
+    if (e instanceof GoogleError && (e.status === 404 || e.status === 410)) return;
+    throw e;
+  }
+}
+
 interface GTime {
-  date?: string;
-  dateTime?: string;
-  timeZone?: string;
+  date?: string | null;
+  dateTime?: string | null;
+  timeZone?: string | null;
 }
 interface GEvent {
   id: string;
@@ -78,8 +97,13 @@ function draftBody(d: EventDraft): Partial<GEvent> {
     summary: d.title,
     description: d.description ?? '',
     location: d.location ?? '',
-    start: d.allDay ? { date: d.firstDay ?? toISODate(d.start) } : { dateTime: d.start.toISOString(), timeZone: tz },
-    end: d.allDay ? { date: addDays(d.lastDay ?? toISODate(d.start), 1) } : { dateTime: d.end.toISOString(), timeZone: tz },
+    // PATCH merges nested objects: clear the other kind of time, or a timed <-> all-day change is rejected.
+    start: d.allDay
+      ? { date: d.firstDay ?? toISODate(d.start), dateTime: null, timeZone: null }
+      : { date: null, dateTime: d.start.toISOString(), timeZone: tz },
+    end: d.allDay
+      ? { date: addDays(d.lastDay ?? toISODate(d.start), 1), dateTime: null, timeZone: null }
+      : { date: null, dateTime: d.end.toISOString(), timeZone: tz },
     reminders:
       d.reminderMinutes === undefined
         ? { useDefault: true }
@@ -87,6 +111,23 @@ function draftBody(d: EventDraft): Partial<GEvent> {
   };
   if (!d.keepRecurrence) body.recurrence = d.repeat ? [toRRule(d.repeat, d.allDay)] : [];
   return body;
+}
+
+/** Occurrences of a series starting before `before`, cancelled ones included (COUNT counts them too). */
+async function instancesBefore(cal: string, seriesId: string, before: Date): Promise<number> {
+  let n = 0;
+  let pageToken: string | undefined;
+  do {
+    const r = await call<{ items?: unknown[]; nextPageToken?: string }>(
+      `/calendars/${cal}/events/${encodeURIComponent(seriesId)}/instances`,
+      {
+        query: { showDeleted: 'true', timeMax: before.toISOString(), maxResults: '2500', ...(pageToken ? { pageToken } : {}) },
+      },
+    );
+    n += r.items?.length ?? 0;
+    pageToken = r.nextPageToken;
+  } while (pageToken);
+  return n;
 }
 
 const roles = new Map<string, AccessRole>();
@@ -138,17 +179,45 @@ export const googleSource: CalendarSource = {
     return out;
   },
 
+  async nextOccurrence(calendarId, id, after) {
+    const cal = encodeURIComponent(calendarId);
+    const role = roles.get(calendarId) ?? 'reader';
+    let g: GEvent;
+    try {
+      g = await call<GEvent>(`/calendars/${cal}/events/${encodeURIComponent(id)}`);
+    } catch (e) {
+      if (e instanceof GoogleError && (e.status === 404 || e.status === 410)) return null;
+      throw e;
+    }
+    if (g.status === 'cancelled' || !g.start || !g.end) return null;
+    if (!g.recurrence?.length) {
+      const ev = toCalEvent(calendarId, g, role);
+      return ev.end > after ? ev : null;
+    }
+    const r = await call<{ items?: GEvent[] }>(`/calendars/${cal}/events/${encodeURIComponent(id)}/instances`, {
+      query: { timeMin: after.toISOString(), maxResults: '1' },
+    });
+    const next = r.items?.find((i) => i.status !== 'cancelled' && i.start && i.end);
+    return next ? toCalEvent(calendarId, next, role) : null;
+  },
+
   async seriesRecurrence(calendarId, seriesId) {
     const g = await call<GEvent>(`/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(seriesId)}`);
     return g.recurrence ?? [];
   },
 
-  async insert(calendarId, draft) {
-    const g = await call<GEvent>(`/calendars/${encodeURIComponent(calendarId)}/events`, {
-      method: 'POST',
-      body: JSON.stringify(draftBody(draft)),
-    });
-    return { id: g.id };
+  async insert(calendarId, id, draft) {
+    const cal = encodeURIComponent(calendarId);
+    try {
+      await call<GEvent>(`/calendars/${cal}/events`, { method: 'POST', body: JSON.stringify({ ...draftBody(draft), id }) });
+    } catch (e) {
+      // A retry after a lost response: the event exists already, so bring it up to date instead of adding it twice.
+      if (!(e instanceof GoogleError && e.status === 409)) throw e;
+      await call(`/calendars/${cal}/events/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify(draftBody(draft)),
+      });
+    }
   },
 
   async update(ev, draft, scope) {
@@ -161,14 +230,26 @@ export const googleSource: CalendarSource = {
     const master = await call<GEvent>(`/calendars/${cal}/events/${encodeURIComponent(ev.seriesId)}`);
     const masterStart = parseTime(master.start).at;
     if (scope === 'following' && toISODate(masterStart) < toISODate(ev.start)) {
-      // End the old series the day before this occurrence, start a new one here.
-      await call(`/calendars/${cal}/events/${encodeURIComponent(ev.seriesId)}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ recurrence: endSeriesBefore(master.recurrence ?? [], toISODate(ev.start), ev.allDay) }),
-      });
+      // Start a new series here, then end the old one the day before this occurrence.
+      const lines = master.recurrence ?? [];
       const body = draftBody({ ...draft, keepRecurrence: false });
-      if (draft.keepRecurrence) body.recurrence = master.recurrence;
+      if (draft.keepRecurrence) {
+        // A COUNT rule continues with the occurrences it has left, not a fresh COUNT.
+        const count = recurrenceCount(lines);
+        body.recurrence =
+          count === null ? lines : withCount(lines, Math.max(1, count - (await instancesBefore(cal, ev.seriesId, ev.start))));
+      }
       const created = await call<GEvent>(`/calendars/${cal}/events`, { method: 'POST', body: JSON.stringify(body) });
+      try {
+        await call(`/calendars/${cal}/events/${encodeURIComponent(ev.seriesId)}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ recurrence: endSeriesBefore(lines, toISODate(ev.start), ev.allDay) }),
+        });
+      } catch (e) {
+        // Without the old series ended, the new one would double every occurrence.
+        await del(`/calendars/${cal}/events/${encodeURIComponent(created.id)}`).catch(() => {});
+        throw e;
+      }
       return { newSeriesId: created.id };
     }
     // All occurrences: move the series start by however far this occurrence moved.
@@ -192,16 +273,16 @@ export const googleSource: CalendarSource = {
   async remove(ev, scope) {
     const cal = encodeURIComponent(ev.calendarId);
     if (!ev.seriesId || scope === 'this') {
-      await call(`/calendars/${cal}/events/${encodeURIComponent(ev.id)}`, { method: 'DELETE' });
+      await del(`/calendars/${cal}/events/${encodeURIComponent(ev.id)}`);
       return;
     }
     if (scope === 'all') {
-      await call(`/calendars/${cal}/events/${encodeURIComponent(ev.seriesId)}`, { method: 'DELETE' });
+      await del(`/calendars/${cal}/events/${encodeURIComponent(ev.seriesId)}`);
       return;
     }
     const master = await call<GEvent>(`/calendars/${cal}/events/${encodeURIComponent(ev.seriesId)}`);
     if (toISODate(parseTime(master.start).at) >= toISODate(ev.start)) {
-      await call(`/calendars/${cal}/events/${encodeURIComponent(ev.seriesId)}`, { method: 'DELETE' });
+      await del(`/calendars/${cal}/events/${encodeURIComponent(ev.seriesId)}`);
       return;
     }
     await call(`/calendars/${cal}/events/${encodeURIComponent(ev.seriesId)}`, {

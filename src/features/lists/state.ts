@@ -3,7 +3,16 @@ import { deleteField } from 'firebase/firestore';
 import { batch, data, newId, patch, put } from '../../data/store';
 import type { List, ListItem, ListKind, ListSection } from '../../data/types';
 import { currentTime } from '../../lib/clock';
-import { defaultGroceryList, itemKey, nextDefaultGrocery, sectionOf, topOrder, type OrderPatch } from './logic';
+import {
+  defaultGroceryList,
+  itemKey,
+  nextDefaultGrocery,
+  placeMerge,
+  sectionOf,
+  topOrder,
+  type MergeItem,
+  type OrderPatch,
+} from './logic';
 
 /** Reactive views of lists and their items, and every list write. Checking items off is open to everyone; callers wrap the rest in asParent(). */
 
@@ -49,14 +58,26 @@ export function toggleCollapsed(key: string): void {
 
 /* ---------- Items ---------- */
 
+const settleTimers = new Map<string, number>();
+
+function unsettle(id: string): void {
+  clearTimeout(settleTimers.get(id));
+  settleTimers.delete(id);
+  if (!settling.value.has(id)) return;
+  const next = new Set(settling.value);
+  next.delete(id);
+  settling.value = next;
+}
+
+/** Check an item off (it settles in place, then sinks to Done) or back on (at once, even mid-settle). */
 export function setDone(item: ListItem, done: boolean): void {
+  unsettle(item.id);
   if (done) {
     settling.value = new Set([...settling.value, item.id]);
-    setTimeout(() => {
-      const next = new Set(settling.value);
-      next.delete(item.id);
-      settling.value = next;
-    }, SETTLE_MS);
+    settleTimers.set(
+      item.id,
+      window.setTimeout(() => unsettle(item.id), SETTLE_MS),
+    );
   }
   void patch('listItems', item.id, done ? { done: true, doneAt: currentTime() } : { done: false });
 }
@@ -66,7 +87,8 @@ export type AddResult = { kind: 'added' | 'reopened' | 'already'; item: ListItem
 /**
  * Add an item at the top of a section. On a grocery list, an item already
  * open there is not duplicated, and a checked-off one comes back instead
- * ("add again").
+ * ("add again"): in its own section from the top field, in the section
+ * typed into otherwise.
  */
 export function addItem(list: List, text: string, sectionId: string | null, qty?: string): AddResult {
   const items = itemsByList.value.get(list.id) ?? [];
@@ -76,8 +98,14 @@ export function addItem(list: List, text: string, sectionId: string | null, qty?
     if (open) return { kind: 'already', item: open };
     const done = items.filter((i) => i.done && itemKey(i.text) === key).sort((a, b) => (b.doneAt ?? 0) - (a.doneAt ?? 0))[0];
     if (done) {
-      const order = topOrder(list, items, sectionOf(list, done));
-      void patch('listItems', done.id, { done: false, order, ...(qty ? { qty } : {}) });
+      const own = sectionOf(list, done);
+      const section = sectionId ?? own;
+      void patch('listItems', done.id, {
+        done: false,
+        order: topOrder(list, items, section),
+        ...(section === own ? {} : { sectionId: (section ?? deleteField()) as string }),
+        ...(qty ? { qty } : {}),
+      });
       return { kind: 'reopened', item: done };
     }
   }
@@ -95,14 +123,18 @@ export function addItem(list: List, text: string, sectionId: string | null, qty?
   return { kind: 'added', item };
 }
 
-/** Replace text, quantity and section; empty quantity or no section removes the field. */
-export function updateItem(item: ListItem, text: string, qty: string, sectionId: string | null, order?: number): void {
-  void put('listItems', {
-    ...item,
+/**
+ * Set text, quantity and section (empty quantity or no section removes the
+ * field), and order when given. Only these fields are written, so a check-off
+ * or reorder made meanwhile (here or on another device) is kept.
+ */
+export function updateItem(id: string, text: string, qty: string, sectionId: string | null, order?: number): void {
+  const q = qty.trim();
+  void patch('listItems', id, {
     text,
-    qty: qty.trim() || undefined,
-    sectionId: sectionId ?? undefined,
-    order: order ?? item.order,
+    qty: (q || deleteField()) as string,
+    sectionId: (sectionId ?? deleteField()) as string,
+    ...(order === undefined ? {} : { order }),
   });
 }
 
@@ -119,44 +151,25 @@ export function applyOrder(patches: OrderPatch[]): void {
   void b.commit();
 }
 
-export interface MergeItem {
-  name: string;
-  qty?: string;
-  /** A checked-off item that comes back instead of a new one. */
-  reopenId?: string;
-}
-
-/**
- * Put several items on a list in one batch: new ones at the top of the
- * unsectioned group in the given order, checked-off ones reopened in their
- * own section. Returns an undo that restores the list as it was.
- */
+/** Put several items on a list in one batch (see logic.placeMerge). Returns an undo that restores the list as it was. */
 export function mergeItems(list: List, rows: MergeItem[]): () => void {
-  const items = itemsByList.value.get(list.id) ?? [];
-  const byId = new Map(items.map((i) => [i.id, i]));
   const b = batch();
   const created: string[] = [];
   const reopened: ListItem[] = [];
-  let order = topOrder(list, items, null) - rows.filter((r) => !r.reopenId).length + 1;
   const now = currentTime();
-  for (const r of rows) {
-    const prior = r.reopenId ? byId.get(r.reopenId) : undefined;
+  for (const { row, prior, order } of placeMerge(list, itemsByList.value.get(list.id) ?? [], rows)) {
     if (prior) {
       reopened.push(prior);
-      b.patch('listItems', prior.id, {
-        done: false,
-        order: topOrder(list, items, sectionOf(list, prior)),
-        ...(r.qty ? { qty: r.qty } : {}),
-      });
+      b.patch('listItems', prior.id, { done: false, order, ...(row.qty ? { qty: row.qty } : {}) });
       continue;
     }
     const item: ListItem = {
       id: newId(),
       listId: list.id,
-      text: r.name,
-      qty: r.qty,
+      text: row.name,
+      qty: row.qty,
       done: false,
-      order: order++,
+      order,
       createdAt: now,
     };
     created.push(item.id);
@@ -190,7 +203,12 @@ export interface ListDraft {
   isDefaultGrocery: boolean;
 }
 
-/** Create or update a list. Making it the default grocery list clears the flag elsewhere; removed sections release their items. */
+/**
+ * Create or update a list. Making it the default grocery list clears the
+ * flag elsewhere; a new grocery list takes it when no grocery list has it
+ * (a new to-do or other list only when asked); removed sections release
+ * their items.
+ */
 export function saveList(draft: ListDraft, existing?: List): List {
   const all = lists.value;
   const b = batch();
@@ -200,7 +218,7 @@ export function saveList(draft: ListDraft, existing?: List): List {
         id: newId(),
         ...draft,
         emoji: draft.emoji || undefined,
-        isDefaultGrocery: draft.isDefaultGrocery || !defaultGroceryList(all) || undefined,
+        isDefaultGrocery: draft.isDefaultGrocery || (draft.kind === 'grocery' && !defaultGroceryList(all)) || undefined,
         order: all.length ? Math.max(...all.map((l) => l.order)) + 1 : 0,
         createdAt: currentTime(),
       };
@@ -223,7 +241,7 @@ export function addSection(list: List, name: string): ListSection {
   return section;
 }
 
-/** Delete a list and its items; if it was the default grocery list, the next grocery list (or any list) takes over. */
+/** Delete a list and its items; if it was the default grocery list, the next grocery list (if any) takes over. */
 export function deleteList(list: List): void {
   const b = batch().remove('lists', list.id);
   for (const it of itemsByList.value.get(list.id) ?? []) b.remove('listItems', it.id);

@@ -119,8 +119,9 @@ function MonthWeek({ days, items, month }: { days: ISODate[]; items: Map<ISODate
       {lay.singles.map((s) => {
         const it = singleById.get(s.id)!;
         return (
-          <div key={s.id} class="month-item" style={{ gridColumn: String(s.col + 1), gridRow: String(s.line + 2) }}>
-            {'meal' in it ? <MealPill item={it.meal} /> : <EventPill ev={it.ev} />}
+          // An overnight event is a single on both of its days, so the key needs the column.
+          <div key={`${s.id}@${s.col}`} class="month-item" style={{ gridColumn: String(s.col + 1), gridRow: String(s.line + 2) }}>
+            {'meal' in it ? <MealPill item={it.meal} /> : <EventPill ev={it.ev} day={days[s.col]} />}
           </div>
         );
       })}
