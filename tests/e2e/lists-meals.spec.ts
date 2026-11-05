@@ -347,8 +347,12 @@ test('deleting the grocery list never sends ingredients to a to-do list', async 
   await page.getByRole('button', { name: 'Grocery List menu' }).click();
   await page.getByRole('button', { name: 'Delete list' }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Delete' }).click();
-  await page.locator('.fab').click();
   const editor = page.getByRole('dialog', { name: 'New list' });
+  // A to-do list made first must not become the target either.
+  await page.locator('.fab').click();
+  await editor.getByPlaceholder('Grocery List').fill('Chores');
+  await editor.getByRole('button', { name: 'Add list' }).click();
+  await page.locator('.fab').click();
   await editor.getByPlaceholder('Grocery List').fill('Groceries');
   await editor.getByRole('tab', { name: 'Grocery' }).click();
   await editor.getByRole('button', { name: 'Add list' }).click();

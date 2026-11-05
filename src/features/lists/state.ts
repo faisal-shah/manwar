@@ -203,7 +203,12 @@ export interface ListDraft {
   isDefaultGrocery: boolean;
 }
 
-/** Create or update a list. Making it the default grocery list clears the flag elsewhere; removed sections release their items. */
+/**
+ * Create or update a list. Making it the default grocery list clears the
+ * flag elsewhere; a new grocery list takes it when no grocery list has it
+ * (a new to-do or other list only when asked); removed sections release
+ * their items.
+ */
 export function saveList(draft: ListDraft, existing?: List): List {
   const all = lists.value;
   const b = batch();
@@ -213,7 +218,7 @@ export function saveList(draft: ListDraft, existing?: List): List {
         id: newId(),
         ...draft,
         emoji: draft.emoji || undefined,
-        isDefaultGrocery: draft.isDefaultGrocery || !defaultGroceryList(all) || undefined,
+        isDefaultGrocery: draft.isDefaultGrocery || (draft.kind === 'grocery' && !defaultGroceryList(all)) || undefined,
         order: all.length ? Math.max(...all.map((l) => l.order)) + 1 : 0,
         createdAt: currentTime(),
       };
