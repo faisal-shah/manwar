@@ -241,7 +241,8 @@ flowchart LR
   the wall opens does not, as it may be older than the Sleep now.
 - **Activity** (`core/activity.ts`): the one source of "someone is using the
   wall" (pointer, key and input events; the on-screen keyboard sends no
-  pointer events). Idle return, relock, sleep and the update check read it.
+  pointer events). Idle return, relock, sleep, the update check and a
+  phone's last-seen stamp read it.
 - **Shell**: `app/tabs.tsx` lists the tabs; each feature exports a `TabDef`
   (`app/tab.ts`) from `src/features/<tab>/index.tsx` with `Body`, optional
   top-bar `Controls`, `onAdd` (the + button) and `title`.
@@ -281,9 +282,15 @@ sequenceDiagram
   claims `hid`, `account`, `device`. `firestore.rules` count it a member
   only while `devices/{device}` exists (one extra read per request, for
   phones only); devices are written only by the Functions, except a phone
-  stamping its own `lastSeenAt`. `googleAccessToken` refuses a removed
+  stamping its own `lastSeenAt` (`watchDevice` in `data/session.ts`: on
+  opening, on being shown again and on a touch, at most hourly, as a phone
+  page stays open for days). `googleAccessToken` refuses a removed
   phone too. `session.pairedDevice()` is the device id on a paired phone;
-  `core/lock.ts` turns the lock off there.
+  `core/lock.ts` turns the lock off there. A phone removed while offline
+  never hears it from its device watch; once its token is refused, Auth
+  signs it out by itself, and a phone's sign-out this page did not ask for
+  (`leave()`: disconnect, unpair, a refused sign-in) shows the removed
+  message too.
 - **Shell** (`phone/PhoneApp.tsx`): pairing screen until signed in, then a
   header, the status line (household not syncing, calendar trouble) and a
   bottom tab bar. Tabs are `PhonePage`s (`phone/nav.ts`) listed in
@@ -384,10 +391,12 @@ sequenceDiagram
   through `PlanMealSheet` on `planTarget`, a meal's `MealPopover`, which
   has no Open recipe on a phone), Note to the wall (`phone/notes/`: from
   whom, remembered per phone, read aloud, the notes the wall shows or
-  holds, Dismiss; the draft survives Back), Wall timer (`phone/timer/`:
-  presets, any minutes, the countdown, Stop or Done, through the server,
-  so an offline phone says it could not reach the wall; a timer replaced
-  elsewhere is a new view) and Wall screen (`phone/wallscreen/`: Sleep now,
+  holds, Dismiss; the draft survives Back, and a reload in sessionStorage,
+  as the update check may reload an idle phone), Wall timer
+  (`phone/timer/`: presets, any minutes, the countdown, Stop or Done,
+  through the server, so an offline phone says it could not reach the
+  wall; a timer replaced elsewhere is a new view) and Wall screen
+  (`phone/wallscreen/`: Sleep now,
   Wake up, what was last asked and by whom). What the wall's screen is
   doing is a guess (`wallAsleepGuess`, by the wall's own rule in
   `core/sleep.ts` from the last command, the timer and the sleep window; a

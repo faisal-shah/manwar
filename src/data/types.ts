@@ -204,7 +204,7 @@ export interface Device {
   name: string;
   kind: 'phone';
   createdAt: number;
-  /** When the phone last opened the household; it stamps this itself, at most hourly. */
+  /** When the phone was last used (opened, shown again, touched); it stamps this itself, at most hourly. */
   lastSeenAt?: number;
 }
 

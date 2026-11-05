@@ -108,6 +108,26 @@ test('a note posted on the phone pops up on the wall; dismissed on either side, 
   expect([...w.errors, ...p.errors]).toEqual([]);
 });
 
+test('a half-written note survives a reload (an update applied while the phone sat idle)', async ({ browser }) => {
+  const hh = name('draft');
+  await wall(browser, hh);
+  const p = await phone(browser, hh);
+  await more(p.page, 'Note to the wall');
+  await p.page.getByLabel('Note', { exact: true }).fill('Pick up the dry cleaning before');
+  await p.page.reload();
+  await expect(p.page.locator('.ph-nav')).toBeVisible({ timeout: 30_000 });
+  await more(p.page, 'Note to the wall');
+  await expect(p.page.getByLabel('Note', { exact: true })).toHaveValue('Pick up the dry cleaning before');
+  // Posted, it is gone for good: a reload brings back an empty field.
+  await p.page.getByRole('button', { name: 'Post to the wall' }).click();
+  await expect(p.page.getByLabel('Note', { exact: true })).toHaveValue('');
+  await p.page.reload();
+  await expect(p.page.locator('.ph-nav')).toBeVisible({ timeout: 30_000 });
+  await more(p.page, 'Note to the wall');
+  await expect(p.page.getByLabel('Note', { exact: true })).toHaveValue('');
+  expect(p.errors).toEqual([]);
+});
+
 test('a note posted while the wall sleeps waits; the phone says so and can wake it', async ({ browser }) => {
   const hh = name('asleep');
   const w = await wall(browser, hh);
