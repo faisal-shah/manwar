@@ -1,6 +1,7 @@
 import { batch as signalBatch, computed, signal, type Signal } from '@preact/signals';
 import {
   collection,
+  deleteField,
   deleteDoc,
   doc,
   increment,
@@ -150,6 +151,24 @@ export function put<K extends CollectionName>(name: K, value: Collections[K]): P
 
 export function patch<K extends CollectionName>(name: K, id: string, partial: Partial<Collections[K]>): Promise<void> {
   return updateDoc(docRef(name, id), partial as object);
+}
+
+/**
+ * Save what an editor shows: create the document when it is new, otherwise
+ * update only `fields` (undefined deletes the field). Fields the editor does
+ * not show (a redemption, a check-off, archived) are never overwritten, even
+ * when a change made elsewhere has not reached this device yet.
+ */
+export function saveEdited<K extends CollectionName>(
+  name: K,
+  value: Collections[K],
+  isNew: boolean,
+  fields: readonly (keyof Collections[K] & string)[],
+): Promise<void> {
+  if (isNew) return put(name, value);
+  const partial: Record<string, unknown> = {};
+  for (const f of fields) partial[f] = value[f] === undefined ? deleteField() : value[f];
+  return updateDoc(docRef(name, value.id), partial);
 }
 
 export function remove(name: CollectionName, id: string): Promise<void> {

@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks';
-import { data, newId, profiles, put } from '../../data/store';
+import { data, newId, profiles, saveEdited } from '../../data/store';
 import type { PartOfDay, Task } from '../../data/types';
 import { currentTime, today } from '../../lib/clock';
 import { Button, Chips, Field, Segmented, Stepper, Toggle } from '../../ui/controls';
@@ -48,7 +48,20 @@ function TaskEditor({ task, onClose }: { task: Task | null; onClose: () => void 
     // The stored task, not the copy the editor opened with: a check-off meanwhile may have moved lastDone.
     const base = (task && data.tasks.value.find((t) => t.id === task.id)) ?? task;
     const out = taskFrom(d, base ?? { id: newId(), order, createdAt: currentTime() });
-    void put('tasks', out);
+    void saveEdited('tasks', out, !task, [
+      'kind',
+      'title',
+      'emoji',
+      'notes',
+      'assignees',
+      'upForGrabs',
+      'stars',
+      'date',
+      'time',
+      'repeat',
+      'repeatAfterDone',
+      'parts',
+    ]);
     toast(task ? `Saved "${out.title}"` : `Added "${out.title}"`);
     onClose();
   };

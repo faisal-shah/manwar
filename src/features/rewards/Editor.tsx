@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks';
-import { data, newId, put } from '../../data/store';
+import { data, newId, saveEdited } from '../../data/store';
 import { EVERYONE, type Reward } from '../../data/types';
 import { currentTime } from '../../lib/clock';
 import { Button, Chips, Field, Toggle } from '../../ui/controls';
@@ -47,7 +47,7 @@ function RewardEditor({ reward, onClose }: { reward: Reward | null; onClose: () 
       createdAt: reward?.createdAt ?? currentTime(),
       archived: base?.archived,
     };
-    void put('rewards', out);
+    void saveEdited('rewards', out, !reward, ['title', 'emoji', 'cost', 'profiles', 'renews']);
     toast(reward ? `Saved "${out.title}"` : `Added "${out.title}"`);
     onClose();
   };
