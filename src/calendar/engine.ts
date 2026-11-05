@@ -25,9 +25,25 @@ export const sync = signal<{ loading: boolean; lastSync: number | null; error: s
   error: null,
 });
 
-/** Loaded window [from, to) as ISO dates. Views call ensureRange to widen it. */
-let loadedFrom: ISODate = addDays(today.value, -42);
-let loadedTo: ISODate = addMonths(today.value, 4);
+/**
+ * The fetched window [from, to): six weeks back and four months ahead of
+ * today, widened to the days the latest view asked for (ensureRange). It
+ * follows today, so a wall left running for months does not keep fetching
+ * and caching an ever longer past.
+ */
+let wanted: { from: ISODate; to: ISODate } | null = null;
+
+function fetchWindow(): { from: ISODate; to: ISODate } {
+  const t = today.value;
+  let from = addDays(t, -42);
+  let to = addMonths(t, 4);
+  if (wanted && wanted.from < from) from = addDays(wanted.from, -14);
+  if (wanted && wanted.to >= to) to = addDays(wanted.to, 30);
+  return { from, to };
+}
+
+/** The window of the last successful fetch. */
+let loaded = fetchWindow();
 
 const SNAPSHOT_KEY = demoMode ? 'manwar.demoEvents.v1' : 'manwar.events.v1';
 
@@ -44,8 +60,8 @@ function saveSnapshot() {
     const s: Snapshot = {
       calendars: calendars.value,
       events: events.value.map((e) => ({ ...e, start: e.start.getTime(), end: e.end.getTime() })),
-      from: loadedFrom,
-      to: loadedTo,
+      from: loaded.from,
+      to: loaded.to,
       at: Date.now(),
     };
     localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(s));
@@ -69,42 +85,55 @@ function loadSnapshot() {
 
 const visibleCalendars = () => calendars.value.filter((c) => !settings.value.hiddenCalendars.includes(c.id));
 
-let inflight: Promise<void> | null = null;
+const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
-/** Re-fetch every shown calendar for the loaded window. */
+async function fetchAll(): Promise<void> {
+  sync.value = { ...sync.value, loading: true };
+  try {
+    calendars.value = await source.listCalendars();
+    const w = fetchWindow();
+    const shown = visibleCalendars();
+    const results = await Promise.allSettled(shown.map((c) => source.listEvents(c.id, dateAt(w.from), dateAt(w.to))));
+    // A calendar that fails keeps the events it had, so one bad calendar neither blanks nor freezes the wall.
+    const failed = shown.filter((_, i) => results[i].status === 'rejected');
+    const kept = events.value.filter((e) => failed.some((c) => c.id === e.calendarId));
+    const fresh = results.flatMap((r) => (r.status === 'fulfilled' ? r.value : []));
+    events.value = [...kept, ...fresh].sort((a, b) => a.start.getTime() - b.start.getTime());
+    const firstError = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
+    if (!failed.length) loaded = w;
+    sync.value = firstError
+      ? { loading: false, lastSync: sync.value.lastSync, error: `${failed[0].name}: ${message(firstError.reason)}` }
+      : { loading: false, lastSync: Date.now(), error: null };
+    saveSnapshot();
+  } catch (e) {
+    sync.value = { ...sync.value, loading: false, error: message(e) };
+  }
+}
+
+let running: Promise<void> | null = null;
+let queued: Promise<void> | null = null;
+
+/**
+ * Re-fetch every shown calendar. A call made while a fetch is running gets
+ * one more fetch after it (shared by every such call), so what it awaits
+ * includes any change made before the call: a saved event, a wider window.
+ */
 export function refresh(): Promise<void> {
-  if (inflight) return inflight;
-  inflight = (async () => {
-    sync.value = { ...sync.value, loading: true };
-    try {
-      calendars.value = await source.listCalendars();
-      const timeMin = dateAt(loadedFrom);
-      const timeMax = dateAt(loadedTo);
-      const lists = await Promise.all(visibleCalendars().map((c) => source.listEvents(c.id, timeMin, timeMax)));
-      events.value = lists.flat().sort((a, b) => a.start.getTime() - b.start.getTime());
-      sync.value = { loading: false, lastSync: Date.now(), error: null };
-      saveSnapshot();
-    } catch (e) {
-      sync.value = { ...sync.value, loading: false, error: e instanceof Error ? e.message : String(e) };
-    } finally {
-      inflight = null;
-    }
-  })();
-  return inflight;
+  if (!running) {
+    running = fetchAll().finally(() => (running = null));
+    return running;
+  }
+  queued ??= running.then(() => {
+    queued = null;
+    return refresh();
+  });
+  return queued;
 }
 
 /** Make sure [from, to] is loaded (views call this when paging). */
 export function ensureRange(from: ISODate, to: ISODate): void {
-  let grew = false;
-  if (from < loadedFrom) {
-    loadedFrom = addDays(from, -14);
-    grew = true;
-  }
-  if (to >= loadedTo) {
-    loadedTo = addDays(to, 30);
-    grew = true;
-  }
-  if (grew) void refresh();
+  wanted = { from, to };
+  if (from < loaded.from || to >= loaded.to) void refresh();
 }
 
 let started = false;
