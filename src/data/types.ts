@@ -229,7 +229,7 @@ export interface EventMeta {
 export const EVERYONE = '*';
 /**
  * Event profiles meaning "no one": an occurrence whose people were taken
- * away (their profile deleted, or cleared in the editor) waits in triage
+ * away (their profile deleted) waits in triage
  * instead of falling back to its series' people. Never a profile id, so
  * the views skip it like a deleted profile.
  */

@@ -1,7 +1,7 @@
 import { batch as signalBatch, computed, effect, signal } from '@preact/signals';
 import { demoMode } from '../config';
 import { data, householdId, patch, profileById, put, remove as removeDoc, settings, upsert } from '../data/store';
-import { EVERYONE, NOBODY, type EventMeta, type ISODate } from '../data/types';
+import { EVERYONE, type EventMeta, type ISODate } from '../data/types';
 import { addDays, addMonths, dateAt, diffDays, toISODate } from '../lib/date';
 import { currentTime, today } from '../lib/clock';
 import { fakeSource } from './fake';
@@ -619,10 +619,10 @@ export async function updateEvent(
       updatedAt: currentTime(),
     });
   } else if (ev.seriesId && scope === 'this') {
-    // The occurrence keeps only what differs from its series; no one, where the series has people, is NOBODY.
+    // The occurrence keeps only what differs from its series.
     const series = metaDocs(ev).series;
     putOwn(ev, {
-      profiles: sameIds(profileIds, series?.profiles ?? []) ? [] : profileIds.length ? profileIds : [NOBODY],
+      profiles: sameIds(profileIds, series?.profiles ?? []) ? [] : profileIds,
       countdown: countdown === !!series?.countdown ? undefined : countdown,
     });
   } else {

@@ -247,18 +247,6 @@ describe('triage queue', () => {
     expect(engine.triageScope(a)).toBe('series');
   });
 
-  it('keeps an occurrence cleared in the editor with no one, not its series’ people', async () => {
-    const a = swim(3);
-    engine.events.value = [a];
-    source.update = async () => ({});
-    source.listCalendars = async () => [CAL];
-    source.listEvents = async () => [a];
-    store.data.eventMeta.value = [meta('swim', ['asiyah'])];
-    await engine.updateEvent(a, { title: a.title, allDay: false, start: a.start, end: a.end, keepRecurrence: true }, 'this', []);
-    expect(engine.profilesOf(a)).toBeNull();
-    expect(metaDoc(a.id)?.profiles).toEqual([NOBODY]);
-  });
-
   it('lists each unassigned series once, by its next occurrence', () => {
     const [a, b] = [swim(1), swim(8)];
     const one = ev('dentist', day(2, '16:30'), day(2, '17:30'));
