@@ -2,7 +2,8 @@ import { demoMode } from '../config';
 import { metaKey } from '../calendar/engine';
 import { currentTime } from '../lib/clock';
 import { addDays, toISODate } from '../lib/date';
-import { batch, data, newId, saveSettings } from './store';
+import { getDocsFromServer, limit, query } from 'firebase/firestore';
+import { batch, colRef, data, newId, saveSettings } from './store';
 import {
   EVERYONE,
   type List,
@@ -15,6 +16,9 @@ import {
   type Task,
 } from './types';
 
+/** `?seed=none` gives a demo household a real household's first run (the empty state, for tests). */
+const demoFamily = demoMode && new URLSearchParams(location.search).get('seed') !== 'none';
+
 /**
  * First-run data. A real household gets only the default Grocery List; the
  * demo household gets a family that looks like the one in
@@ -22,10 +26,27 @@ import {
  */
 export async function seedIfEmpty(): Promise<void> {
   if (data.profiles.value.length || data.lists.value.length) return;
-  if (demoMode) return seedDemo();
+  if (!(await emptyOnServer())) return;
+  if (demoFamily) return seedDemo();
+  // A fixed id: two tablets on their first run write the same list, not two.
   const b = batch();
-  b.put('lists', grocery(newId(), []));
+  b.put('lists', grocery('grocery', []));
   await b.commit();
+}
+
+/**
+ * The local cache can be empty while the household is not (an offline start
+ * with a cold cache); only the server can say this is a first run. Offline,
+ * the seed waits for a later start.
+ */
+async function emptyOnServer(): Promise<boolean> {
+  try {
+    const one = (name: 'profiles' | 'lists') => getDocsFromServer(query(colRef(name), limit(1)));
+    const [p, l] = await Promise.all([one('profiles'), one('lists')]);
+    return p.empty && l.empty;
+  } catch {
+    return false;
+  }
 }
 
 function grocery(id: string, sections: List['sections']): List {

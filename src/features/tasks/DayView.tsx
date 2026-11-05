@@ -4,6 +4,7 @@ import { today } from '../../lib/clock';
 import { progress } from '../../tasks/engine';
 import { occurrencesFor, todayOccurrences } from '../../tasks/state';
 import { Empty } from '../../ui/controls';
+import { NoProfiles } from '../../ui/NoProfiles';
 import { Avatar } from '../../ui/profile';
 import { StarPill } from '../rewards/StarPill';
 import { SECTION_META, buildColumns, defaultExpanded, isAllDone, sectionProgress, sectionsOf, type Column as Col } from './logic';
@@ -15,7 +16,12 @@ export function DayView() {
   const day = selectedDay.value;
   const occ = day === today.value ? todayOccurrences.value : occurrencesFor(day);
   const cols = buildColumns(occ, profiles.value, taskFilter.value);
-  if (!cols.length) return <Empty emoji="👀">Every profile is hidden. Use Filter to show them.</Empty>;
+  if (!cols.length)
+    return profiles.value.length ? (
+      <Empty emoji="👀">Every profile is hidden. Use Filter to show them.</Empty>
+    ) : (
+      <NoProfiles>Add the people in your family to give them routines and chores.</NoProfiles>
+    );
   return (
     <div class="pcols" data-count={cols.length}>
       {cols.map((c) => (

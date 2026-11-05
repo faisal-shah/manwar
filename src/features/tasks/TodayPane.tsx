@@ -3,6 +3,8 @@ import { today } from '../../lib/clock';
 import { todayOccurrences } from '../../tasks/state';
 import { ColumnHead } from './DayView';
 import { buildColumns } from './logic';
+import { Empty } from '../../ui/controls';
+import { NoProfiles } from '../../ui/NoProfiles';
 import { TaskCard, UFG_COLOR } from './TaskCard';
 import { TasksOverlays } from './overlays';
 import { taskFilter } from './view';
@@ -18,6 +20,17 @@ import './tasks.css';
 export function TodayTasksPane() {
   const day = today.value;
   const cols = buildColumns(todayOccurrences.value, profiles.value, taskFilter.value);
+  if (!cols.length)
+    return (
+      <div class="tp">
+        {profiles.value.length ? (
+          <Empty emoji="👀">Every profile is hidden. Use Filter on the Tasks tab to show them.</Empty>
+        ) : (
+          <NoProfiles>Add the people in your family to give them routines and chores.</NoProfiles>
+        )}
+        <TasksOverlays />
+      </div>
+    );
   return (
     <div class="tp">
       <div class="tp-cards" data-count={cols.length}>

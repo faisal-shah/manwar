@@ -5,6 +5,7 @@ import { data, profileById, profiles } from '../../data/store';
 import type { Profile } from '../../data/types';
 import { monthShort } from '../../lib/date';
 import { Button } from '../../ui/controls';
+import { NoProfiles } from '../../ui/NoProfiles';
 import { Avatar } from '../../ui/profile';
 import { editReward, redeem, redeemed, unredeem } from './actions';
 import { formatStars, longDay, rewardsFor, type RewardView } from './logic';
@@ -14,6 +15,7 @@ export const hideRedeemed = signal(false);
 
 /** One column per profile: balance and the rewards they can redeem. */
 export function RewardsView() {
+  if (!profiles.value.length) return <NoProfiles>Add the people in your family to give them stars and rewards.</NoProfiles>;
   return (
     <div class="pcols" data-count={profiles.value.length}>
       {profiles.value.map((p) => (

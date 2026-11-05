@@ -6,6 +6,7 @@ import { today } from '../../lib/clock';
 import { dayShort, fromISODate } from '../../lib/date';
 import { occurrencesFor, todayOccurrences } from '../../tasks/state';
 import { Empty } from '../../ui/controls';
+import { NoProfiles } from '../../ui/NoProfiles';
 import { Avatar } from '../../ui/profile';
 import { StarPill } from '../rewards/StarPill';
 import { detailsFor, tapCheck } from './actions';
@@ -23,7 +24,12 @@ export function WeekView() {
     ...(hasUfg && f.upForGrabs ? [UP_FOR_GRABS] : []),
     ...profiles.value.filter((p) => !f.hidden.includes(p.id)).map((p) => p.id),
   ];
-  if (!owners.length) return <Empty emoji="👀">Every profile is hidden. Use Filter to show them.</Empty>;
+  if (!owners.length)
+    return profiles.value.length ? (
+      <Empty emoji="👀">Every profile is hidden. Use Filter to show them.</Empty>
+    ) : (
+      <NoProfiles>Add the people in your family to give them routines and chores.</NoProfiles>
+    );
   const owner =
     weekOwner.value && owners.includes(weekOwner.value)
       ? weekOwner.value

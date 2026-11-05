@@ -24,6 +24,29 @@ async function openSettings(page: Page, section: string) {
   await page.locator('.set-menu button', { hasText: new RegExp(`^${section}$`) }).click();
 }
 
+test('a first-run household shows how to add people, and the button opens Profiles', async ({ page }) => {
+  await open(page, '&seed=none');
+  await rail(page, 'Tasks').click();
+  const prompt = page.locator('.no-profiles');
+  await expect(prompt).toContainText('Add the people in your family');
+  await expect(page.getByText('Every profile is hidden')).toHaveCount(0);
+  await page.getByRole('tab', { name: 'Week' }).click();
+  await expect(prompt).toBeVisible();
+  await rail(page, 'Rewards').click();
+  await expect(prompt).toContainText('stars and rewards');
+  await rail(page, 'Home').click();
+  await expect(page.locator('.home-tasks .no-profiles')).toBeVisible();
+
+  await page.locator('.home-tasks').getByRole('button', { name: 'Add people' }).click();
+  await expect(page.locator('.set-menu button.on')).toHaveText('Profiles');
+  await page.getByRole('button', { name: 'Add a profile' }).click();
+  await page.getByRole('textbox', { name: 'Name' }).fill('Zaid');
+  await page.getByRole('button', { name: 'Create profile' }).click();
+  await page.getByRole('button', { name: 'Close' }).click();
+  await expect(page.locator('.home-tasks .no-profiles')).toHaveCount(0);
+  await expect(page.locator('.home-tasks .tp-card', { hasText: 'Zaid' })).toBeVisible();
+});
+
 test('a tablet that boots offline with an expired sign-in still opens its household', async ({ page }) => {
   await open(page);
   // Expire the stored ID token, then cut the token refresh (the Wi-Fi is not up yet).
