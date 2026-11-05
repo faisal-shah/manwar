@@ -54,6 +54,15 @@ describe('event editor form', () => {
     const a = shiftStart(valid({ allDay: true, endDate: '2026-11-08' }), '2026-11-10', '09:00');
     expect([a.startDate, a.endDate]).toEqual(['2026-11-10', '2026-11-12']);
   });
+  it('keeps the clock times of a night shift moved off the night the clocks go back', () => {
+    // 10 PM Oct 31 to 6 AM Nov 1 lasts nine hours (1 AM comes twice) but reads eight on the clock.
+    const shift = valid({ startDate: '2026-10-31', startTime: '22:00', endDate: '2026-11-01', endTime: '06:00' });
+    const moved = shiftStart(shift, '2026-11-07', '22:00');
+    expect([moved.endDate, moved.endTime]).toEqual(['2026-11-08', '06:00']);
+    // And onto it.
+    const back = shiftStart(moved, '2026-10-31', '22:00');
+    expect([back.endDate, back.endTime]).toEqual(['2026-11-01', '06:00']);
+  });
   it('reads an all-day multi-day event back as its first and last day', () => {
     const ev: CalEvent = {
       key: 'c::g',

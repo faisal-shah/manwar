@@ -129,6 +129,9 @@ export function sameRepeat(a: Repeat | undefined, b: Repeat | undefined): boolea
   return a.every === b.every && a.unit === b.unit && days(a) === days(b) && (a.until ?? '') === (b.until ?? '');
 }
 
+/** Start to end on the clock, in minutes. */
+const clockMinutes = (f: Form) => diffDays(f.startDate, f.endDate) * 1440 + hhmmToMinutes(f.endTime) - hhmmToMinutes(f.startTime);
+
 /**
  * Set the end time. An event under a day long stays under a day: the end is
  * the first time it reads after the start, on the start day or the next (so
@@ -136,8 +139,7 @@ export function sameRepeat(a: Repeat | undefined, b: Repeat | undefined): boolea
  * brings it back). A longer event the parent set up keeps its end day.
  */
 export function setEndTime(f: Form, endTime: HHMM): Form {
-  const span = diffDays(f.startDate, f.endDate) * 1440 + hhmmToMinutes(f.endTime) - hhmmToMinutes(f.startTime);
-  if (span > 1440) return { ...f, endTime };
+  if (clockMinutes(f) > 1440) return { ...f, endTime };
   const endDate = hhmmToMinutes(endTime) > hhmmToMinutes(f.startTime) ? f.startDate : addDays(f.startDate, 1);
   return { ...f, endTime, endDate };
 }
@@ -148,7 +150,7 @@ export function shiftStart(f: Form, startDate: ISODate, startTime: HHMM): Form {
     const len = diffDays(f.startDate, f.endDate);
     return { ...f, startDate, startTime, endDate: addDays(startDate, Math.max(0, len)) };
   }
-  const dur = Math.max(5, (dateAt(f.endDate, f.endTime).getTime() - dateAt(f.startDate, f.startTime).getTime()) / 60_000);
-  const end = new Date(dateAt(startDate, startTime).getTime() + dur * 60_000);
-  return { ...f, startDate, startTime, endDate: toISODate(end), endTime: hhmm(end) };
+  // On the clock, so a night shift moved off (or onto) the night clocks change keeps its end time.
+  const end = hhmmToMinutes(startTime) + Math.max(5, clockMinutes(f));
+  return { ...f, startDate, startTime, endDate: addDays(startDate, Math.floor(end / 1440)), endTime: minutesToHHMM(end % 1440) };
 }
