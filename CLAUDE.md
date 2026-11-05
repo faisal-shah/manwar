@@ -144,7 +144,7 @@ so `1rem` = 10 design px. Use rem for every size. Tokens are CSS variables in
 - `?seed=none` (with `?demo=<new name>`) seeds a demo household the way a
   real one starts: no people, only the Grocery List. Seeding runs only after
   a server read confirms the household is empty (an offline start with a
-  cold cache must not seed; it asks again every 20 seconds until the server
+  cold cache must not seed; it asks again every 3 seconds until the server
   answers), and the real seed uses the fixed list id `grocery` so two
   tablets on their first run do not make two lists.
 - Screenshots: `node tests/visual/shoot.mjs out.png "now=2026-11-04T11:44" [steps.json]`
