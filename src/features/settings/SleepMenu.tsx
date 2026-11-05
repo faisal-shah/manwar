@@ -2,6 +2,7 @@ import { useState } from 'preact/hooks';
 import { Moon } from 'lucide-preact';
 import { sleepNow } from '../../core/display';
 import { asParent } from '../../core/lock';
+import { changedFields, windowChange } from '../../data/settings';
 import { saveSettings, settings } from '../../data/store';
 import type { HHMM } from '../../data/types';
 import { today } from '../../lib/clock';
@@ -12,13 +13,15 @@ import { ToggleRow, WindowRow, emptyWindow } from './parts';
 
 /** The rail's Sleep button: the nightly schedule (a parent change) and "Sleep now" (anyone). */
 export function SleepMenu({ onClose }: { onClose: () => void }) {
-  const saved = settings.value.sleep;
-  const [draft, setDraft] = useState(saved);
-  const dirty = draft.enabled !== saved.enabled || draft.from !== saved.from || draft.to !== saved.to;
+  // Save writes what was changed here since the menu opened, so another tablet's change to the rest stays.
+  const [opened] = useState(settings.value.sleep);
+  const [draft, setDraft] = useState(opened);
+  const edits = changedFields(opened, draft);
+  const dirty = Object.keys(edits).length > 0;
   const fmt = (t: HHMM) => formatTime(dateAt(today.value, t), settings.value.timeFormat);
   const save = () =>
     asParent(() => {
-      void saveSettings({ sleep: draft });
+      void saveSettings(windowChange('sleep', edits));
       onClose();
     }, 'Enter the PIN to change the sleep schedule.');
   return (

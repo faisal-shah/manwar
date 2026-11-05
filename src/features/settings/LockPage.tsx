@@ -1,6 +1,7 @@
 import { useState } from 'preact/hooks';
 import { ArrowLeft, ChevronRight, Lock, LockOpen } from 'lucide-preact';
 import { asParent, lockEnabled, lockNow, setPin } from '../../core/lock';
+import { relockChange } from '../../data/settings';
 import { settings } from '../../data/store';
 import { Button, Stepper } from '../../ui/controls';
 import { confirm, toast } from '../../ui/overlays';
@@ -50,12 +51,7 @@ export function LockPage({ onClose }: { onClose: () => void }) {
               onClick={() => void asParent(() => setChoosing(true), REASON)}
             />
             <Row label="Lock again after" hint="Minutes without a touch, once the PIN was entered">
-              <Stepper
-                value={lock.relockMinutes}
-                min={1}
-                max={10}
-                onChange={(relockMinutes) => void change({ lock: { ...settings.value.lock, relockMinutes } })}
-              />
+              <Stepper value={lock.relockMinutes} min={1} max={10} onChange={(m) => void change(relockChange(m))} />
             </Row>
             <NavRow label={<span class="set-error">Remove PIN</span>} onClick={() => void removePin()} />
           </Group>
