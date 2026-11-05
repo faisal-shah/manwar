@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { PAIR_ALPHABET, PAIR_CODE_LENGTH, codeFromBytes, deviceName, deviceUid, isDeviceId, normalizeCode } from './pairing.js';
+import {
+  PAIR_ALPHABET,
+  PAIR_CODE_LENGTH,
+  codeFromBytes,
+  deviceName,
+  deviceUid,
+  isDeviceId,
+  normalizeCode,
+  rateLimiter,
+} from './pairing.js';
 
 describe('pairing codes', () => {
   it('draws eight characters from the alphabet, skipping bytes past the last whole round', () => {
@@ -47,5 +56,26 @@ describe('devices', () => {
     expect(isDeviceId('../../private/google0')).toBe(false);
     expect(isDeviceId('short')).toBe(false);
     expect(deviceUid('g123', 'abcdefghij0123456789')).toBe('g123.phone.abcdefghij0123456789');
+  });
+});
+
+describe('rate limiter', () => {
+  it('lets a burst through, then one call per refill interval', () => {
+    const take = rateLimiter(30, 3);
+    const t0 = 1_000_000;
+    expect([take(t0), take(t0), take(t0), take(t0)]).toEqual([true, true, true, false]);
+    // 30 a minute: one more every 2 seconds.
+    expect(take(t0 + 1_000)).toBe(false);
+    expect(take(t0 + 2_100)).toBe(true);
+    expect(take(t0 + 2_200)).toBe(false);
+  });
+
+  it('refills to the burst and no further after a quiet spell', () => {
+    const take = rateLimiter(60, 2);
+    const t0 = 5_000_000;
+    take(t0);
+    take(t0);
+    const later = t0 + 10 * 60_000;
+    expect([take(later), take(later), take(later)]).toEqual([true, true, false]);
   });
 });

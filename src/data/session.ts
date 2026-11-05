@@ -240,6 +240,15 @@ export async function makePairingCode(): Promise<{ code: string; expiresAt: numb
   }
 }
 
+/** Put the wall's pairing code away (Done, or the page left): it can no longer pair a phone. */
+export async function cancelPairingCode(): Promise<void> {
+  try {
+    await call<void, unknown>('cancelPairing')();
+  } catch (e) {
+    throw new Error(errorMessage(e));
+  }
+}
+
 /** Remove a paired phone (the wall): it is signed out and refused from now on. */
 export async function removePhone(deviceId: string): Promise<void> {
   try {

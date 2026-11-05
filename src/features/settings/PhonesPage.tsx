@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { renderSVG } from 'uqr';
-import { asParent } from '../../core/lock';
+import { asParent, requireParent } from '../../core/lock';
 import { demoMode } from '../../config';
-import { makePairingCode, removePhone } from '../../data/session';
+import { cancelPairingCode, makePairingCode, removePhone } from '../../data/session';
 import { data } from '../../data/store';
 import type { Device } from '../../data/types';
 import { nowMs } from '../../lib/clock';
@@ -33,19 +33,31 @@ export function PhonesPage() {
   const [pairing, setPairing] = useState<{ code: string; expiresAt: number; known: Set<string> } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const add = () =>
-    asParent(async () => {
-      setBusy(true);
-      setError(null);
-      try {
-        const p = await makePairingCode();
-        setPairing({ ...p, known: new Set(data.devices.peek().map((d) => d.id)) });
-      } catch (e) {
-        setError((e as Error).message);
-      } finally {
-        setBusy(false);
-      }
-    }, 'Enter the PIN to pair a phone.');
+  // A phone paired here never asks for the PIN: ask for it each time, even while the wall is unlocked.
+  const add = async () => {
+    if (!(await requireParent('Enter the PIN to pair a phone.', { fresh: true }))) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const p = await makePairingCode();
+      setPairing({ ...p, known: new Set(data.devices.peek().map((d) => d.id)) });
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  // A code put away (Done, or Settings left while it shows) can no longer pair a phone.
+  const shown = useRef(pairing);
+  shown.current = pairing;
+  const putAway = () => {
+    if (shown.current && shown.current.expiresAt > Date.now()) void cancelPairingCode().catch(() => {});
+  };
+  useEffect(() => putAway, []);
+  const done = () => {
+    putAway();
+    setPairing(null);
+  };
   // The phone that used the code shows up in the list: the code is spent, so put it away.
   const joined = pairing ? devices.find((d) => !pairing.known.has(d.id)) : undefined;
   useEffect(() => {
@@ -61,7 +73,7 @@ export function PhonesPage() {
         the timer here. It never asks for the PIN.
       </p>
       {pairing ? (
-        <PairingCode code={pairing.code} expiresAt={pairing.expiresAt} onNew={add} onDone={() => setPairing(null)} />
+        <PairingCode code={pairing.code} expiresAt={pairing.expiresAt} onNew={add} onDone={done} />
       ) : (
         <div class="pair-add">
           <Button variant="primary" disabled={busy} onClick={add}>

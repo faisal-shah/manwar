@@ -178,6 +178,8 @@ describe('calendar sync across a change of account', () => {
 
   it('remembers a calendar that never loaded as never loaded, after a reload', async () => {
     const at = Date.now() - 3_600_000;
+    store.householdId.value = null;
+    await settle();
     // School failed in every fetch before the reload; ours last answered an hour ago.
     storage.set(
       'manwar.events.v1',
@@ -191,8 +193,6 @@ describe('calendar sync across a change of account', () => {
         syncedAt: { 'ours@gmail.com': at },
       }),
     );
-    store.householdId.value = null;
-    await settle();
     source.listCalendars = async () => {
       throw new Error('Failed to fetch');
     };
@@ -202,6 +202,20 @@ describe('calendar sync across a change of account', () => {
       { name: 'ours@gmail.com', at },
       { name: 'school@group.calendar.google.com', at: null },
     ]);
+  });
+
+  it('drops the snapshot when the household signs out (disconnected, or a phone removed)', async () => {
+    source.listCalendars = async () => [cal('ours@gmail.com')];
+    source.listEvents = async () => [ev('ours@gmail.com', 'e1')];
+    await engine.refresh();
+    expect(storage.has('manwar.events.v1')).toBe(true);
+    store.householdId.value = null;
+    await settle();
+    expect(storage.has('manwar.events.v1')).toBe(false);
+    // Signed in again for the tests after this one.
+    store.householdId.value = 'gOurs';
+    await settle();
+    await engine.refresh();
   });
 
   it('keeps a snapshot that fits: without notes when they are too big, none rather than an old one', async () => {

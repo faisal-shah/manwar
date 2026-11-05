@@ -1,5 +1,6 @@
 import { computed, signal } from '@preact/signals';
 import { pinChange } from '../data/settings';
+import { isPhone } from '../app/layout';
 import { pairedDevice } from '../data/session';
 import { saveSettings, settings } from '../data/store';
 import { currentTime, nowMs } from '../lib/clock';
@@ -11,10 +12,11 @@ import { pinPause } from './pin';
  * around and check off tasks; adding, editing, deleting, giving stars and
  * redeeming need the PIN. A correct PIN unlocks until the tablet has been
  * idle for `relockMinutes`. A paired phone belongs to a parent (only the
- * wall pairs phones, behind the PIN), so it never asks.
+ * wall pairs phones, behind the PIN), so it never asks; a paired device
+ * switched to the wall layout (a second tablet) is a wall, and asks.
  */
 
-export const lockEnabled = computed(() => !pairedDevice() && !!settings.value.lock.pinHash);
+export const lockEnabled = computed(() => !(isPhone && pairedDevice()) && !!settings.value.lock.pinHash);
 const unlockedUntil = signal(0);
 export const unlocked = computed(() => !lockEnabled.value || nowMs.value < unlockedUntil.value);
 
@@ -77,9 +79,13 @@ export async function checkPin(pin: string): Promise<boolean> {
   return ok;
 }
 
-/** Resolves true once a parent has entered the PIN (immediately when unlocked or no PIN). */
-export function requireParent(reason?: string): Promise<boolean> {
-  if (unlocked.value) {
+/**
+ * Resolves true once a parent has entered the PIN (immediately when unlocked
+ * or no PIN). `fresh` asks even while unlocked: for what outlasts the
+ * unlock (pairing a phone that will never ask).
+ */
+export function requireParent(reason?: string, { fresh = false }: { fresh?: boolean } = {}): Promise<boolean> {
+  if (unlocked.value && !(fresh && lockEnabled.value)) {
     if (lockEnabled.value) extend();
     return Promise.resolve(true);
   }

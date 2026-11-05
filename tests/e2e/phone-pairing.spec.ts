@@ -1,5 +1,6 @@
 import { expect as baseExpect, test } from '@playwright/test';
 import { devices, type Browser } from '@playwright/test';
+import { enterPin, setPin } from './phone-family';
 import { FS, NOW, OWNER, pairPhone, pairingCode, phone, redeem, wall } from './phone-helpers';
 
 /** A phone on the pairing screen with nothing filled in (`pair=` empty, as a person typing the code sees it). */
@@ -128,4 +129,46 @@ test("the phone's Back closes what is open, then returns to Today", async ({ bro
   await page.goBack();
   await expect(page.locator('.ph-head h1')).toHaveText('Today');
   expect(p.errors).toEqual([]);
+});
+
+test('Done puts the code away: a phone using it after that is told to make a new one', async ({ browser }) => {
+  const household = `e2e-pair-${RUN}-done`;
+  const w = await wall(browser, household);
+  const code = await pairingCode(w.page);
+  await w.page.locator('.pair-card').getByRole('button', { name: 'Done' }).click();
+  await expect(w.page.locator('.pair-card')).toHaveCount(0);
+  const late = await redeem(browser, household, code, 'Late');
+  await expect(late.page.locator('.ph-pair .error')).toContainText('expired or was already used');
+  await expect(late.page.locator('.ph-nav')).toHaveCount(0);
+  expect(w.errors).toEqual([]);
+});
+
+test('with a PIN set, each new code asks for it, even while the wall is unlocked', async ({ browser }) => {
+  const household = `e2e-pair-${RUN}-pin`;
+  const w = await wall(browser, household);
+  await setPin(household);
+  await w.page.locator('.rail button', { hasText: 'Settings' }).click();
+  await enterPin(w.page);
+  await w.page.getByRole('button', { name: 'Phones' }).click();
+  // Unlocked a moment ago, and still it asks: a phone paired here never will.
+  await w.page.waitForTimeout(500);
+  await w.page.getByRole('button', { name: 'Add a phone' }).click();
+  await enterPin(w.page);
+  await expect(w.page.locator('.pair-code')).toHaveText(/^[2-9A-Z]{4}-[2-9A-Z]{4}$/, { timeout: 20_000 });
+  expect(w.errors).toEqual([]);
+});
+
+test('a paired device switched to the wall layout is a wall: it asks for the PIN', async ({ browser }) => {
+  const household = `e2e-pair-${RUN}-walllayout`;
+  const w = await wall(browser, household);
+  const p = await pairPhone(browser, w.page, household, 'Kids tablet');
+  await setPin(household);
+  await p.page.getByRole('button', { name: 'More' }).click();
+  await p.page.getByRole('button', { name: 'This phone' }).click();
+  await p.page.waitForTimeout(500);
+  await p.page.getByRole('button', { name: 'Use the wall layout here' }).click();
+  await expect(p.page.locator('.shell')).toBeVisible({ timeout: 30_000 });
+  await p.page.locator('.rail button', { hasText: 'Settings' }).click();
+  await expect(p.page.getByRole('dialog', { name: 'Parent PIN' })).toBeVisible();
+  expect([...w.errors, ...p.errors]).toEqual([]);
 });

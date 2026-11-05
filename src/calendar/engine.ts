@@ -119,11 +119,7 @@ function saveSnapshot(household: string) {
       /* over the quota: try smaller */
     }
   }
-  try {
-    localStorage.removeItem(SNAPSHOT_KEY);
-  } catch {
-    /* storage unavailable: nothing was kept */
-  }
+  dropSnapshot();
 }
 
 /** Show the household's last events until the first sync; another household's are dropped. */
@@ -257,6 +253,16 @@ function resetForHousehold(household: string | null): void {
   pause.step = 0;
   loaded.value = null;
   if (household) loadSnapshot(household);
+  // Signed out (disconnected, or a phone removed or unpaired): its events leave the device too.
+  else dropSnapshot();
+}
+
+function dropSnapshot(): void {
+  try {
+    localStorage.removeItem(SNAPSHOT_KEY);
+  } catch {
+    /* storage unavailable: nothing was kept */
+  }
 }
 
 let running: Promise<void> | null = null;

@@ -237,15 +237,17 @@ flowchart LR
 
 Parents' phones open the same URL and get a different app on the same
 household data (`src/phone/`). Only the wall pairs and removes phones; a
-paired phone is a parent's, so it never asks for the PIN.
+paired phone is a parent's, so in the phone layout it never asks for the
+PIN.
 
 ```mermaid
 sequenceDiagram
   participant W as Wall (Settings > Phones)
   participant F as Functions
   participant P as Phone
-  W->>F: createPairing (behind the PIN)
+  W->>F: createPairing (asks for the PIN every time)
   F-->>W: code, valid 10 min (pairings/{code})
+  Note over W,F: Done, or Settings left: cancelPairing
   W-->>P: QR code: /?pair=CODE (or the code typed)
   P->>F: redeemPairing(code, name)
   F->>F: delete the code, create households/hid/devices/id
@@ -270,7 +272,22 @@ sequenceDiagram
   phones only); devices are written only by the Functions, except a phone
   stamping its own `lastSeenAt`. `googleAccessToken` refuses a removed
   phone too. `session.pairedDevice()` is the device id on a paired phone;
-  `core/lock.ts` turns the lock off there.
+  `core/lock.ts` turns the lock off there in the phone layout only (a
+  paired device switched to the wall layout is a wall, and asks).
+- **Pairing limits** (`functions/src/index.ts`): Add a phone asks for the
+  PIN even while the wall is unlocked (`requireParent(reason, { fresh:
+true })`), since what it grants outlasts the unlock. A code shown is put
+  away (`cancelPairing`) on Done or when Settings closes, and
+  `createPairing` clears codes any household left expired.
+  `redeemPairing` needs no sign-in, so it runs on one instance and each
+  instance refuses calls past 30 a minute (bursts of 15) before any
+  database read (`rateLimiter`, off in the emulator, where the e2e suite
+  pairs hundreds of phones). That bounds what a stranger can add to the
+  bill to the calls themselves.
+- **No household data at rest on a phone**: phones use Firestore's memory
+  cache (`data/firebase.ts`; the wall's is persistent), and the calendar
+  snapshot is dropped when the device signs out (disconnected, removed,
+  unpaired), so a phone removed or lost keeps only what it had open.
 - **Shell** (`phone/PhoneApp.tsx`): pairing screen until signed in, then a
   header, the status line (household not syncing, calendar trouble) and a
   bottom tab bar. Tabs are `PhonePage`s (`phone/nav.ts`) listed in

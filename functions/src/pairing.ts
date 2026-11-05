@@ -1,9 +1,9 @@
 /**
  * Phone pairing, the pure parts (unit-tested in pairing.test.ts).
  *
- * A signed-in wall (or an already paired phone) asks for a pairing code; a
- * phone that presents the code within PAIRING_TTL_MS, once, becomes a device
- * of that household with its own sign-in. Codes come from an alphabet without
+ * A signed-in wall asks for a pairing code; a phone that presents the code
+ * within PAIRING_TTL_MS, once, becomes a device of that household with its
+ * own sign-in. Codes come from an alphabet without
  * look-alike characters (no 0/O, 1/I/L), so one read off the wall and typed
  * on a phone is not mistyped.
  */
@@ -42,8 +42,24 @@ export function deviceName(input: unknown): string | null {
   return s.length >= 1 && [...s].length <= DEVICE_NAME_MAX ? s : null;
 }
 
-/** A device id: 20 characters from [a-z0-9], as Firestore auto ids are. */
+/** A device id: 20 letters and digits, as Firestore auto ids are. */
 export const isDeviceId = (id: unknown): id is string => typeof id === 'string' && /^[A-Za-z0-9]{20}$/.test(id);
 
 /** The Firebase Auth user of a paired device: per device, so removing one signs out only that one. */
 export const deviceUid = (hid: string, deviceId: string) => `${hid}.phone.${deviceId}`;
+
+/**
+ * A token bucket: up to `burst` calls at once, refilled at `perMinute`.
+ * `take(now)` spends one and says whether there was one to spend.
+ */
+export function rateLimiter(perMinute: number, burst: number): (now: number) => boolean {
+  let tokens = burst;
+  let at = -Infinity;
+  return (now) => {
+    tokens = Math.min(burst, tokens + ((now - at) * perMinute) / 60_000);
+    at = now;
+    if (tokens < 1) return false;
+    tokens -= 1;
+    return true;
+  };
+}

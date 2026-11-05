@@ -5,7 +5,7 @@ import { defineSecret, defineString } from 'firebase-functions/params';
 import { HttpsError, onCall, type CallableOptions } from 'firebase-functions/v2/https';
 import { OAuth2Client } from 'google-auth-library';
 import { randomBytes } from 'node:crypto';
-import { PAIRING_TTL_MS, codeFromBytes, deviceName, deviceUid, isDeviceId, normalizeCode } from './pairing.js';
+import { PAIRING_TTL_MS, codeFromBytes, deviceName, deviceUid, isDeviceId, normalizeCode, rateLimiter } from './pairing.js';
 import { householdIdFor, isAllowedAccount, missingScopes, parseAccountList } from './policy.js';
 
 initializeApp();
@@ -24,9 +24,10 @@ const ALLOWED_ACCOUNTS = defineSecret('ALLOWED_ACCOUNTS');
 /**
  * The emulator has no Secret Manager: there the demo households (accounts
  * at manwar.local, which no real Google account has) are the allowed ones.
+ * Only an emulator running a demo project counts.
  */
-const emulator = process.env.FUNCTIONS_EMULATOR === 'true';
-const allowed = (email: unknown) =>
+const emulator = process.env.FUNCTIONS_EMULATOR === 'true' && (process.env.GCLOUD_PROJECT ?? '').startsWith('demo-');
+const allowed = (email: unknown): email is string =>
   typeof email === 'string' &&
   (emulator ? email.endsWith('@manwar.local') : isAllowedAccount(email, parseAccountList(ALLOWED_ACCOUNTS.value())));
 const NOT_ALLOWED = 'This Google account is not on the allowlist for this Manwar. Ask its owner to add it.';
@@ -164,25 +165,59 @@ function newCode(): string {
   }
 }
 
-/** A pairing code for the caller's household; one at a time (a new one replaces the last). */
+/** The household's pairing codes (one at a time, but a wall may ask again before the last one is used). */
+const pairingsOf = (hid: string) => db.collection('pairings').where('hid', '==', hid);
+
+/**
+ * A pairing code for the caller's household; one at a time (a new one
+ * replaces the last). Codes left expired by any household are cleared here
+ * too, so no account lingers in an unused one.
+ */
 export const createPairing = onCall(opts, async (req) => {
   const { hid, device } = await caller(req);
   if (device) throw new HttpsError('permission-denied', 'Phones are paired from the wall.');
   const account = req.auth?.token?.account;
   if (!allowed(account)) throw new HttpsError('permission-denied', NOT_ALLOWED);
-  const old = await db.collection('pairings').where('hid', '==', hid).get();
   const code = newCode();
   const now = Date.now();
   const expiresAt = now + PAIRING_TTL_MS;
-  const b = db.batch();
-  for (const d of old.docs) b.delete(d.ref);
-  b.create(db.doc(`pairings/${code}`), { hid, account, createdAt: now, expiresAt });
-  await b.commit();
+  await db.runTransaction(async (tx) => {
+    const old = await tx.get(pairingsOf(hid));
+    for (const d of old.docs) tx.delete(d.ref);
+    tx.create(db.doc(`pairings/${code}`), { hid, account, createdAt: now, expiresAt });
+  });
+  const stale = await db.collection('pairings').where('expiresAt', '<', now).limit(50).get();
+  if (!stale.empty) {
+    const b = db.batch();
+    for (const d of stale.docs) b.delete(d.ref);
+    await b.commit();
+  }
   return { code, expiresAt };
 });
 
+/** Put the household's code away (the wall's Done, or the page left): it can no longer pair a phone. */
+export const cancelPairing = onCall(opts, async (req) => {
+  const { hid, device } = await caller(req);
+  if (device) throw new HttpsError('permission-denied', 'Phones are paired from the wall.');
+  const codes = await pairingsOf(hid).get();
+  const b = db.batch();
+  for (const d of codes.docs) b.delete(d.ref);
+  await b.commit();
+  return {};
+});
+
+/*
+ * redeemPairing needs no sign-in, so anyone can call it: each instance
+ * refuses calls past a rate no family pairing comes near, before any
+ * database read, and there is one instance. The emulator, where the tests
+ * pair hundreds of phones, has no limit.
+ */
+const redeemLimit = emulator ? () => true : rateLimiter(30, 15);
+
 /** Pair a phone: trade a code from the wall, once, for the phone's own sign-in. Needs no sign-in. */
-export const redeemPairing = onCall<{ code?: unknown; name?: unknown }>(opts, async (req) => {
+export const redeemPairing = onCall<{ code?: unknown; name?: unknown }>({ ...opts, maxInstances: 1 }, async (req) => {
+  if (!redeemLimit(Date.now()))
+    throw new HttpsError('resource-exhausted', 'Too many pairing attempts just now. Wait a minute and try again.');
   const code = normalizeCode(req.data?.code);
   if (!code) throw new HttpsError('invalid-argument', 'That is not a pairing code: it has 8 letters and digits.');
   const name = deviceName(req.data?.name);
@@ -200,7 +235,7 @@ export const redeemPairing = onCall<{ code?: unknown; name?: unknown }>(opts, as
     if (!allowed(account)) return { ok: false, error: NOT_ALLOWED };
     const dev = db.collection(`households/${hid}/devices`).doc();
     tx.create(dev, { id: dev.id, name, kind: 'phone', createdAt: Date.now() });
-    return { ok: true, hid, account: account as string, deviceId: dev.id };
+    return { ok: true, hid, account, deviceId: dev.id };
   });
   if (!paired.ok) throw new HttpsError(paired.error === EXPIRED ? 'not-found' : 'permission-denied', paired.error);
   const customToken = await getAuth().createCustomToken(deviceUid(paired.hid, paired.deviceId), {
@@ -218,7 +253,7 @@ export const removeDevice = onCall<{ deviceId?: unknown }>(opts, async (req) => 
   const t = req.auth?.token;
   const hid = t?.hid;
   if (typeof hid !== 'string') throw new HttpsError('unauthenticated', 'Sign in first.');
-  // A phone unpairing itself may already be removed; the wall must be a member in good standing.
+  // A phone unpairing itself may already be removed, so it is not refused for that.
   if (t?.device !== undefined && t.device !== id)
     throw new HttpsError('permission-denied', 'A phone can only unpair itself. Remove other phones at the wall.');
   await deviceDoc(hid, id).delete();
