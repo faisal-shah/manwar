@@ -13,6 +13,12 @@ import { NOW, pairPhone, wall, type Opened } from './phone-helpers';
 const expect = baseExpect.configure({ timeout: 15_000 });
 test.describe.configure({ timeout: 120_000 });
 const RUN = Date.now().toString(36);
+
+// Each test opens a wall and phones in contexts of their own: close them all when it ends, so the machine
+// (and the shared emulators) do not carry every test's browsers to the end of the run.
+test.afterEach(async ({ browser }) => {
+  await Promise.all(browser.contexts().map((c) => c.close()));
+});
 const FS = 'http://127.0.0.1:8080/v1/projects/demo-manwar/databases/(default)/documents';
 
 const READING = 'family@demo::reading_20261104';
