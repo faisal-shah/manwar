@@ -5,13 +5,14 @@ import { followDisplayCommands, startDisplay } from '../core/display';
 import { holdWakeLock } from '../core/kiosk';
 import { idleFor, trackActivity } from '../core/activity';
 import { startRelock } from '../core/lock';
-import { keepScaleWithKeyboard } from '../core/viewport';
+import { keepFieldAboveKeyboard, keepScaleWithKeyboard } from '../core/viewport';
 import { startWeather } from '../core/weather';
 import { seedIfEmpty } from '../data/seed';
 import { ready } from '../data/store';
 import { session } from '../data/session';
 import { holdSleepForTimer } from '../features/timer/state';
 import { startPhoneTheme } from '../phone/theme';
+import { startBack } from '../ui/back';
 import { isPhone } from './layout';
 import { startIdleReturn } from './nav';
 
@@ -22,8 +23,11 @@ import { startIdleReturn } from './nav';
  */
 export function startApp(): void {
   trackActivity();
-  if (isPhone) startPhoneTheme();
-  else {
+  if (isPhone) {
+    startPhoneTheme();
+    startBack();
+    keepFieldAboveKeyboard();
+  } else {
     keepScaleWithKeyboard();
     startDisplay();
     startRelock();

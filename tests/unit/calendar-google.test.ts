@@ -169,8 +169,8 @@ describe('google calendar: reading events', () => {
         end: { dateTime: '2026-11-07T10:00:00-06:00' },
       });
     const [a, b] = await listOne([invite('inv1'), invite('inv2', true)]);
-    expect([a.organizer, a.editable]).toEqual(['coach@club.example', false]);
-    expect([b.organizer, b.editable]).toEqual(['coach@club.example', true]);
+    expect([a.organizer, a.editable, a.readOnly]).toEqual(['coach@club.example', false, 'invited']);
+    expect([b.organizer, b.editable, b.readOnly]).toEqual(['coach@club.example', true, undefined]);
   });
 
   it('keeps recurring instances apart and links them to their series', async () => {
@@ -228,6 +228,8 @@ describe('google calendar: reading events', () => {
       'reader',
     );
     expect([ev.title, ev.allDay, ev.editable, ev.seriesId]).toEqual(["Grandma's birthday", true, false, 'BIRTHDAY_contacts_abc']);
+    // A birthday says where to change it, rather than that its calendar is read only.
+    expect(ev.readOnly).toBe('birthday');
   });
 
   it('follows events.list pages', async () => {
@@ -370,11 +372,11 @@ describe('google calendar: reading events', () => {
           end: at(20),
         }),
       ]);
-      expect(evs.map((e) => [e.id, e.editable])).toEqual([
-        ['bday', false],
-        ['locked', false],
-        ['plain', true],
-        ['resto', false],
+      expect(evs.map((e) => [e.id, e.editable, e.readOnly])).toEqual([
+        ['bday', false, 'birthday'],
+        ['locked', false, 'locked'],
+        ['plain', true, undefined],
+        ['resto', false, 'gmail'],
       ]);
       // Gmail adds its events under a placeholder organizer, not someone who invited the family.
       expect(evs.find((e) => e.id === 'resto')!.organizer).toBeUndefined();
@@ -389,7 +391,7 @@ describe('google calendar: reading events', () => {
         [{ kind: 'calendar#event', id: 'fb', status: 'confirmed', start: at(9), end: at(10) }],
         'freeBusyReader',
       );
-      expect([busy.title, busy.editable]).toEqual(['Busy', false]);
+      expect([busy.title, busy.editable, busy.readOnly]).toEqual(['Busy', false, 'calendar']);
       // On its own calendar an untitled private event is just untitled.
       routes = [];
       const [own] = await listOne([priv], 'owner');

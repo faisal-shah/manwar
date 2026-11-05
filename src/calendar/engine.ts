@@ -1,4 +1,4 @@
-import { batch as signalBatch, computed, effect, signal } from '@preact/signals';
+import { batch as signalBatch, computed, effect, signal, type ReadonlySignal } from '@preact/signals';
 import { demoMode } from '../config';
 import { listAdd } from '../data/settings';
 import { data, householdId, patch, profileById, put, remove as removeDoc, settings, upsert } from '../data/store';
@@ -62,11 +62,14 @@ function fetchWindow(): { from: ISODate; to: ISODate } {
 }
 
 /**
- * The window of the last fetch. A calendar that failed in it is asked again
- * by the next poll, so a page turn inside the window does not refetch every
- * calendar for it.
+ * The window of the last fetch, or of the offline snapshot shown until the
+ * first one, [from, to); null before either. A calendar that failed in it
+ * is asked again by the next poll, so a page turn inside the window does not
+ * refetch every calendar for it. Days outside it are not known yet: a view
+ * that reaches them says so rather than showing them empty.
  */
-let loaded = fetchWindow();
+const loaded = signal<{ from: ISODate; to: ISODate } | null>(null);
+export const loadedRange: ReadonlySignal<{ from: ISODate; to: ISODate } | null> = loaded;
 
 const SNAPSHOT_KEY = demoMode ? 'manwar.demoEvents.v1' : 'manwar.events.v1';
 
@@ -103,8 +106,8 @@ function saveSnapshot(household: string) {
     household,
     calendars: calendars.value,
     events: stored(withNotes),
-    from: loaded.from,
-    to: loaded.to,
+    from: loaded.peek()!.from,
+    to: loaded.peek()!.to,
     at: Date.now(),
     syncedAt: Object.fromEntries(syncedAt),
   });
@@ -145,6 +148,7 @@ function loadSnapshot(household: string) {
       const at = s.syncedAt ? s.syncedAt[c.id] : s.at;
       if (at !== undefined) syncedAt.set(c.id, at);
     }
+    loaded.value = { from: s.from, to: s.to };
     sync.value = { ...sync.value, lastSync: s.at };
   } catch {
     /* corrupt snapshot: ignore */
@@ -210,7 +214,7 @@ async function fetchAll(): Promise<void> {
     const at = Date.now();
     const answered = shown.filter((c) => !failed.includes(c));
     answered.forEach((c) => syncedAt.set(c.id, at));
-    loaded = w;
+    loaded.value = w;
     const far = await fetchFarCountdowns(new Set(answered.map((c) => c.id)));
     if (stale()) return;
     // Hidden while they were looked up: left off too.
@@ -251,7 +255,7 @@ function resetForHousehold(household: string | null): void {
   // Rate limits are per Google account.
   endPause();
   pause.step = 0;
-  loaded = fetchWindow();
+  loaded.value = null;
   if (household) loadSnapshot(household);
 }
 
@@ -295,7 +299,9 @@ function fetchSoon(force: boolean): Promise<void> {
 /** Make sure [from, to] is loaded (views call this when paging). */
 export function ensureRange(from: ISODate, to: ISODate): void {
   wanted = { from, to };
-  if (from < loaded.from || to >= loaded.to) void refresh();
+  // Before the first fetch lands, the window it is fetching.
+  const w = loaded.peek() ?? fetchWindow();
+  if (from < w.from || to >= w.to) void refresh();
 }
 
 let started = false;
@@ -395,14 +401,20 @@ export function eventColors(ev: CalEvent): string[] {
   return ids.map((id) => known.get(id)!.color);
 }
 
-/** Is the event shown under the current profile filter? Unassigned events always show. */
-export function passesFilter(ev: CalEvent): boolean {
-  const hidden = settings.value.filter.hiddenProfiles;
+/**
+ * Is the event shown while the profiles in `hidden` are filtered out? While
+ * any of its profiles is shown, and always when it is for the whole family
+ * or unassigned.
+ */
+export function passesHidden(ev: CalEvent, hidden: readonly string[]): boolean {
   if (!hidden.length) return true;
   const ids = profilesOf(ev);
   if (!ids || ids.includes(EVERYONE)) return true;
   return ids.some((id) => !hidden.includes(id));
 }
+
+/** Is the event shown under the household's calendar filter (the wall's)? */
+export const passesFilter = (ev: CalEvent): boolean => passesHidden(ev, settings.value.filter.hiddenProfiles);
 
 /** Events overlapping [from, to] (inclusive ISO dates), filtered. */
 export function eventsBetween(from: ISODate, to: ISODate): CalEvent[] {

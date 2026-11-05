@@ -99,4 +99,34 @@ describe('calendar state per household', () => {
     reloaded.startCalendarSync();
     expect(reloaded.events.value).toEqual([]);
   });
+
+  it('knows which days it has: none before a fetch or a snapshot, then the window it holds', async () => {
+    vi.resetModules();
+    mem.clear();
+    account.hid = 'D';
+    let open!: () => void;
+    gate = new Promise((r) => (open = r));
+    const st = await import('../../src/data/store');
+    st.householdId.value = 'D';
+    const engine = await import('../../src/calendar/engine');
+    const { today } = await import('../../src/lib/clock');
+    const { addDays, addMonths } = await import('../../src/lib/date');
+    engine.startCalendarSync();
+    // Nothing fetched yet: the days are not known to be empty.
+    expect(engine.loadedRange.value).toBeNull();
+    open();
+    await engine.refresh();
+    const t = today.value;
+    const window = { from: addDays(t, -42), to: addMonths(t, 4) };
+    expect(engine.loadedRange.value).toEqual(window);
+    // Reopened while Google cannot be reached: the snapshot's days.
+    vi.resetModules();
+    gate = new Promise(() => {});
+    const st2 = await import('../../src/data/store');
+    st2.householdId.value = 'D';
+    const reopened = await import('../../src/calendar/engine');
+    reopened.startCalendarSync();
+    expect(reopened.loadedRange.value).toEqual(window);
+    expect(titles(reopened.events.value)).toEqual(["D's event"]);
+  });
 });

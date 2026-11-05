@@ -46,3 +46,20 @@ export function keepScaleWithKeyboard(): void {
     }
   });
 }
+
+/**
+ * The phone: its scale is the phone's own text size, not the viewport, so
+ * only the field being typed in needs following. When the on-screen
+ * keyboard shrinks the page (resizes-content), the field is scrolled back
+ * into view inside its sheet, as the wall does.
+ */
+export function keepFieldAboveKeyboard(): void {
+  if (started) return;
+  started = true;
+  let h = window.innerHeight;
+  window.addEventListener('resize', () => {
+    const field = typing();
+    if (field && window.innerHeight < h) requestAnimationFrame(() => field.scrollIntoView({ block: 'nearest' }));
+    h = window.innerHeight;
+  });
+}

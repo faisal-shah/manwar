@@ -2,6 +2,7 @@ import { signal, type Signal } from '@preact/signals';
 import { ensureRange } from '../../calendar/engine';
 import type { CalEvent } from '../../calendar/types';
 import { asParent } from '../../core/lock';
+import { secondTapOf, tapMark, type TapMark } from '../../ui/overlays';
 import { settings } from '../../data/store';
 import type { CalendarView, ISODate } from '../../data/types';
 import { today } from '../../lib/clock';
@@ -82,7 +83,8 @@ export const todayPressed = signal(0);
 
 /* ---------- Per-device preferences ---------- */
 
-function stored<T>(key: string, fallback: T, valid: (v: unknown) => v is T): Signal<T> {
+/** A signal kept in this device's localStorage under `key` (a stored value `valid` refuses reads as `fallback`). */
+export function stored<T>(key: string, fallback: T, valid: (v: unknown) => v is T): Signal<T> {
   let initial = fallback;
   try {
     const raw = localStorage.getItem(key);
@@ -131,20 +133,20 @@ export const countdownPopup = signal<DOMRect | null>(null);
 export const triageOpen = signal(false);
 
 /**
- * When the editor last closed after saving. The + button sits right under
+ * The tap that last saved the editor. The wall's + button sits right under
  * the editor's Save button, so the second tap of a double tap on Save must
- * not open a fresh editor.
+ * not open a fresh editor; any other tap right after a save (Edit on the
+ * next event) opens it.
  */
-let savedAt = -Infinity;
-const REOPEN_GUARD_MS = 500;
+let savedBy: TapMark | null = null;
 
 export function editorSaved(): void {
-  savedAt = performance.now();
+  savedBy = tapMark();
 }
 
 /** Open the event editor (asks for the parent PIN first when the lock is on). */
 export function openEditor(req: EditorRequest = {}): void {
-  if (performance.now() - savedAt < REOPEN_GUARD_MS) return;
+  if (savedBy && secondTapOf(savedBy)) return;
   void asParent(() => {
     detailReq.value = null;
     dayPopup.value = null;

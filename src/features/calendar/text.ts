@@ -1,3 +1,5 @@
+import type { ReadOnly } from '../../calendar/types';
+
 /** Pure text helpers for event fields (tests/unit/calendar-form.test.ts). */
 
 const NAMED: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
@@ -22,4 +24,27 @@ export function plainText(s: string): string {
     })
     .replace(/\n{3,}/g, '\n\n')
     .trim();
+}
+
+/** A maps search for an event's location (a phone with Google Maps opens it there). */
+export const mapsUrl = (location: string): string =>
+  `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location.trim())}`;
+
+/** A name set in a sentence as its own direction (Unicode first-strong isolate, as a <bdi> does). */
+const isolate = (s: string) => `\u2068${s}\u2069`;
+
+/** Why an event cannot be changed here, in a sentence (`calendar`: its calendar's name). */
+export function readOnlyText(why: ReadOnly, calendar: string, organizer?: string): string {
+  switch (why) {
+    case 'birthday':
+      return 'Birthdays come from Google Contacts: change it there.';
+    case 'gmail':
+      return 'Gmail added this event from an email, so it cannot be changed here.';
+    case 'calendar':
+      return `${isolate(calendar)} is shared with the household to read only.`;
+    case 'locked':
+      return 'This is a locked copy of an event: only its organizer can change it.';
+    case 'invited':
+      return organizer ? `Only its organizer, ${isolate(organizer)}, can change it.` : 'Only its organizer can change it.';
+  }
 }

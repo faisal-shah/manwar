@@ -11,6 +11,14 @@ export interface CalendarInfo {
   primary: boolean;
 }
 
+/**
+ * Why the household cannot change an event's times and text: a birthday
+ * from Google Contacts, an event Gmail added from an email, a calendar
+ * shared with the household to read only, a locked copy of someone
+ * else's event, or an invitation only its organizer may change.
+ */
+export type ReadOnly = 'birthday' | 'gmail' | 'calendar' | 'locked' | 'invited';
+
 /** One concrete occurrence, as shown on the wall. */
 export interface CalEvent {
   /** eventKey(calendarId, id) */
@@ -34,8 +42,10 @@ export interface CalEvent {
   description?: string;
   /** Organizer email, when it differs from the calendar's own account. */
   organizer?: string;
-  /** Can the household account edit this event? */
+  /** Can the household account edit this event? `readOnly` says why not. */
   editable: boolean;
+  /** Set exactly when `editable` is false (both come from one reading of the event). */
+  readOnly?: ReadOnly;
   /** Minutes-before popup reminder, if the event overrides the calendar default. */
   reminderMinutes?: number | null;
   /** Timed events: the time zones Google keeps the start and end in, when set (edits keep them). */

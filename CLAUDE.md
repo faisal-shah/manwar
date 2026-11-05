@@ -14,13 +14,13 @@ Everything that ties the repo to one deployment lives in a few places; the
 docs refer to them rather than repeating the values. `<project>` below means
 the default project in `.firebaserc`.
 
-| What | Where |
-|---|---|
-| Firebase project | `.firebaserc` (default) |
-| Web config (API key, app id, auth domain) and the OAuth client id | `src/config.ts`; hosts derive from it (`canonicalHost` = authDomain, `<project>.web.app` forwards there) |
-| Functions params | `functions/.env`: `GOOGLE_OAUTH_CLIENT_ID` (must equal `googleClientId`; `tests/unit/config.test.ts` checks) and `FUNCTIONS_SERVICE_ACCOUNT` (the runtime account's full email) |
-| Secrets | Secret Manager: `GOOGLE_OAUTH_CLIENT_SECRET`, `ALLOWED_ACCOUNTS` |
-| Deploy identity | GitHub repository variables `GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_DEPLOY_SERVICE_ACCOUNT` |
+| What                                                              | Where                                                                                                                                                                           |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Firebase project                                                  | `.firebaserc` (default)                                                                                                                                                         |
+| Web config (API key, app id, auth domain) and the OAuth client id | `src/config.ts`; hosts derive from it (`canonicalHost` = authDomain, `<project>.web.app` forwards there)                                                                        |
+| Functions params                                                  | `functions/.env`: `GOOGLE_OAUTH_CLIENT_ID` (must equal `googleClientId`; `tests/unit/config.test.ts` checks) and `FUNCTIONS_SERVICE_ACCOUNT` (the runtime account's full email) |
+| Secrets                                                           | Secret Manager: `GOOGLE_OAUTH_CLIENT_SECRET`, `ALLOWED_ACCOUNTS`                                                                                                                |
+| Deploy identity                                                   | GitHub repository variables `GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_DEPLOY_SERVICE_ACCOUNT`                                                                                      |
 
 - Run gcloud as an account with Owner on the project (pass `--account` where
   the machine's gcloud default is a different account). Deploys go through
@@ -119,6 +119,11 @@ flowchart LR
   once, and one shown again is fetched. The fetched window counts as
   loaded even when a calendar failed in it (the next poll asks that one
   again), so page turns inside it do not refetch everything.
+  `loadedRange` is that window (or the snapshot's), null before either: a
+  view shows a day outside it as not loaded yet, never as empty.
+  `passesHidden(ev, hidden)` is the profile filter rule (an event shows
+  while any of its people does, and always when it is for everyone or no
+  one); `passesFilter` applies the household's filter with it.
   Events with no meta are **unassigned** and listed in `unassigned` (the
   triage queue, badge on the Calendar rail item). `[EVERYONE]` means the
   whole family. Countdowns past the window (setting Always) come from
@@ -134,8 +139,10 @@ flowchart LR
 - **Google mapping** (`calendar/google.ts`, the API boundary): working
   locations, focus time, cancelled stubs and invitations the household
   declined are not on the wall; birthdays, Gmail events and locked copies
-  are read-only (the API refuses their times and text); hidden details read
-  Busy. Writes keep what the editor does not show: reminders are written
+  are read-only (the API refuses their times and text), as are events on a
+  calendar shared read-only and invitations only the organizer may change:
+  `readOnly` says which, set with `editable` by one function; hidden details
+  read Busy. Writes keep what the editor does not show: reminders are written
   only when the reminder was changed (`keepReminders`), notes only when the
   event had some or the editor gave some (`''` clears), every timed write names
   the event's own zones (the tablet's for new or formerly all-day events),
@@ -267,23 +274,32 @@ sequenceDiagram
 - **Back gesture** (`ui/back.ts`): on the phone each open overlay
   (`useOverlay` calls `useBack`) or inner view holds one history entry;
   Back closes the top one, and a view closed another way gives its entry
-  back. A browser fixes the entry `history.back()` lands on when it is
-  called, so an entry opened while one of ours is on its way (details
-  giving way to the editor) is pushed once it has landed. Use
+  back. The stack brings the browser's entries to its depth once per task
+  (a microtask), so a view closed and another opened together (Edit
+  swapping the event sheet for the editor) share one entry, and it pushes
+  nothing while its own traversal is on the way: Chrome applies a push
+  made then and traverses past it. It starts with the phone
+  (`startBack`), going back over the entries a reload left. Use
   `useBack(onClose, true)` in any phone view that should close on Back.
-  In e2e, wait for the page's own `history.back()` to land before
-  `page.goBack()` (Playwright's goBack targets an entry).
-- **Double taps on the phone** (`ui/overlays.tsx`): a full-width sheet and
-  a popover laid out as a bottom sheet cover the spot that opened them,
-  so they drop the rest of that double tap inside them, as dialogs do; an
-  overlay that closes takes the rest of its double tap with it
-  (`swallowRestOfTap`, the very next tap only), or it would press what was
-  under (the tab bar, another task's circle). Call `swallowRestOfTap()`
-  for any tap that puts another screen under the finger (Today's rows
-  opening Tasks, Give closing its form). The tab bar is
-  `data-tap-through`: it loses only a real double tap's second tap
-  (`detail` 2). In e2e, wait half a second after opening a sheet before
-  tapping in it where the tap that opened it was.
+  In e2e, wait for `history.state.manwarBack` to reach the expected depth
+  before `page.goBack()` (Playwright's goBack targets an entry).
+- **Double taps on the phone** (`ui/overlays.tsx`): phone sheets fade
+  in where they stay (a sliding one is not under a tap aimed at it yet,
+  which then closes it on the scrim). A full-width sheet and a popover
+  laid out as a bottom sheet cover the spot that opened them, so they drop
+  the rest of that double tap inside them, as dialogs do (`useOverlay`'s
+  `content`); a view that opens in place of what was tapped spreads
+  `useOpeningTapGuard()` on its root. An overlay that a tap closes takes
+  the rest of that double tap with it (`swallowRestOfTap`, the very next
+  tap only; not when Back or something else closed it), or it would press
+  what was under (the tab bar, another task's circle). Call
+  `swallowRestOfTap()` for any tap that puts another screen under the
+  finger (Today's rows opening Tasks, Give closing its form). The tab bar
+  is `data-tap-through`: it loses only a real double tap's second tap
+  (`detail` 2). In e2e, a tap within 450 ms and 6rem of the one that
+  opened an overlay or view is dropped: wait half a second first (the PIN
+  pad's keys, a confirmation's button, the editor's X after the header's
+  +).
 - **Today** (`phone/today/`): the wall's running timer and the note it
   shows, what is next (`nextUp`, `today/logic.ts`: today's all-day events
   and the timed ones not over, and tomorrow's once no timed event is left
@@ -308,6 +324,27 @@ sequenceDiagram
   the phone, the Tasks tab's star pill included): Give and Remove with a
   note (`Adjust`), the rewards they can redeem (`redeem`), the history
   with Undo (`HistoryList`), and the reward editor and redeemed dialog.
+- **Calendar tab** (`phone/calendar/`): the agenda (`agenda.ts`, pure:
+  the days from a start day, all-day rows first, the Now line on today,
+  free days folded into one line) from today or a day gone to; scrolling
+  near the end adds days, shown only inside `loadedRange` and asked for
+  with `ensureRange`. The day at the top (`lookingAt`) gives the header
+  its month and is where + adds an event; at midnight it stays in place.
+  The person filter is per phone (`shownPeople`, localStorage) on the
+  wall's rule (`passesHidden`). Event details and the editor are the
+  wall's (`CalendarOverlays`), re-laid in `phone/calendar/calendar.css`;
+  on the phone the details link the location to maps and say why a
+  read-only event cannot be changed (`readOnlyText`). To assign lists
+  `unassigned` with a chip per person: a tap writes at once (`assign`,
+  with the scope `triageScope` gave the row when it first showed, kept
+  for the visit), a row stays in place once assigned (here or on another
+  device) so nothing shifts under a finger, a second tap on the same chip
+  within the double-tap time is dropped, and taps build on what the last
+  one wrote until the store shows it.
+- **Demo calendar failures**: the demo source fails as Google's would
+  while the browser is offline, and for the calendars listed in
+  localStorage `manwar.demoCalendarDown.v1` (JSON ids, or `"all"`), for
+  tests of sync failures, offline edits and the snapshot.
 - **Shared with the wall through Firestore**: the timer (`timers/wall`,
   `features/timer/state.ts`; stopping stamps `stoppedAt`, and the wall's
   sleep hold is derived from the document) and the screen
@@ -330,8 +367,11 @@ so `1rem` = 10 design px. Use rem for every size. Tokens are CSS variables in
   anyway. Sheets, dialogs and popovers are fixed to that viewport and end
   above the keyboard. The scale must not follow: while a text field has
   focus and only the height shrank, `--app-h` keeps the full height and the
-  field is scrolled into view. Test it by focusing a field and shrinking the
-  viewport height (`tests/e2e/layout-fit.spec.ts`).
+  field is scrolled into view. The phone's scale does not follow the
+  viewport, so there only the field is kept in view
+  (`keepFieldAboveKeyboard`). Test it by focusing a field and shrinking the
+  viewport height (`tests/e2e/layout-fit.spec.ts`, and the editor in
+  `tests/e2e/phone-calendar.spec.ts`).
 - **The + button** covers the bottom-right corner. A scroller that can pass
   under it ends with `padding-bottom: var(--fab-clear)`; Month gives the
   corner day fewer lines (`useFit` in `views/Month.tsx`).
@@ -347,7 +387,7 @@ so `1rem` = 10 design px. Use rem for every size. Tokens are CSS variables in
   `color: lch(from var(--c) calc((50 - l) * infinity) 0 0)` (white on dark
   colors, black on light ones). The palette has both kinds. Write it as
   `color: #fff` and, nested in the same rule, `@supports (color: lch(from
-  red l c h)) { color: <the ink>; }`: a WebView without relative colors
+red l c h)) { color: <the ink>; }`: a WebView without relative colors
   does not drop a declaration with `var()` in it but computes it to the
   inherited color, and the minifier merges two `color` declarations into
   the last (`tests/unit/css-ink.test.ts`).
@@ -427,9 +467,12 @@ generated from it: `node scripts/icons/render.mjs` after any brand change.
 - Overlays (`Sheet`, `Modal`, `Popover`, the calendar `Menu`) portal to
   `document.body` and register through `useOverlay(onClose)`: its `scrim`
   handler lets the second tap of the double tap that opened the overlay
-  through, and a centered dialog puts `content` on its box (onClickCapture)
-  so that tap presses nothing in it (a PIN key, OK). Use it for any custom
-  overlay. Idle return closes every registered overlay (`closeOverlays()`).
+  through, and one that opens under that tap (a centered dialog; on the
+  phone every sheet and popover) puts `content` on its box
+  (onClickCapture) so it presses nothing in it (a PIN key, OK, the phone
+  editor's X where the header's + was). Use it for any custom overlay. `openEditor`
+  refuses only the second tap of a double tap on Save (`tapMark`,
+  `secondTapOf`), since the wall's + sits under it. Idle return closes every registered overlay (`closeOverlays()`).
   The sleep screen uses `useScrimClose` (the same rule) and, after a waking
   tap, stays a moment (fading) to take the rest of that double tap. In e2e
   tests, close by tapping away from the control that opened it.

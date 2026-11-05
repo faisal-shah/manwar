@@ -1,5 +1,6 @@
 import { profiles, settings } from '../data/store';
 import { EVERYONE, type Profile } from '../data/types';
+import { toggleAssignee } from '../lib/assignees';
 
 export function Avatar({
   profile,
@@ -46,12 +47,7 @@ export function ProfilePicker({
   everyone?: boolean;
   single?: boolean;
 }) {
-  const toggle = (id: string) => {
-    if (single) return onChange([id]);
-    if (id === EVERYONE) return onChange(value.includes(EVERYONE) ? [] : [EVERYONE]);
-    const rest = value.filter((v) => v !== EVERYONE);
-    onChange(rest.includes(id) ? rest.filter((v) => v !== id) : [...rest, id]);
-  };
+  const toggle = (id: string) => onChange(single ? [id] : toggleAssignee(value, id));
   return (
     <div class="picker">
       {profiles.value.map((p) => {

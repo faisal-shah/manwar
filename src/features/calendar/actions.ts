@@ -1,6 +1,7 @@
 import { assign, deleteEvent, setCountdown } from '../../calendar/engine';
 import type { CalEvent, EditScope } from '../../calendar/types';
 import { asParent } from '../../core/lock';
+import { errorMessage } from '../../data/errors';
 import { choose, confirm, toast } from '../../ui/overlays';
 
 /** Mutations started from the calendar UI. Each one goes through the parental lock. */
@@ -21,10 +22,8 @@ export async function askScope(ev: CalEvent, title: string, seriesOnly = false):
   return choose(title, seriesOnly ? SCOPES.filter((s) => s.value !== 'this') : SCOPES);
 }
 
-const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
-
 export function errorToast(what: string, e: unknown): void {
-  toast(`${what}: ${message(e)}`);
+  toast(`${what}: ${errorMessage(e)}`);
 }
 
 /**

@@ -19,6 +19,7 @@ import {
   type CalendarInfo,
   type CalendarSource,
   type EventDraft,
+  type ReadOnly,
 } from './types';
 
 const API = 'https://www.googleapis.com/calendar/v3';
@@ -194,8 +195,16 @@ function onWall(g: GEvent): boolean {
   return !g.attendees?.some((a) => a.self && a.responseStatus === 'declined');
 }
 
-/** Types whose times and text the API does not let anyone change (birthdays, events from Gmail). */
-const FIXED_TYPES = new Set(['birthday', 'fromGmail']);
+/** Why the household cannot change the event, or undefined when it can (the first reason that applies). */
+function readOnlyReason(g: GEvent, role: AccessRole): ReadOnly | undefined {
+  // Types whose times and text the API does not let anyone change.
+  if (g.eventType === 'birthday') return 'birthday';
+  if (g.eventType === 'fromGmail') return 'gmail';
+  if (role !== 'owner' && role !== 'writer') return 'calendar';
+  if (g.locked === true) return 'locked';
+  if (g.organizer && g.organizer.self !== true && g.guestsCanModify !== true) return 'invited';
+  return undefined;
+}
 
 function toCalEvent(calendarId: string, g: GEvent, role: AccessRole): CalEvent {
   const s = parseTime(g.start);
@@ -204,7 +213,7 @@ function toCalEvent(calendarId: string, g: GEvent, role: AccessRole): CalEvent {
     g.reminders?.useDefault === false ? (g.reminders.overrides?.find((o) => o.method === 'popup')?.minutes ?? null) : undefined;
   // Free/busy access, and private events on a calendar shared read-only, come without their details.
   const detailsHidden = role === 'freeBusyReader' || (role === 'reader' && g.visibility === 'private');
-  const fixed = !!g.eventType && FIXED_TYPES.has(g.eventType);
+  const readOnly = readOnlyReason(g, role);
   return {
     key: eventKey(calendarId, g.id),
     calendarId,
@@ -219,11 +228,8 @@ function toCalEvent(calendarId: string, g: GEvent, role: AccessRole): CalEvent {
     description: g.description || undefined,
     // Gmail adds its events under a placeholder organizer, not someone who invited the family.
     organizer: g.organizer && !g.organizer.self && g.eventType !== 'fromGmail' ? g.organizer.email : undefined,
-    editable:
-      (role === 'owner' || role === 'writer') &&
-      !fixed &&
-      g.locked !== true &&
-      (!g.organizer || g.organizer.self === true || g.guestsCanModify === true),
+    editable: !readOnly,
+    readOnly,
     reminderMinutes: popup,
     timeZone: g.start.timeZone || undefined,
     endTimeZone: g.end.timeZone || undefined,

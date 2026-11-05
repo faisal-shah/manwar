@@ -32,6 +32,26 @@ interface Master {
 
 const KEY = 'manwar.demoCalendar.v1';
 
+/**
+ * The demo calendar fails as Google's would: offline (`navigator.onLine`
+ * false) no request answers, and the calendars listed in localStorage
+ * `manwar.demoCalendarDown.v1` (a JSON list of ids, or "all") stay
+ * unreachable, for tests of sync failures and offline edits.
+ */
+const DOWN_KEY = 'manwar.demoCalendarDown.v1';
+
+function reach(calendarId?: string): void {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) throw new TypeError('Failed to fetch');
+  let down: unknown = null;
+  try {
+    down = JSON.parse(localStorage.getItem(DOWN_KEY) ?? 'null');
+  } catch {
+    /* no storage: everything answers */
+  }
+  if (down === 'all' || (calendarId !== undefined && Array.isArray(down) && down.includes(calendarId)))
+    throw new TypeError('Failed to fetch');
+}
+
 export const DEMO_CALENDARS: CalendarInfo[] = [
   { id: 'family@demo', name: 'Family', color: '#2D7F86', accessRole: 'owner', primary: true },
   { id: 'mamma@demo', name: "Mamma's calendar", color: '#C7A9D4', accessRole: 'reader', primary: false },
@@ -168,7 +188,9 @@ function occurrence(ms: Master, day: ISODate, recurring: boolean): CalEvent {
     location: ms.location,
     description: ms.description,
     organizer: ms.organizer,
-    editable: cal.accessRole === 'owner' || cal.accessRole === 'writer',
+    ...(cal.accessRole === 'owner' || cal.accessRole === 'writer'
+      ? { editable: true }
+      : { editable: false, readOnly: 'calendar' as const }),
     reminderMinutes: ms.reminderMinutes,
   };
 }
@@ -195,10 +217,12 @@ function fromDraft(id: string, calendarId: string, d: EventDraft): Master {
 
 export const fakeSource: CalendarSource = {
   async listCalendars() {
+    reach();
     return DEMO_CALENDARS;
   },
 
   async listEvents(calendarId, timeMin, timeMax) {
+    reach(calendarId);
     const from = toISODate(timeMin);
     const to = toISODate(timeMax);
     const out: CalEvent[] = [];
@@ -219,6 +243,7 @@ export const fakeSource: CalendarSource = {
   },
 
   async nextOccurrence(calendarId, id, after) {
+    reach(calendarId);
     const { masterId, day } = /_\d{8}$/.test(id) ? parseInstance(id) : { masterId: id, day: null };
     const ms = load().find((x) => x.id === masterId && x.calendarId === calendarId);
     if (!ms) return null;
@@ -239,18 +264,21 @@ export const fakeSource: CalendarSource = {
     return null;
   },
 
-  async seriesRecurrence(_calendarId, seriesId) {
+  async seriesRecurrence(calendarId, seriesId) {
+    reach(calendarId);
     const ms = load().find((x) => x.id === seriesId);
     return ms?.repeat ? [toRRule(ms.repeat, ms.allDay)] : [];
   },
 
   async insert(calendarId, id, draft) {
+    reach(calendarId);
     const ms = load().filter((x) => x.id !== id);
     ms.push(fromDraft(id, calendarId, draft));
     save(ms);
   },
 
   async update(ev, draft, scope) {
+    reach(ev.calendarId);
     const ms = load();
     const masterId = ev.seriesId ?? ev.id;
     const i = ms.findIndex((x) => x.id === masterId);
@@ -287,6 +315,7 @@ export const fakeSource: CalendarSource = {
   },
 
   async remove(ev, scope) {
+    reach(ev.calendarId);
     let ms = load();
     const masterId = ev.seriesId ?? ev.id;
     const master = ms.find((x) => x.id === masterId);

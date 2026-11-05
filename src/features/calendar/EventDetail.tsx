@@ -2,6 +2,7 @@ import { useEffect, useState } from 'preact/hooks';
 import {
   Bell,
   CalendarDays,
+  Lock,
   MapPin,
   Pencil,
   Repeat,
@@ -24,10 +25,11 @@ import { Avatar, ProfilePicker } from '../../ui/profile';
 import { assignFlow, countdownFlow, deleteFlow } from './actions';
 import { reminderLabel } from './layout';
 import { calendarName, countdownEmoji, whenLabel, whoOf } from './model';
-import { plainText } from './text';
+import { mapsUrl, plainText, readOnlyText } from './text';
 import { Unassigned } from './parts';
 import { openEditor } from './state';
 import { plural } from '../../lib/text';
+import { isPhone } from '../../app/layout';
 
 const ICON = { size: '2.2rem', strokeWidth: 1.8 };
 
@@ -116,6 +118,15 @@ export function EventDetail({ ev, anchor, onClose }: { ev: CalEvent; anchor: DOM
         {countdown && until >= 0 && (
           <Row icon={<Timer {...ICON} />}>{until === 0 ? 'Today' : `${plural(until, 'day')} until event`}</Row>
         )}
+        {isPhone && ev.readOnly && (
+          <Row icon={<Lock {...ICON} />}>
+            <span class="evd-label">Can't be changed here</span>
+            <span class="evd-why">
+              {readOnlyText(ev.readOnly, calendarName(ev.calendarId), ev.organizer)} Who it is for and its countdown can still be
+              set.
+            </span>
+          </Row>
+        )}
         <Row icon={<CalendarDays {...ICON} />}>{whenLabel(ev)}</Row>
         {repeat && <Row icon={<Repeat {...ICON} />}>{repeat}</Row>}
         {reminder && <Row icon={<Bell {...ICON} />}>{reminder}</Row>}
@@ -173,7 +184,13 @@ export function EventDetail({ ev, anchor, onClose }: { ev: CalEvent; anchor: DOM
         )}
         {ev.location && (
           <Row icon={<MapPin {...ICON} />}>
-            <span dir="auto">{ev.location}</span>
+            {isPhone ? (
+              <a class="evd-loc" href={mapsUrl(ev.location)} target="_blank" rel="noopener noreferrer" dir="auto">
+                {ev.location}
+              </a>
+            ) : (
+              <span dir="auto">{ev.location}</span>
+            )}
           </Row>
         )}
         {ev.description && (

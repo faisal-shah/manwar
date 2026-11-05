@@ -16,18 +16,27 @@ const portal = (node: ComponentChildren) => createPortal(node, document.body);
  * The second tap of a double tap lands where the first one did, a moment
  * later. When the first opened an overlay, the second falls on its scrim
  * and would close it again at once; so a scrim ignores a tap that comes
- * soon after the overlay opened and close to the tap that opened it. A
- * centered dialog opens wherever that tap was, so the second tap can also
- * land on a control in it (a PIN key, OK): a dialog ignores it inside too.
- * On the phone every overlay covers the spot (a full-width sheet, a
- * popover laid out as a bottom sheet), so sheets and popovers ignore it
- * inside as well, and the tap that closes an overlay there takes the rest
- * of its double tap with it, or it would press what was under the overlay.
+ * soon after the overlay opened and close to the tap that opened it. An
+ * overlay can also open under that tap (a centered dialog, and on the
+ * phone every sheet and popover: the editor's X sits where the header's +
+ * was), so the second tap can land on a control in it (a PIN key, Close):
+ * those ignore it inside too. The wall's sheets and popovers open beside
+ * what was tapped. On the phone the tap that closes an overlay also takes
+ * the rest of its double tap with it, or that would press what the
+ * overlay covered.
  */
 export const DOUBLE_TAP_MS = 450;
 const DOUBLE_TAP_REM = 6;
-/** The latest pointerdown; `seq` counts them, so the one right after a tap can be told from later ones. */
-let lastDown = { x: -1e9, y: -1e9, at: -1e9, seq: 0 };
+
+/** Where and when a tap went down; `seq` counts taps, so the one right after it can be told from later ones. */
+export interface TapMark {
+  x: number;
+  y: number;
+  at: number;
+  seq: number;
+}
+/** The latest pointerdown. */
+let lastDown: TapMark = { x: -1e9, y: -1e9, at: -1e9, seq: 0 };
 if (typeof window !== 'undefined')
   window.addEventListener(
     'pointerdown',
@@ -35,39 +44,65 @@ if (typeof window !== 'undefined')
     { capture: true, passive: true },
   );
 
-/** Whether a tap is the rest of a double tap that began at `from`. */
-function restOfTap(from: { x: number; y: number; at: number }, e: MouseEvent): boolean {
+/** The latest tap's place, timed from now (what is opening as it lands). */
+export const tapMark = (): TapMark => ({ ...lastDown, at: performance.now() });
+
+/** Whether a tap at (x, y) now (by default the latest one) is the second tap of the double tap begun at `m`. */
+export function secondTapOf(m: TapMark, x = lastDown.x, y = lastDown.y): boolean {
   const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 10;
-  return performance.now() - from.at < DOUBLE_TAP_MS && Math.hypot(e.clientX - from.x, e.clientY - from.y) < DOUBLE_TAP_REM * rem;
+  return performance.now() - m.at < DOUBLE_TAP_MS && Math.hypot(x - m.x, y - m.y) < DOUBLE_TAP_REM * rem;
 }
 
-/** Whether a tap is the rest of the double tap that opened the calling overlay. */
-function useOpeningTap(): (e: MouseEvent) => boolean {
-  const opened = useRef({ ...lastDown, at: performance.now() });
-  return (e) => restOfTap(opened.current, e);
-}
+const drop = (e: Event) => {
+  e.stopPropagation();
+  e.preventDefault();
+};
 
 /**
  * The tap being handled changes what is under the finger (a screen opens
  * in its place, a form closes and the list below moves up): the rest of
- * its double tap presses nothing. A no-op once the tap is past. Controls
- * inside `[data-tap-through]` (the phone's tab bar, where a tap changes
- * nothing but the tab) lose only a tap the browser counts as a double tap's
- * second (`detail` 2), so a quick but separate tap there always lands.
+ * its double tap presses nothing and focuses no field. A no-op once the tap
+ * is past. Controls inside `[data-tap-through]` (the phone's tab bar, where
+ * a tap changes nothing but the tab) lose only a tap the browser counts as
+ * a double tap's second (`detail` 2), so a quick but separate tap there
+ * always lands.
  */
 export function swallowRestOfTap(): void {
   const from = lastDown;
   const left = DOUBLE_TAP_MS - (performance.now() - from.at);
   if (left <= 0) return;
-  const onClick = (e: MouseEvent) => {
+  const onTap = (e: MouseEvent) => {
     // Only the very next tap (the second of a double tap), not taps made since.
-    if (lastDown.seq !== from.seq + 1 || !restOfTap(from, e)) return;
+    if (lastDown.seq !== from.seq + 1 || !secondTapOf(from, e.clientX, e.clientY)) return;
     if (e.detail < 2 && e.target instanceof Element && e.target.closest('[data-tap-through]')) return;
-    e.stopPropagation();
-    e.preventDefault();
+    drop(e);
   };
-  window.addEventListener('click', onClick, true);
-  setTimeout(() => window.removeEventListener('click', onClick, true), left);
+  for (const type of ['mousedown', 'click'] as const) window.addEventListener(type, onTap, true);
+  setTimeout(() => {
+    for (const type of ['mousedown', 'click'] as const) window.removeEventListener(type, onTap, true);
+  }, left);
+}
+
+/** Whether a tap is the rest of the double tap that opened the calling view; `opened` is that tap. */
+function useOpeningTap(): { opened: TapMark; isOpeningTap: (e: MouseEvent) => boolean } {
+  const opened = useRef(tapMark()).current;
+  return { opened, isOpeningTap: (e) => secondTapOf(opened, e.clientX, e.clientY) };
+}
+
+/**
+ * For a view that opens in place of what was tapped (a phone tab's inner
+ * view, a More row's page): spread on the view's root, and the rest of the
+ * double tap that opened it presses nothing in it and focuses no field
+ * there (raising the keyboard or the PIN pad).
+ */
+export function useOpeningTapGuard(): {
+  onPointerDownCapture: (e: PointerEvent) => void;
+  onMouseDownCapture: (e: MouseEvent) => void;
+  onClickCapture: (e: MouseEvent) => void;
+} {
+  const { isOpeningTap } = useOpeningTap();
+  const guard = (e: MouseEvent) => void (isOpeningTap(e) && drop(e));
+  return { onPointerDownCapture: guard, onMouseDownCapture: guard, onClickCapture: guard };
 }
 
 /** The onClose of every overlay on screen, for closeOverlays(). */
@@ -76,12 +111,11 @@ const onScreen = new Set<{ current: () => void }>();
 /**
  * Every overlay (sheet, dialog, popover, menu) calls this. `scrim` closes it
  * on a tap outside, letting the rest of the opening double tap through;
- * `content`, for a centered dialog's box (onClickCapture), drops that tap
- * inside it (on the phone, a sheet's and a popover's too). The overlay also
- * closes on idle return (closeOverlays).
+ * `content`, for the box of one that opens under that tap (onClickCapture),
+ * drops it inside. The overlay also closes on idle return (closeOverlays).
  */
 export function useOverlay(onClose: () => void): { scrim: (e: MouseEvent) => void; content: (e: MouseEvent) => void } {
-  const openingTap = useOpeningTap();
+  const { opened, isOpeningTap } = useOpeningTap();
   const close = useRef(onClose);
   close.current = onClose;
   // On the phone, Back closes it.
@@ -90,17 +124,14 @@ export function useOverlay(onClose: () => void): { scrim: (e: MouseEvent) => voi
     onScreen.add(close);
     return () => void onScreen.delete(close);
   }, []);
-  // A layout effect's cleanup runs as the overlay leaves the screen (an effect's waits for the next paint).
-  useLayoutEffect(() => () => void (isPhone && swallowRestOfTap()), []);
+  // As it leaves the screen (a layout effect's cleanup; an effect's waits for the next paint), when a tap
+  // closed it: not Back, idle return or a change from elsewhere, which leave no tap of theirs to swallow.
+  useLayoutEffect(() => () => void (isPhone && lastDown.seq !== opened.seq && swallowRestOfTap()), []);
   return {
     scrim: (e) => {
-      if (!openingTap(e)) onClose();
+      if (!isOpeningTap(e)) onClose();
     },
-    content: (e) => {
-      if (!openingTap(e)) return;
-      e.stopPropagation();
-      e.preventDefault();
-    },
+    content: (e) => void (isOpeningTap(e) && drop(e)),
   };
 }
 
@@ -111,9 +142,9 @@ export function closeOverlays(): void {
 
 /** Tap handler for a full-screen layer that is not an overlay to close (the sleep screen), with the same double-tap rule. */
 export function useScrimClose(onClose: () => void): (e: MouseEvent) => void {
-  const openingTap = useOpeningTap();
+  const { isOpeningTap } = useOpeningTap();
   return (e) => {
-    if (!openingTap(e)) onClose();
+    if (!isOpeningTap(e)) onClose();
   };
 }
 

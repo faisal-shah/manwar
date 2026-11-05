@@ -11,7 +11,7 @@ import {
   shiftStart,
   type Form,
 } from '../../src/features/calendar/form';
-import { plainText } from '../../src/features/calendar/text';
+import { mapsUrl, plainText, readOnlyText } from '../../src/features/calendar/text';
 
 const at = (s: string) => new Date(s).getTime();
 
@@ -193,5 +193,25 @@ describe('event notes', () => {
     const bare = formFromEvent({ ...ev, description: undefined }, ['asiyah'], false);
     expect(draftFromForm({ ...bare, title: 'Field trip!' }, false).description).toBeUndefined();
     expect(draftFromForm({ ...bare, notes: 'Bring water' }, false).description).toBe('Bring water');
+  });
+});
+
+describe('event detail text', () => {
+  it('links a location to a maps search', () => {
+    expect(mapsUrl(' Smile Dental, 100 Main St ')).toBe(
+      'https://www.google.com/maps/search/?api=1&query=Smile%20Dental%2C%20100%20Main%20St',
+    );
+    expect(mapsUrl('مسجد النور')).toBe(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent('مسجد النور')}`);
+  });
+
+  it('says why an event is read-only, with names isolated from the sentence', () => {
+    expect(readOnlyText('birthday', 'Contacts')).toBe('Birthdays come from Google Contacts: change it there.');
+    expect(readOnlyText('calendar', 'تقويم ماما')).toBe('\u2068تقويم ماما\u2069 is shared with the household to read only.');
+    expect(readOnlyText('invited', 'Family', 'coach@club.example')).toBe(
+      'Only its organizer, \u2068coach@club.example\u2069, can change it.',
+    );
+    expect(readOnlyText('invited', 'Family')).toBe('Only its organizer can change it.');
+    expect(readOnlyText('gmail', 'Family')).toContain('Gmail');
+    expect(readOnlyText('locked', 'Family')).toContain('locked copy');
   });
 });
