@@ -114,7 +114,7 @@ export function PlanMealSheet({
     return (
       <button type="button" class={`pick-row${r.id === recipeId ? ' on' : ''}`} key={r.id} onClick={() => pick(r)}>
         <span class="pick-emoji">{r.emoji ?? (rc && <CategoryBadge category={rc} size={3.2} />)}</span>
-        <span class="grow">{r.name}</span>
+        <bdi class="grow">{r.name}</bdi>
         {rc && <CategoryBadge category={rc} size={2.8} />}
       </button>
     );

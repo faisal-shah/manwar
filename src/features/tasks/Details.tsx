@@ -36,7 +36,9 @@ function Details({ d }: { d: NonNullable<typeof detailsFor.value> }) {
               {t.emoji}
             </span>
           )}
-          <h2 class="serif">{t.title}</h2>
+          <h2 class="serif">
+            <bdi>{t.title}</bdi>
+          </h2>
           <IconButton label="Edit task" onClick={() => editTask(t)}>
             <Pencil size="2.2rem" />
           </IconButton>

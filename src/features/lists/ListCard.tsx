@@ -82,7 +82,7 @@ export function ListCard({ list, compact }: { list: List; compact?: boolean }) {
         onPointerDown={item.done ? undefined : (e) => drag.press(e, item)}
       >
         <button type="button" class="li-text" onClick={(e) => openEditor(item, e.currentTarget.parentElement!)}>
-          <span>{item.text}</span>
+          <bdi>{item.text}</bdi>
           {item.qty && <span class="li-qty">{item.qty}</span>}
         </button>
         <button
@@ -103,7 +103,9 @@ export function ListCard({ list, compact }: { list: List; compact?: boolean }) {
     <section class={`list-card${compact ? ' compact' : ''}`} style={{ '--c': listColor(list) }} aria-label={list.title}>
       <header class="lc-head">
         {list.emoji && <span class="lc-emoji">{list.emoji}</span>}
-        <h3 class="lc-title">{list.title}</h3>
+        <h3 class="lc-title">
+          <bdi>{list.title}</bdi>
+        </h3>
         <span class="lc-count" aria-label={`${view.open} open items`}>
           {view.open}
         </span>

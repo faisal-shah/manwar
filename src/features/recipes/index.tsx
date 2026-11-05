@@ -33,7 +33,7 @@ function RecipesBody() {
         onClick={() => (selectedRecipeId.value = r.id)}
       >
         <span class="rl-emoji">{r.emoji ?? (cat && <CategoryBadge category={cat} size={3.2} />)}</span>
-        <span class="grow">{r.name}</span>
+        <bdi class="grow">{r.name}</bdi>
         {cat && <CategoryBadge category={cat} size={2.8} />}
       </button>
     );
