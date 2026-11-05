@@ -1,6 +1,15 @@
+/*
+ * The shell is exactly the viewport's height, whatever its columns hold.
+ * With the on-screen keyboard up the viewport is shorter than the rail
+ * (core/viewport.ts keeps the scale): an auto row would grow to the rail,
+ * the page would overflow, and scrolling a field into view would scroll
+ * the whole page and take the top bar off the screen. So the row is the
+ * viewport and the rail clips what does not fit (under the keyboard).
+ */
 .shell {
   display: grid;
   grid-template-columns: var(--rail-w) 1fr;
+  grid-template-rows: minmax(0, 1fr);
   height: 100%;
 }
 
@@ -9,6 +18,8 @@
   display: flex;
   flex-direction: column;
   align-items: stretch;
+  min-height: 0;
+  overflow: clip;
   background: var(--rail);
   padding: 0.8rem 0;
   gap: 0.2rem;

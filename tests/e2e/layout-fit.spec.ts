@@ -131,6 +131,27 @@ test('the on-screen keyboard keeps the scale, and the sheet ends above it', asyn
   await expect.poll(() => rem(page)).toBeLessThan(full);
 });
 
+test('with the keyboard up, a list field low on the screen scrolls the list, not the page', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await open(page);
+  await rail(page, 'Lists').click();
+  // A section's + opens Add item at the end of that section, near the bottom of the screen.
+  await page
+    .getByRole('button', { name: /^Add to / })
+    .last()
+    .click();
+  const field = page.locator('.li-add-input:focus');
+  await expect(field).toBeVisible();
+  // The keyboard opens: the viewport shrinks to the space above it, shorter than the nav rail.
+  await page.setViewportSize({ width: 1280, height: 430 });
+  await expect.poll(async () => (await box(field)).y + (await box(field)).height).toBeLessThanOrEqual(430);
+  await page.waitForTimeout(300);
+  expect((await box(page.locator('.topbar'))).y).toBe(0);
+  expect(await page.evaluate(() => [document.documentElement.scrollTop, document.body.scrollTop])).toEqual([0, 0]);
+  // The field scrolled into view inside its list.
+  expect(await field.evaluate((el) => el.closest('.lc-body')!.scrollTop)).toBeGreaterThan(0);
+});
+
 test('a PIN pad that opens while someone types closes the keyboard, so all its keys show', async ({ page }) => {
   await page.clock.install();
   await open(page);
