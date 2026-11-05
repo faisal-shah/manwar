@@ -2,17 +2,39 @@ import { effect, signal } from '@preact/signals';
 import { ArrowLeft, CloudOff, CloudUpload, TriangleAlert } from 'lucide-preact';
 import { sync } from '../calendar/engine';
 import { googleProblem, session } from '../data/session';
-import { loadError, ready, unsentWrites } from '../data/store';
+import { householdId, loadError, ready, unsentWrites } from '../data/store';
 import { currentTime, nowMs } from '../lib/clock';
 import { calendarStatus, householdStatus, unsentStatus } from '../app/status';
 import { IngredientsHost } from '../features/meals/IngredientsModal';
 import { useBack } from '../ui/back';
 import { IconButton } from '../ui/controls';
 import { DialogHost, ToastHost } from '../ui/overlays';
+import { calView } from './calendar/state';
+import { openListId } from './lists/state';
+import { moreView } from './more';
 import { goPhone, phoneTab } from './nav';
+import { noteDraft } from './notes';
 import { PHONE_PAGES } from './pages';
 import { PairScreen } from './PairScreen';
 import './phone.css';
+
+/*
+ * Where this phone was (tab, open list, More view, Calendar view, kept for
+ * the session) and a note being written belong to the household it was
+ * signed in to: signed out (unpaired, removed), they go.
+ */
+let household = householdId.peek();
+effect(() => {
+  const next = householdId.value;
+  if (household && next !== household) {
+    phoneTab.value = 'today';
+    openListId.value = null;
+    moreView.value = null;
+    calView.value = 'agenda';
+    noteDraft.value = '';
+  }
+  household = next;
+});
 
 /** The phone companion: pairing until signed in, then the tabs. */
 export function PhoneApp() {

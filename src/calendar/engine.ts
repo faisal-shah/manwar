@@ -1,4 +1,5 @@
 import { batch as signalBatch, computed, effect, signal, type ReadonlySignal } from '@preact/signals';
+import { isPhone } from '../app/layout';
 import { demoMode } from '../config';
 import { listAdd } from '../data/settings';
 import { data, householdId, patch, profileById, put, remove as removeDoc, settings, upsert } from '../data/store';
@@ -94,6 +95,8 @@ interface Snapshot {
  * left in place would come back on the next offline start as if current.
  */
 function saveSnapshot(household: string) {
+  // A phone keeps the household's events in memory only (one left over from the wall layout goes).
+  if (isPhone) return dropSnapshot();
   const stored = (withNotes: boolean): StoredEvent[] =>
     events.value.map((e) => ({
       ...e,
@@ -124,6 +127,7 @@ function saveSnapshot(household: string) {
 
 /** Show the household's last events until the first sync; another household's are dropped. */
 function loadSnapshot(household: string) {
+  if (isPhone) return dropSnapshot();
   try {
     const raw = localStorage.getItem(SNAPSHOT_KEY);
     if (!raw) return;

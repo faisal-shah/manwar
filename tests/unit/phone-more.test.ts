@@ -43,7 +43,7 @@ describe('the sleep rule', () => {
 });
 
 describe('timer runs', () => {
-  const t = newRun('r2', 10, 1000, 'phone1');
+  const t = newRun('r2', 10, 1000, { startedBy: 'phone1' });
   it('starts after the lead-in, from the phone that started it', () => {
     expect(t).toEqual({
       id: 'wall',

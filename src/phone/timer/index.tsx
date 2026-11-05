@@ -3,7 +3,7 @@ import { signal } from '@preact/signals';
 import { useState } from 'preact/hooks';
 import type { TargetedEvent } from 'preact';
 import { AlarmClock, Timer as TimerIcon } from 'lucide-preact';
-import { errorMessage, isNetworkError } from '../../data/errors';
+import { wallRequestError } from '../../data/errors';
 import { pairedDevice } from '../../data/session';
 import { settings } from '../../data/store';
 import type { WallTimer } from '../../data/types';
@@ -32,7 +32,7 @@ async function ask(request: () => Promise<boolean>, refused: string): Promise<bo
     if (await request()) return true;
     toast(refused);
   } catch (e) {
-    toast(isNetworkError(e) ? "Could not reach the wall. Check this phone's connection and try again." : errorMessage(e));
+    toast(wallRequestError(e));
   } finally {
     asking.value = false;
   }

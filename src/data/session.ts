@@ -1,6 +1,7 @@
 import { signal } from '@preact/signals';
 import { onAuthStateChanged, signInWithCustomToken, signOut, type User } from 'firebase/auth';
 import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
+import { HOUSEHOLD_KEY } from './householdKey';
 import { httpsCallable } from 'firebase/functions';
 import { demoMode, googleClientId, googleScopes } from '../config';
 import { onActivity } from '../core/activity';
@@ -255,9 +256,9 @@ export async function makePairingCode(): Promise<{ code: string; expiresAt: numb
 }
 
 /** Put the wall's pairing code away (Done, or the page left): it can no longer pair a phone. */
-export async function cancelPairingCode(): Promise<void> {
+export async function cancelPairingCode(code: string): Promise<void> {
   try {
-    await call<void, unknown>('cancelPairing')();
+    await call<{ code: string }, unknown>('cancelPairing')({ code });
   } catch (e) {
     throw new Error(errorMessage(e));
   }
@@ -350,7 +351,6 @@ async function removed(): Promise<void> {
  * remembered for its user and used when the claims cannot be refreshed for
  * any reason but a refused sign-in (offline, or the token service failing).
  */
-const HOUSEHOLD_KEY = 'manwar.claims.v1';
 
 interface Household {
   uid: string;

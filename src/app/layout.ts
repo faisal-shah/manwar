@@ -5,13 +5,17 @@
  * layout is chosen once per page load:
  *
  * 1. `?layout=wall|phone` in the URL (tests, screenshots);
- * 2. the choice stored on this device (pairing a phone stores 'phone';
- *    More > Use as the wall, or the sign-in screen's switch, store theirs);
- * 3. otherwise the screen: a short side under 600 CSS px is a phone.
+ * 2. the choice stored on this device (pairing a phone stores 'phone', a
+ *    wall signing in stores 'wall'; the layout switches store theirs);
+ * 3. a device signed in as the household's wall (it remembers a household
+ *    and is not a paired phone): a wall from before layouts were stored;
+ * 4. otherwise the screen: a short side under 600 CSS px is a phone.
  *
  * Switching stores the choice and reloads, so the services a layout starts
  * (the wall's display schedule, wake lock, idle return) never mix.
  */
+import { HOUSEHOLD_KEY } from '../data/householdKey';
+
 export type Layout = 'wall' | 'phone';
 
 const KEY = 'manwar.layout.v1';
@@ -19,10 +23,11 @@ const PHONE_MAX_SHORT_SIDE = 600;
 
 const isLayout = (v: unknown): v is Layout => v === 'wall' || v === 'phone';
 
-/** The rule above, pure (unit-tested). */
-export function chooseLayout(param: string | null, stored: string | null, shortSide: number): Layout {
+/** The rule above, pure (unit-tested). `signedInAsWall`: what rule 3 asks. */
+export function chooseLayout(param: string | null, stored: string | null, signedInAsWall: boolean, shortSide: number): Layout {
   if (isLayout(param)) return param;
   if (isLayout(stored)) return stored;
+  if (signedInAsWall) return 'wall';
   return shortSide < PHONE_MAX_SHORT_SIDE ? 'phone' : 'wall';
 }
 
@@ -34,12 +39,23 @@ function storedLayout(): string | null {
   }
 }
 
+/** Whether this device remembers a household it opened as the wall (not as a paired phone). */
+function signedInAsWall(): boolean {
+  try {
+    const h = JSON.parse(localStorage.getItem(HOUSEHOLD_KEY) ?? 'null') as { hid?: unknown; device?: unknown } | null;
+    return typeof h?.hid === 'string' && h.device === undefined;
+  } catch {
+    return false;
+  }
+}
+
 export const layout: Layout =
   typeof window === 'undefined'
     ? 'wall'
     : chooseLayout(
         new URLSearchParams(location.search).get('layout'),
         storedLayout(),
+        signedInAsWall(),
         Math.min(window.screen.width, window.screen.height),
       );
 
@@ -57,7 +73,7 @@ export function switchLayout(next: Layout): void {
   if (next !== layout || url.href !== location.href) location.replace(url.href);
 }
 
-/** Remember the phone layout without reloading (pairing, on a page that already is one). */
+/** Remember the layout without reloading (pairing on a phone, a wall signing in): the page already is that one. */
 export function rememberLayout(next: Layout): void {
   try {
     localStorage.setItem(KEY, next);

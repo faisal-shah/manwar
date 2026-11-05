@@ -1,9 +1,11 @@
 import { computed, effect } from '@preact/signals';
+import { isPhone } from '../../app/layout';
 import { endForcedSleep, sleepHeldUntil } from '../../core/display';
 import { data, newId, patch, put, transaction } from '../../data/store';
 import type { WallTimer } from '../../data/types';
 import { currentTime, nowMs } from '../../lib/clock';
-import { newRun, onWall, stoppedAt, timerSleepHold } from './logic';
+import { stored as storedSignal } from '../../lib/stored';
+import { newRun, onWall, shownOn, stoppedAt, timerSleepHold } from './logic';
 
 export type RunningTimer = WallTimer;
 
@@ -17,7 +19,18 @@ export type RunningTimer = WallTimer;
  * ended more than STALE_MS ago is left over (nobody was at the wall to
  * dismiss it) and reads as none.
  */
-const stored = computed(() => data.timers.value.find((x) => x.id === 'wall') ?? null);
+const doc = computed(() => data.timers.value.find((x) => x.id === 'wall') ?? null);
+
+/** This tablet's own id, for the runs it starts (WallTimer.startedOn); null on a phone. */
+const wallId: string | null = isPhone
+  ? null
+  : storedSignal('manwar.wallId.v1', crypto.randomUUID(), (v): v is string => typeof v === 'string').peek();
+
+/** The run this device shows: on a wall, one it started or a phone did; a phone shows any. */
+const stored = computed(() => {
+  const t = doc.value;
+  return t && shownOn(t, wallId) ? t : null;
+});
 
 export const timer = computed<RunningTimer | null>(() => {
   const t = stored.value;
@@ -39,7 +52,7 @@ const stop = (run: string) => ({ [`stopped.${run}`]: currentTime() }) as Partial
 
 /** Start a timer at the wall (replacing one that runs). Written here at once, as every wall write is. */
 export function startTimer(minutes: number): void {
-  void put('timers', newRun(newId(), minutes, currentTime()));
+  void put('timers', newRun(newId(), minutes, currentTime(), { startedOn: wallId ?? undefined }));
 }
 
 /** Stop or dismiss run `t` at the wall. */
@@ -62,7 +75,7 @@ export function startTimerFromPhone(minutes: number, device?: string): Promise<b
   return transaction(async (tx) => {
     const cur = await tx.get('timers', 'wall');
     if (cur && onWall(cur, currentTime())) return false;
-    tx.put('timers', newRun(newId(), minutes, currentTime(), device));
+    tx.put('timers', newRun(newId(), minutes, currentTime(), { startedBy: device }));
     return true;
   });
 }

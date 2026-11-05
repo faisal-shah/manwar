@@ -1,7 +1,7 @@
 import { computed, signal } from '@preact/signals';
 import { arrayUnion, deleteField } from 'firebase/firestore';
 import { errorMessage } from '../../data/errors';
-import { batch, data, fieldChanges, newId, patch, put, upsert } from '../../data/store';
+import { batch, data, fieldChanges, newId, patch, put } from '../../data/store';
 import type { List, ListItem, ListKind, ListSection } from '../../data/types';
 import { currentTime } from '../../lib/clock';
 import { toast } from '../../ui/overlays';
@@ -11,6 +11,7 @@ import {
   itemKey,
   nextDefaultGrocery,
   placeMerge,
+  reopenedChanges,
   reopenedItem,
   sectionOf,
   topOrder,
@@ -68,6 +69,17 @@ const notSaved = (what: string) => (e: unknown) => {
   toast(`${what}: ${errorMessage(e)}`);
 };
 
+/**
+ * A reopening refused because the item is gone from the server (deleted on
+ * another device meanwhile, Clear done there): `whole` writes it back
+ * complete while its list is still there. Any other refusal is said.
+ */
+const unlessGone = (listId: string, whole: () => Promise<void>, what: string) => (e: unknown) => {
+  if ((e as { code?: string }).code === 'not-found' && lists.peek().some((l) => l.id === listId))
+    return void whole().catch(notSaved(what));
+  notSaved(what)(e);
+};
+
 const settleTimers = new Map<string, number>();
 
 function unsettle(id: string): void {
@@ -109,8 +121,9 @@ export function addItem(list: List, text: string, sectionId: string | null, qty?
     const done = items.filter((i) => i.done && itemKey(i.text) === key).sort((a, b) => (b.doneAt ?? 0) - (a.doneAt ?? 0))[0];
     if (done) {
       const section = sectionId ?? sectionOf(list, done);
-      void upsert('listItems', done.id, reopenedItem(done, topOrder(list, items, section), section, qty)).catch(
-        notSaved(`"${done.text}" was not added back`),
+      const order = topOrder(list, items, section);
+      void patch('listItems', done.id, fieldChanges(reopenedChanges(order, section, qty)) as Partial<ListItem>).catch(
+        unlessGone(list.id, () => put('listItems', reopenedItem(done, order, section, qty)), `"${done.text}" was not added back`),
       );
       return { kind: 'reopened', item: done };
     }
@@ -159,18 +172,21 @@ export function applyOrder(patches: OrderPatch[]): void {
 
 /** Put several items on a list in one batch (see logic.placeMerge). Returns an undo that restores the list as it was. */
 export function mergeItems(list: List, rows: MergeItem[]): () => void {
-  const b = batch();
-  const created: string[] = [];
-  /** What the undo puts back on each reopened item: only the fields the merge changed. */
-  const reopened: { id: string; was: Partial<ListItem> }[] = [];
+  const created: ListItem[] = [];
+  /** Checked-off items that come back: what changes, the whole item, and what the undo puts back (only the fields the merge changed). */
+  const reopens: { changes: Partial<ListItem>; whole: ListItem; was: Partial<ListItem> }[] = [];
   const now = currentTime();
   const items = itemsByList.value.get(list.id) ?? [];
   const taken = items.map((i) => ({ id: i.id }));
   for (const { row, prior, order } of placeMerge(list, items, rows)) {
     if (prior) {
       const changed: (keyof ListItem)[] = row.qty ? ['done', 'order', 'qty'] : ['done', 'order'];
-      reopened.push({ id: prior.id, was: Object.fromEntries(changed.map((k) => [k, prior[k]])) });
-      b.upsert('listItems', prior.id, reopenedItem(prior, order, sectionOf(list, prior), row.qty));
+      const section = sectionOf(list, prior);
+      reopens.push({
+        changes: reopenedChanges(order, section, row.qty),
+        whole: reopenedItem(prior, order, section, row.qty),
+        was: Object.fromEntries(changed.map((k) => [k, prior[k]])),
+      });
       continue;
     }
     const item: ListItem = {
@@ -182,14 +198,24 @@ export function mergeItems(list: List, rows: MergeItem[]): () => void {
       order,
       createdAt: now,
     };
-    created.push(item.id);
+    created.push(item);
     taken.push({ id: item.id });
-    b.put('listItems', item);
   }
-  void b.commit().catch(notSaved(`The items were not added to ${list.title}`));
+  // One batch; if an item it reopens was deleted meanwhile (the whole batch is refused), again with those items whole.
+  const commit = (whole: boolean) => {
+    const b = batch();
+    for (const r of reopens)
+      if (whole) b.put('listItems', r.whole);
+      else b.patch('listItems', r.whole.id, fieldChanges(r.changes) as Partial<ListItem>);
+    created.forEach((item) => b.put('listItems', item));
+    return b.commit();
+  };
+  const what = `The items were not added to ${list.title}`;
+  void commit(false).catch(unlessGone(list.id, () => commit(true), what));
+  const reopened = reopens.map((r) => ({ id: r.whole.id, was: r.was }));
   return () => {
     const u = batch();
-    created.forEach((id) => u.remove('listItems', id));
+    created.forEach((item) => u.remove('listItems', item.id));
     // Only the merged fields go back: a rename or move made since is kept, and an item deleted since stays deleted.
     const live = new Set((itemsByList.value.get(list.id) ?? []).map((i) => i.id));
     reopened.forEach(({ id, was }) => live.has(id) && u.patch('listItems', id, fieldChanges(was) as Partial<ListItem>));

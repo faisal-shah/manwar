@@ -213,31 +213,58 @@ test('an offline phone queues no start or stop: it says it could not reach the w
   expect(real([...w.errors, ...p.errors])).toEqual([]);
 });
 
+test('a timer set on one wall stays on that wall; one started from a phone shows on every wall', async ({ browser }) => {
+  const hh = name('twowalls');
+  const study = await wall(browser, hh);
+  const bedroom = await wall(browser, hh);
+  const p = await phone(browser, hh);
+  const studyLayer = study.page.locator('.timer-layer');
+  const bedroomLayer = bedroom.page.locator('.timer-layer');
+  await startAtWall(study.page, '5');
+  await expect(studyLayer.locator('.timer-total')).toContainText('5 min');
+  // The phone sees the household's timer; the other tablet does not show it, chime or wake for it.
+  await more(p.page, 'Wall timer');
+  await expect(p.page.locator('.pt-total')).toContainText('5 min timer');
+  await bedroom.page.waitForTimeout(1500);
+  await expect(bedroomLayer).toHaveCount(0);
+  // Stopped from the phone, and a new one from the phone: on both walls.
+  await p.page.getByRole('button', { name: 'Stop timer' }).click();
+  await expect(studyLayer).toHaveCount(0);
+  await p.page.waitForTimeout(500);
+  await p.page.getByRole('button', { name: '10 minutes', exact: true }).click();
+  await expect(studyLayer.locator('.timer-total')).toContainText('10 min');
+  await expect(bedroomLayer.locator('.timer-total')).toContainText('10 min');
+  expect([...study.errors, ...bedroom.errors, ...p.errors]).toEqual([]);
+});
+
 test('a stop that lands late, from a wall that was offline, leaves the timer started since', async ({ browser }) => {
   const hh = name('latestop');
-  const hall = await wall(browser, hh);
-  const kitchen = await wall(browser, hh);
-  const hallLayer = hall.page.locator('.timer-layer');
-  const kitchenLayer = kitchen.page.locator('.timer-layer');
-  await startAtWall(hall.page, '5');
-  await expect(kitchenLayer.locator('.timer-total')).toContainText('5 min');
-  // The hall tablet's Wi-Fi drops as it stops the timer; the kitchen stops it too, and starts another.
-  await hall.page.context().setOffline(true);
-  await hallLayer.getByRole('button', { name: 'Stop timer' }).click();
-  await expect(hallLayer).toHaveCount(0);
-  await kitchenLayer.getByRole('button', { name: 'Stop timer' }).click();
-  await startAtWall(kitchen.page, '7');
-  await expect(kitchenLayer.locator('.timer-total')).toContainText('7 min');
-  await hall.page.context().setOffline(false);
-  // The hall's stop lands, naming the 5-minute run: the 7-minute one runs on, on both walls.
-  await expect(hallLayer.locator('.timer-total')).toContainText('7 min', { timeout: 30_000 });
-  await kitchen.page.waitForTimeout(1500);
-  await expect(kitchenLayer.locator('.timer-total')).toContainText('7 min');
+  const w = await wall(browser, hh);
+  const p = await phone(browser, hh);
+  const layer = w.page.locator('.timer-layer');
+  await startAtWall(w.page, '5');
+  await expect(layer.locator('.timer-total')).toContainText('5 min');
+  await more(p.page, 'Wall timer');
+  await expect(p.page.locator('.pt-total')).toContainText('5 min timer');
+  // The wall's Wi-Fi drops as it stops its timer; a parent stops it from the phone too, and starts another.
+  await w.page.context().setOffline(true);
+  await layer.getByRole('button', { name: 'Stop timer' }).click();
+  await expect(layer).toHaveCount(0);
+  await p.page.getByRole('button', { name: 'Stop timer' }).click();
+  await expect(p.page.getByRole('button', { name: '10 minutes', exact: true })).toBeVisible();
+  await p.page.waitForTimeout(500);
+  await p.page.getByRole('button', { name: '10 minutes', exact: true }).click();
+  await expect(p.page.locator('.pt-total')).toContainText('10 min timer');
+  await w.page.context().setOffline(false);
+  // The wall's stop lands, naming the 5-minute run: the 10-minute one runs on, on the wall and the phone.
+  await expect(layer.locator('.timer-total')).toContainText('10 min', { timeout: 30_000 });
+  await w.page.waitForTimeout(1500);
+  await expect(layer.locator('.timer-total')).toContainText('10 min');
+  await expect(p.page.locator('.pt-total')).toContainText('10 min timer');
   const t = await timerDoc(hh);
-  expect(t.minutes).toBe(7);
-  expect(t.stopped).toHaveLength(1);
+  expect(t.minutes).toBe(10);
   expect(t.stopped).not.toContain(t.run);
-  expect(real([...hall.errors, ...kitchen.errors])).toEqual([]);
+  expect(real([...w.errors, ...p.errors])).toEqual([]);
 });
 
 test('a timer started from the phone ends Sleep now on the wall; one already running does not', async ({ browser }) => {
@@ -390,6 +417,23 @@ test('Sleep now from the phone blanks the wall and Wake up wakes it; the phone s
   await expect(p.page.locator('.pws-state')).toContainText('The wall is likely awake');
   await expect(p.page.locator('.pws-state')).toContainText('Wake up, asked at 11:44 AM.');
   expect([...w.errors, ...p.errors]).toEqual([]);
+});
+
+test('an offline phone asking the wall to sleep is told it could not reach it, and nothing is queued', async ({ browser }) => {
+  const hh = name('screenoffline');
+  const w = await wall(browser, hh);
+  const p = await phone(browser, hh);
+  await more(p.page, 'Wall screen');
+  await p.page.context().setOffline(true);
+  await p.page.getByRole('button', { name: /Sleep now/ }).click();
+  await expect(p.page.locator('.toast', { hasText: 'Could not reach the wall' })).toBeVisible({ timeout: 20_000 });
+  await expect(p.page.locator('.pws-state')).toContainText('The wall is likely awake');
+  await p.page.context().setOffline(false);
+  // Back online, nothing that was asked offline lands on the wall.
+  await w.page.waitForTimeout(3000);
+  await expect(w.page.locator('.sleep-screen')).toHaveCount(0);
+  expect(await stored(hh, 'commands/display')).toBeNull();
+  expect(real([...w.errors, ...p.errors])).toEqual([]);
 });
 
 test("the phone shows tonight's dinner and plans the week, and the wall's grid shows the plan", async ({ browser }) => {

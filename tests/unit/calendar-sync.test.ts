@@ -42,6 +42,8 @@ vi.mock('../../src/data/store', async () => {
 
 const source = vi.hoisted(() => ({}) as CalendarSource);
 vi.mock('../../src/calendar/google', () => ({ googleSource: source }));
+// The wall's engine (a phone keeps no snapshot).
+vi.mock('../../src/app/layout', () => ({ isPhone: false }));
 vi.mock('../../src/data/session', () => ({ googleAccessToken: async () => 'token' }));
 
 const store = await import('../../src/data/store');

@@ -106,6 +106,17 @@ test('a phone unpairs itself without being told it was removed', async ({ browse
   await expect(p.page.locator('.ph-pair')).toBeVisible({ timeout: 30_000 });
   await expect(p.page.locator('.ph-pair .error')).toHaveCount(0);
   await expect(w.page.locator('.set-row', { hasText: 'Spare' })).toHaveCount(0);
+  // Where it was (More > This phone) went with the household: paired again in the same tab, it opens on Today.
+  // The wall put the last code away when the phone joined.
+  await expect(w.page.locator('.pair-card')).toHaveCount(0);
+  await w.page.getByRole('button', { name: 'Add a phone' }).click();
+  const code = w.page.locator('.pair-code');
+  await expect(code).toHaveText(/^[2-9A-Z]{4}-[2-9A-Z]{4}$/, { timeout: 20_000 });
+  await p.page.getByLabel('Pairing code').fill((await code.textContent())!);
+  await p.page.getByLabel('Name for this phone').fill('Spare');
+  await p.page.getByRole('button', { name: 'Pair', exact: true }).click();
+  await expect(p.page.locator('.ph-nav')).toBeVisible({ timeout: 30_000 });
+  await expect(p.page.locator('.ph-head h1')).toHaveText('Today');
 });
 
 test("the phone's Back closes what is open, then returns to Today", async ({ browser }) => {

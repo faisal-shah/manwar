@@ -84,25 +84,23 @@ export function reorder(
 }
 
 /**
- * A checked-off item put back on its list ("add again"): open, at `order`,
- * in `sectionId` (null: none), with `qty` when one was given. It names
- * everything the item is, written as a merge, so an item deleted meanwhile
- * on another device (Clear done there) comes back whole: an update of a
- * missing item is refused, and the item would vanish here too. An undefined
- * sectionId deletes the field.
+ * What putting a checked-off item back on its list ("add again") changes:
+ * open, at `order`, in `sectionId` (null: none, the field deleted), with
+ * `qty` when one was given. Only these are written, so a rename or move
+ * made meanwhile on another device is kept.
  */
-export function reopenedItem(prior: ListItem, order: number, sectionId: string | null, qty?: string): Partial<ListItem> {
-  const q = qty || prior.qty;
-  return {
-    id: prior.id,
-    listId: prior.listId,
-    text: prior.text,
-    createdAt: prior.createdAt,
-    done: false,
-    order,
-    sectionId: sectionId ?? undefined,
-    ...(q ? { qty: q } : {}),
-  };
+export function reopenedChanges(order: number, sectionId: string | null, qty?: string): Partial<ListItem> {
+  return { done: false, order, sectionId: sectionId ?? undefined, ...(qty ? { qty } : {}) };
+}
+
+/**
+ * The same item whole, for when it was deleted meanwhile on another device
+ * (Clear done there) and the change is refused: written back complete.
+ */
+export function reopenedItem(prior: ListItem, order: number, sectionId: string | null, qty?: string): ListItem {
+  const { doneAt: _doneAt, qty: priorQty, ...rest } = prior;
+  const q = qty || priorQty;
+  return { ...rest, ...reopenedChanges(order, sectionId), done: false, ...(q ? { qty: q } : {}) };
 }
 
 export interface MergeItem {

@@ -273,8 +273,12 @@ sequenceDiagram
 ```
 
 - **Layout** (`app/layout.ts`): chosen once per page load: `?layout=` in
-  the URL, else the choice stored on the device (pairing stores 'phone'),
-  else a short screen side under 600 CSS px is a phone. Switching stores
+  the URL, else the choice stored on the device (pairing stores 'phone', a
+  wall stores 'wall' once signed in), else a device that remembers a
+  household it opened as the wall (`manwar.claims.v1` without a device: a
+  wall from before layouts were stored, so a small tablet or a larger
+  display size never turns it into a phone), else a short screen side
+  under 600 CSS px is a phone. Switching stores
   and reloads, so the wall's services (display schedule, wake lock, idle
   return, seeding, remote commands) never start on a phone
   (`app/start.ts`). `html[data-layout]` scopes the phone's CSS
@@ -297,7 +301,8 @@ sequenceDiagram
 - **Pairing limits** (`functions/src/index.ts`): Add a phone asks for the
   PIN even while the wall is unlocked (`requireParent` with `fresh`),
   since what it grants outlasts the unlock. A code shown is put away
-  (`cancelPairing`) on Done or when Settings closes, and `createPairing`
+  (`cancelPairing`, naming the code, so a cancel that lands late never
+  takes the next one) on Done or when Settings closes, and `createPairing`
   clears codes any household left expired. `redeemPairing` needs no
   sign-in, so it runs on one instance and each instance refuses calls
   past 30 a minute (bursts of 15) before any database read
@@ -305,9 +310,20 @@ sequenceDiagram
   of phones). That bounds what a stranger can add to the bill to the
   calls themselves.
 - **No household data at rest on a phone**: phones use Firestore's memory
-  cache (`data/firebase.ts`; the wall's is persistent), and the calendar
-  snapshot is dropped when the device signs out (disconnected, removed,
-  unpaired), so a phone removed or lost keeps only what it had open.
+  cache (`data/firebase.ts`; the wall's is persistent) and keep no
+  calendar snapshot (`calendar/engine.ts`), so a phone removed or lost
+  keeps only what it had open. What that costs, and how it is met:
+  - A cold start has nothing to show: on a phone a collection counts as
+    loaded (`ready`, `data/store.ts`) only once the server has answered
+    for it (its listeners hear metadata changes, so an empty collection's
+    answer counts too), and the loading screen says when the household
+    cannot be reached, or why its data is not coming in.
+  - Changes made offline wait in memory: `unsentWrites` counts those the
+    server has not answered, the status line says how many wait, and the
+    update reload (`app/start.ts`) waits for them.
+  - Where the phone was (tab, open list, More and Calendar views, for the
+    session) and a note being written are cleared when the household
+    signs out (`phone/PhoneApp.tsx`).
 - **Shell** (`phone/PhoneApp.tsx`): pairing screen until signed in, then a
   header, the status line (household not syncing, calendar trouble) and a
   bottom tab bar. Tabs are `PhonePage`s (`phone/nav.ts`) listed in
@@ -451,11 +467,15 @@ sequenceDiagram
   last, and a stop is stamped under its run's id in `stopped`, so a stop
   that lands late stops nothing newer; the wall writes at once, a phone
   through `transaction()`, which also refuses a start over a timer the
-  phone had not seen; the wall's sleep hold is derived from the document)
-  and the screen
-  (`commands/display`: a phone asks the wall to sleep or wake;
+  phone had not seen; the wall's sleep hold is derived from the document;
+  a run started on a wall carries that tablet's id, `startedOn`, and only
+  that wall shows it, while one a phone starts shows on every wall) and
+  the screen (`commands/display`: a phone asks the wall to sleep or wake
+  through `transaction()`, so an offline phone is told at once rather
+  than queueing a request the wall would no longer take;
   `followDisplayCommands` applies each nonce once, only within 10 minutes
-  of being sent).
+  of being sent). A phone's request that fails says so with
+  `wallRequestError` (`data/errors.ts`).
 
 ## Layout system
 
@@ -647,11 +667,12 @@ generated from it: `node scripts/icons/render.mjs` after any brand change.
   - The `isDefaultGrocery` flag only ever passes to a grocery list (on
     delete, or to a new grocery list when none has it); with none, the
     next Add to grocery list makes a "Grocery List".
-  - A done item added again (Add item, the ingredients merge) is written
-    whole as a merge (`reopenedItem`, `upsert`), so one cleared meanwhile
-    on another device comes back rather than the write being refused
-    (the merge's whole batch with it). A refused item write says so in a
-    toast (`notSaved`).
+  - A done item added again (Add item, the ingredients merge) writes only
+    what that changes (`reopenedChanges`), so a rename or move made
+    elsewhere is kept; when the server refuses it because the item was
+    cleared meanwhile on another device (the merge's whole batch with it),
+    it is written back whole (`reopenedItem`) while its list is there. A
+    refused item write says so in a toast (`notSaved`).
   - `IngredientsHost` is mounted once in `app/tabs.tsx` `Overlays`, so
     `openIngredients` works from any tab (the planned-meal toast).
   - Editing one occurrence of a repeating meal goes through

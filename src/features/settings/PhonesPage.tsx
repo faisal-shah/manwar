@@ -51,7 +51,8 @@ export function PhonesPage() {
   const shown = useRef(pairing);
   shown.current = pairing;
   const putAway = () => {
-    if (shown.current && shown.current.expiresAt > Date.now()) void cancelPairingCode().catch(() => {});
+    const p = shown.current;
+    if (p && p.expiresAt > Date.now()) void cancelPairingCode(p.code).catch(() => {});
   };
   useEffect(() => putAway, []);
   const done = () => {

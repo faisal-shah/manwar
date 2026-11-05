@@ -1,5 +1,5 @@
 import { computed, effect, signal } from '@preact/signals';
-import { data, newId, put, settings, settingsLoaded } from '../data/store';
+import { data, newId, settings, settingsLoaded, transaction } from '../data/store';
 import { currentTime, now } from '../lib/clock';
 import { minutesOfDay } from '../lib/date';
 import { onActivity } from './activity';
@@ -108,9 +108,14 @@ export function startDisplay(): void {
 const COMMAND_KEY = 'manwar.displayCommand.v1';
 export const COMMAND_FRESH_MS = 10 * 60_000;
 
-/** Ask the wall(s) to sleep now or wake up. */
-export function sendDisplayCommand(kind: 'sleep' | 'wake', by?: string): void {
-  void put('commands', { id: 'display', kind, nonce: newId(), at: currentTime(), by });
+/**
+ * Ask the wall(s) to sleep now or wake up, through the server (a
+ * transaction): a request queued on an offline phone would land after the
+ * wall stopped taking it (COMMAND_FRESH_MS), so it is refused here instead.
+ * Rejects when the server cannot be reached.
+ */
+export function sendDisplayCommand(kind: 'sleep' | 'wake', by?: string): Promise<void> {
+  return transaction(async (tx) => tx.put('commands', { id: 'display', kind, nonce: newId(), at: currentTime(), by }));
 }
 
 /** The wall's side: apply each new display command. Started once the household is open. */

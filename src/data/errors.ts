@@ -27,6 +27,10 @@ export function isNetworkError(e: unknown): boolean {
   return e.code.startsWith('functions/') && / \[0\]$/.test(e.message);
 }
 
+/** What a phone says when a request it made of the wall, through the server, failed. */
+export const wallRequestError = (e: unknown): string =>
+  isNetworkError(e) ? "Could not reach the wall. Check this phone's connection and try again." : errorMessage(e);
+
 /**
  * The server refused a Firestore write decided from data another device had
  * changed: the rules (a task checked off twice, stars spent twice), or a

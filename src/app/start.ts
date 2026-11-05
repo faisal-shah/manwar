@@ -8,12 +8,12 @@ import { startRelock } from '../core/lock';
 import { keepFieldAboveKeyboard, keepScaleWithKeyboard } from '../core/viewport';
 import { startWeather } from '../core/weather';
 import { seedIfEmpty } from '../data/seed';
-import { ready } from '../data/store';
+import { ready, unsentWrites } from '../data/store';
 import { session } from '../data/session';
 import { holdSleepForTimer } from '../features/timer/state';
 import { startPhoneTheme } from '../phone/theme';
 import { startBack } from '../ui/back';
-import { isPhone } from './layout';
+import { isPhone, rememberLayout } from './layout';
 import { startIdleReturn } from './nav';
 
 /**
@@ -40,6 +40,8 @@ export function startApp(): void {
     startCalendarSync();
     startWeather();
     if (isPhone) return;
+    // A wall stays one however its screen measures (a display size changed later).
+    rememberLayout('wall');
     void seedIfEmpty();
     startIdleReturn();
     holdSleepForTimer();
@@ -55,11 +57,15 @@ const CHECK_MS = 30 * 60_000;
  * New deploys. The service worker checks for a new version every 30 minutes;
  * once one is waiting it is applied (page reload) as soon as nothing would be
  * interrupted: right away before sign-in, otherwise after two idle minutes
- * with no sheet, dialog, popover or running timer on screen.
+ * with no sheet, dialog, popover or running timer on screen, and no change
+ * made here still on its way to the server (a phone keeps those in memory
+ * only, so a reload would lose them).
  */
 function startUpdates(): void {
   let waiting = false;
-  const safe = () => session.value.state !== 'signedIn' || (idleFor() > IDLE_MS && !document.querySelector('[role="dialog"]'));
+  const safe = () =>
+    session.value.state !== 'signedIn' ||
+    (idleFor() > IDLE_MS && !document.querySelector('[role="dialog"]') && unsentWrites.peek() === 0);
   const tryApply = () => {
     if (waiting && safe()) void update(true);
   };

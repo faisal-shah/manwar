@@ -4,6 +4,7 @@ import { Monitor, Moon, Sun } from 'lucide-preact';
 import { sendDisplayCommand } from '../../core/display';
 import { sleepNowEnd } from '../../core/sleep';
 import { pairedDevice } from '../../data/session';
+import { wallRequestError } from '../../data/errors';
 import { data, settings } from '../../data/store';
 import { nowMs, today } from '../../lib/clock';
 import { dateAt, formatTime } from '../../lib/date';
@@ -30,9 +31,13 @@ export const wallSeemsAsleep = computed(() =>
   ),
 );
 
-export function askWall(kind: 'sleep' | 'wake'): void {
-  sendDisplayCommand(kind, pairedDevice() ?? undefined);
-  toast(kind === 'sleep' ? 'Asked the wall to sleep.' : 'Asked the wall to wake up.');
+export async function askWall(kind: 'sleep' | 'wake'): Promise<void> {
+  try {
+    await sendDisplayCommand(kind, pairedDevice() ?? undefined);
+    toast(kind === 'sleep' ? 'Asked the wall to sleep.' : 'Asked the wall to wake up.');
+  } catch (e) {
+    toast(wallRequestError(e));
+  }
 }
 
 const hhmm = (t: string) => formatTime(dateAt(today.value, t), settings.value.timeFormat);

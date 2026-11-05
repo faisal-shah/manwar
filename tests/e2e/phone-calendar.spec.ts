@@ -537,7 +537,7 @@ test('a calendar that does not load is named in the status line; the others stil
   expect(p.errors).toEqual([]);
 });
 
-test('offline: the agenda stays, an edit fails and keeps the editor, an assignment reaches the wall later', async ({
+test('offline: the agenda stays, an edit fails and keeps the editor, an assignment reaches the wall later, nothing kept on disk', async ({
   browser,
 }) => {
   const { w, p } = await pair(browser, 'offline');
@@ -568,12 +568,13 @@ test('offline: the agenda stays, an edit fails and keeps the editor, an assignme
   await p.ctx.setOffline(false);
   await expect(w.page.locator('.rail .badge')).toHaveText('2', { timeout: 30_000 });
 
-  // With Google out of reach, a reload shows the agenda from the snapshot.
+  // A phone keeps the events in memory only: none on disk, so with Google out of reach a reload has none to show.
+  expect(await page.evaluate(() => localStorage.getItem('manwar.demoEvents.v1'))).toBeNull();
   await page.evaluate(() => localStorage.setItem('manwar.demoCalendarDown.v1', '"all"'));
   await page.reload();
   await calTab(page).click();
-  await expect(page.locator(`[data-event="${READING}"]`)).toBeVisible();
-  await expect(page.locator(`[data-event="${DENTIST}"]`)).toContainText('Dentist (moved)');
+  await expect(page.locator('.phc-list')).toContainText('The calendar could not be loaded yet.', { timeout: 30_000 });
+  await expect(page.locator(`[data-event="${READING}"]`)).toHaveCount(0);
   expect([...w.errors, ...p.errors].filter((e) => !/Failed to fetch|ERR_INTERNET/.test(e))).toEqual([]);
 });
 

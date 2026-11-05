@@ -195,14 +195,21 @@ export const createPairing = onCall(opts, async (req) => {
   return { code, expiresAt };
 });
 
-/** Put the household's code away (the wall's Done, or the page left): it can no longer pair a phone. */
-export const cancelPairing = onCall(opts, async (req) => {
+/**
+ * Put a code away (the wall's Done, or the page left): it can no longer pair
+ * a phone. Only the code named, and only the caller's household's: a cancel
+ * that lands late never takes the code the wall made after it.
+ */
+export const cancelPairing = onCall<{ code?: unknown }>(opts, async (req) => {
   const { hid, device } = await caller(req);
   if (device) throw new HttpsError('permission-denied', 'Phones are paired from the wall.');
-  const codes = await pairingsOf(hid).get();
-  const b = db.batch();
-  for (const d of codes.docs) b.delete(d.ref);
-  await b.commit();
+  const code = normalizeCode(req.data?.code);
+  if (!code) throw new HttpsError('invalid-argument', 'That is not a pairing code.');
+  const ref = db.doc(`pairings/${code}`);
+  await db.runTransaction(async (tx) => {
+    const p = await tx.get(ref);
+    if (p.exists && p.get('hid') === hid) tx.delete(ref);
+  });
   return {};
 });
 

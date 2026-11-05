@@ -8,6 +8,7 @@ import {
   moveBy,
   nextDefaultGrocery,
   placeMerge,
+  reopenedChanges,
   reopenedItem,
   reorder,
   topOrder,
@@ -206,6 +207,13 @@ describe('groceryItemId', () => {
   it('takes a fresh id when an item on the list already has it (renamed since)', () => {
     const id = groceryItemId('g', 'Milk', [], fresh);
     expect(groceryItemId('g', 'Milk', [{ id }], fresh)).toBe('fresh');
+  });
+});
+
+describe('reopenedChanges', () => {
+  it('names only what putting it back changes, so a rename or move made elsewhere is kept', () => {
+    expect(reopenedChanges(-4, 'dairy')).toEqual({ done: false, order: -4, sectionId: 'dairy' });
+    expect(reopenedChanges(0, null, '2')).toEqual({ done: false, order: 0, sectionId: undefined, qty: '2' });
   });
 });
 

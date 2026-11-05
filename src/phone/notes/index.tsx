@@ -28,6 +28,7 @@ const usualFrom = stored<string | null>(
  * applied while the phone sat idle, the browser restoring the tab).
  */
 const draft = stored('manwar.phone.noteDraft.v1', '', (v): v is string => typeof v === 'string', 'session');
+export { draft as noteDraft };
 
 /** More > Note to the wall: write a note that pops up on the wall; see and dismiss what it shows. */
 function NoteView() {

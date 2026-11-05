@@ -220,6 +220,12 @@ export interface WallTimer {
   /** The phone that started it, when one did (Device id). */
   startedBy?: string;
   /**
+   * The wall that started it, when one did (that tablet's own id). Only that
+   * wall shows it: a household with a second tablet keeps the timer to the
+   * tablet it was set on. A run a phone starts shows on every wall.
+   */
+  startedOn?: string;
+  /**
    * When runs were stopped or dismissed, by run id (the document stays, so
    * the wall knows when sleep may resume). Only the document's own run
    * counts: a stop that lands late, meant for an earlier run, stops nothing.
