@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { expect, type Browser, type Page } from '@playwright/test';
+import { devices, expect, type Browser, type Page } from '@playwright/test';
 import { FS, OWNER, phone, wall, type Opened } from './phone-helpers';
 
 /*
@@ -24,6 +24,17 @@ export async function wallAndPhone(
   const p = await phone(browser, household, extra);
   if (tab) await phoneTab(p.page, tab);
   return { household, w, p, errors: () => [...w.errors, ...p.errors] };
+}
+
+/** A phone (Pixel 7) on `household` with its clock pinned at `now` (phone() pins the specs' usual 11:44). */
+export async function phoneAt(browser: Browser, household: string, now: string, extra = ''): Promise<Opened> {
+  const ctx = await browser.newContext({ ...devices['Pixel 7'], timezoneId: 'America/Chicago' });
+  const page = await ctx.newPage();
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(String(e)));
+  await page.goto(`/?demo=${household}&layout=phone&now=${now}${extra}`);
+  await expect(page.locator('.ph-nav')).toBeVisible({ timeout: 30_000 });
+  return { page, errors };
 }
 
 export const phoneTab = (page: Page, tab: string) => page.locator('.ph-nav button', { hasText: tab }).click();
