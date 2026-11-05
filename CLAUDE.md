@@ -94,7 +94,8 @@ flowchart LR
   declined are not on the wall; birthdays, Gmail events and locked copies
   are read-only (the API refuses their times and text); hidden details read
   Busy. Writes keep what the editor does not show: reminders are written
-  only when the reminder was changed (`keepReminders`), every timed write names
+  only when the reminder was changed (`keepReminders`), notes only when the
+  event had some or the editor gave some (`''` clears), every timed write names
   the event's own zones (the tablet's for new or formerly all-day events),
   All events leaves the series times out when they were not changed, a
   changed repeat replaces only the RRULE line (EXDATEs stay), and This and
