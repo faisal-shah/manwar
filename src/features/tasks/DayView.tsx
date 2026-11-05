@@ -1,4 +1,5 @@
 import { Check, House } from 'lucide-preact';
+import { useLayoutEffect, useRef } from 'preact/hooks';
 import { profiles, settings } from '../../data/store';
 import { today } from '../../lib/clock';
 import { progress } from '../../tasks/engine';
@@ -16,14 +17,33 @@ export function DayView() {
   const day = selectedDay.value;
   const occ = day === today.value ? todayOccurrences.value : occurrencesFor(day);
   const cols = buildColumns(occ, profiles.value, taskFilter.value);
+  const start = useStartInView(cols[0]?.id);
   if (!cols.length) return <NoColumns />;
   return (
-    <div class="pcols" data-count={cols.length}>
+    <div class="pcols" data-count={cols.length} ref={start.ref} onScroll={start.onScroll}>
       {cols.map((c) => (
         <DayColumn key={c.id} col={c} day={day} />
       ))}
     </div>
   );
+}
+
+/**
+ * Columns that scroll sideways snap, and the browser re-snaps to the column
+ * it showed when another is put in front of it: an Up for Grabs column that
+ * appears (a new chore, a claim undone, a new day) would open off the left
+ * edge. A row scrolled to its start stays at its start.
+ */
+export function useStartInView(first: string | undefined) {
+  const ref = useRef<HTMLDivElement>(null);
+  const atStart = useRef(true);
+  useLayoutEffect(() => {
+    if (ref.current && atStart.current) ref.current.scrollLeft = 0;
+  }, [first]);
+  const onScroll = (e: Event) => {
+    atStart.current = (e.currentTarget as HTMLElement).scrollLeft < 1;
+  };
+  return { ref, onScroll };
 }
 
 /** No column to show: a new household with no profiles yet (with a button to Settings > Profiles), or every column filtered out. */
