@@ -135,7 +135,9 @@
   /* Solid, with the red's ink: a tint over a tinted card falls under AA in the dark theme. */
   background: var(--danger);
   color: #fff;
-  color: lch(from var(--danger) calc((50 - l) * infinity) 0 0);
+  @supports (color: lch(from red l c h)) {
+    color: lch(from var(--danger) calc((50 - l) * infinity) 0 0);
+  }
 }
 .tk-stars,
 .tk-chip {
@@ -202,9 +204,11 @@
 }
 .tk-card.done .tk-circle {
   background: var(--c);
-  color: lch(from var(--c) calc((50 - l) * infinity) 0 0);
   box-shadow: 0 0 0 0.25rem color-mix(in srgb, var(--tint-base) 55%, transparent);
   animation: check-pop 0.32s cubic-bezier(0.3, 1.6, 0.5, 1);
+  @supports (color: lch(from red l c h)) {
+    color: lch(from var(--c) calc((50 - l) * infinity) 0 0);
+  }
 }
 .tk-card.skipped {
   opacity: 0.55;
@@ -530,7 +534,9 @@
 }
 .wk-dot.done {
   color: #fff;
-  color: lch(from var(--c) calc((50 - l) * infinity) 0 0);
+  @supports (color: lch(from red l c h)) {
+    color: lch(from var(--c) calc((50 - l) * infinity) 0 0);
+  }
 }
 .wk-dot.done::before {
   background: var(--c);

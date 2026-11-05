@@ -180,9 +180,11 @@
   border-radius: 50%;
   background: var(--c);
   color: #fff;
-  color: lch(from var(--c) calc((50 - l) * infinity) 0 0);
   font-weight: 700;
   line-height: 1;
+  @supports (color: lch(from red l c h)) {
+    color: lch(from var(--c) calc((50 - l) * infinity) 0 0);
+  }
 }
 .avatar.emoji {
   background: color-mix(in srgb, var(--c) 30%, var(--tint-base));

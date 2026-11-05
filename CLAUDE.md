@@ -181,8 +181,12 @@ so `1rem` = 10 design px. Use rem for every size. Tokens are CSS variables in
   area: size it to `--touch` instead.
 - **Text on a profile or category color** uses the color's ink,
   `color: lch(from var(--c) calc((50 - l) * infinity) 0 0)` (white on dark
-  colors, black on light ones), after a `color: #fff` fallback. The palette
-  has both kinds.
+  colors, black on light ones). The palette has both kinds. Write it as
+  `color: #fff` and, nested in the same rule, `@supports (color: lch(from
+  red l c h)) { color: <the ink>; }`: a WebView without relative colors
+  does not drop a declaration with `var()` in it but computes it to the
+  inherited color, and the minifier merges two `color` declarations into
+  the last (`tests/unit/css-ink.test.ts`).
 - **Sizes for the room**: no text under 1.3rem. The glance text is bigger:
   top bar date and time 4.2rem, progress pills 2rem, task titles 2rem,
   event titles 1.6rem (schedule blocks) to 1.8rem (cards).

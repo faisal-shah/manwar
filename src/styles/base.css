@@ -165,12 +165,15 @@ select {
  * Profile color helpers: set --c on an element, then use these. Text and
  * marks drawn on a solid --c take its ink: white on a dark color, black on a
  * light one (the palette has both), from the color's lightness. Rules that
- * fill with another --c mix compute the ink from that mix the same way.
+ * fill with another --c mix compute the ink from that mix the same way. The
+ * ink is in @supports: a WebView without relative colors keeps the white.
  */
 .tint-solid {
   background: var(--c);
   color: #fff;
-  color: lch(from var(--c) calc((50 - l) * infinity) 0 0);
+  @supports (color: lch(from red l c h)) {
+    color: lch(from var(--c) calc((50 - l) * infinity) 0 0);
+  }
 }
 .tint-mid {
   background: color-mix(in srgb, var(--c) 62%, var(--tint-base));
