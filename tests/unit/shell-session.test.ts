@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { STALE_SYNC_MS, calendarStatus } from '../../src/app/status';
+import { STALE_SYNC_MS, STALE_WEATHER_MS, calendarStatus, currentWeather } from '../../src/app/status';
 import { NETWORK_MESSAGE, errorMessage, isNetworkError, needsReconnect } from '../../src/data/errors';
 
 /** The shapes the Firebase SDKs throw (FirebaseError: code + message). */
@@ -67,5 +67,15 @@ describe('calendar status in the top bar', () => {
       text: 'Reconnect Google Calendar',
       reconnect: true,
     });
+  });
+});
+
+describe('current weather in the top bar', () => {
+  it('hides a reading once fetches have failed for hours', () => {
+    const now = 1_800_000_000_000;
+    const w = { tempC: 20, fetchedAt: now - 60_000 };
+    expect(currentWeather(w, now)).toBe(w);
+    expect(currentWeather({ ...w, fetchedAt: now - STALE_WEATHER_MS }, now)).toBeNull();
+    expect(currentWeather(null, now)).toBeNull();
   });
 });

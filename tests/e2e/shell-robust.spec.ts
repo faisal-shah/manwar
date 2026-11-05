@@ -176,3 +176,40 @@ test('a Google connection that needs a reconnect shows on the wall and leads to 
   await expect(page.locator('.set-page')).toContainText('Google is not connected. Connect the Google account again.');
   await expect(page.locator('.set-page').getByRole('button', { name: 'Reconnect' })).toBeVisible();
 });
+
+test('weather is fetched once per place, not on every settings change, and hides when stale', async ({ page }) => {
+  await page.clock.install();
+  let fetches = 0;
+  let up = true;
+  await page.route('**/api.open-meteo.com/**', (r) => {
+    fetches++;
+    if (!up) return r.abort('internetdisconnected');
+    return r.fulfill({
+      json: {
+        current: { temperature_2m: 21, weather_code: 0, is_day: 1 },
+        daily: { time: ['2026-11-04'], weather_code: [0], temperature_2m_max: [24], temperature_2m_min: [12] },
+      },
+    });
+  });
+  await open(page);
+  await expect(page.locator('.topbar .wx')).toContainText('70°');
+  const before = fetches;
+  await openSettings(page, 'Display');
+  await page.getByRole('switch', { name: /^Sounds/ }).click();
+  await page.getByRole('switch', { name: /^Sounds/ }).click();
+  await page.getByRole('tab', { name: 'Large' }).click();
+  await page.getByRole('tab', { name: 'Medium' }).click();
+  await page.waitForTimeout(500);
+  expect(fetches).toBe(before);
+
+  // The Wi-Fi drops for hours: the last reading stops showing as current.
+  up = false;
+  await page.getByRole('button', { name: 'Close' }).click();
+  await page.clock.fastForward('02:00:00');
+  await expect(page.locator('.topbar .wx')).toBeVisible();
+  await page.clock.fastForward('01:30:00');
+  await expect(page.locator('.topbar .wx')).toHaveCount(0);
+  up = true;
+  await page.clock.fastForward('00:30:00');
+  await expect(page.locator('.topbar .wx')).toBeVisible();
+});

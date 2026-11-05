@@ -13,7 +13,7 @@ import { DialogHost, ToastHost } from '../ui/overlays';
 import { WeatherIcon } from '../ui/WeatherIcon';
 import { LogoMark, Wordmark } from '../ui/Logo';
 import { activeTab, goTo, openSettings, settingsOpen, sleepMenuOpen } from './nav';
-import { calendarStatus } from './status';
+import { calendarStatus, currentWeather } from './status';
 import { TABS, Overlays, RailBadges } from './tabs';
 import { SettingsSheet, SleepMenu } from '../features/settings';
 
@@ -113,10 +113,10 @@ function Shell() {
 
 function TopBar({ title, Controls }: { title: string | null; Controls?: FunctionComponent }) {
   const hour = now.value.getHours();
-  // Syncs are stamped with the real clock (not a pinned ?now=).
+  // Readings and syncs are stamped with the real clock (not a pinned ?now=).
   void nowMs.value;
   const real = Date.now();
-  const w = weather.value;
+  const w = currentWeather(weather.value, real);
   return (
     <header class="topbar">
       <div class="when">

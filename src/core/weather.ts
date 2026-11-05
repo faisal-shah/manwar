@@ -1,4 +1,4 @@
-import { effect, signal } from '@preact/signals';
+import { computed, effect, signal } from '@preact/signals';
 import { settings } from '../data/store';
 import type { ISODate } from '../data/types';
 
@@ -79,23 +79,35 @@ export const toUnit = (c: number, unit: 'f' | 'c') => Math.round(unit === 'f' ? 
 
 const REFRESH_MS = 30 * 60_000;
 let timer: ReturnType<typeof setInterval> | undefined;
+let reload: (() => void) | null = null;
+
+/** The configured location as a key, so other settings changes do not refetch. */
+const placeKey = computed(() => {
+  const loc = settings.value.weather;
+  return loc ? `${loc.lat},${loc.lon}` : null;
+});
 
 /** Keep `weather` current for the configured location. */
 export function startWeather(): void {
   effect(() => {
-    const loc = settings.value.weather;
+    const key = placeKey.value;
     clearInterval(timer);
-    if (!loc) {
-      weather.value = null;
-      return;
-    }
+    // A reading for another place is wrong, not just old.
+    weather.value = null;
+    reload = null;
+    if (!key) return;
+    const [lat, lon] = key.split(',').map(Number);
     const load = () =>
-      fetchWeather(loc.lat, loc.lon)
-        .then((w) => (weather.value = w))
+      fetchWeather(lat, lon)
+        .then((w) => {
+          if (placeKey.peek() === key) weather.value = w;
+        })
         .catch(() => {
-          /* keep the last reading; retry on the next tick */
+          /* keep the last reading (the top bar hides it once stale); retry on the next tick */
         });
+    reload = load;
     void load();
     timer = setInterval(load, REFRESH_MS);
   });
+  window.addEventListener('online', () => reload?.());
 }
