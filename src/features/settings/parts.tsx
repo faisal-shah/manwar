@@ -158,6 +158,9 @@ export function TimeInput({
   );
 }
 
+/** A daily window whose From and To are the same time never turns on (see inWindow). */
+export const emptyWindow = (w: { enabled: boolean; from: HHMM; to: HHMM }) => w.enabled && w.from === w.to;
+
 /** From / To pickers for a daily window (night mode, sleep). */
 export function WindowRow({
   from,
@@ -171,15 +174,22 @@ export function WindowRow({
   onChange: (w: { from: HHMM; to: HHMM }) => void;
 }) {
   return (
-    <div class={`set-row set-window${disabled ? ' off' : ''}`}>
-      <label>
-        <span>From</span>
-        <TimeInput label="From" value={from} disabled={disabled} onChange={(v) => onChange({ from: v, to })} />
-      </label>
-      <label>
-        <span>To</span>
-        <TimeInput label="To" value={to} disabled={disabled} onChange={(v) => onChange({ from, to: v })} />
-      </label>
-    </div>
+    <>
+      <div class={`set-row set-window${disabled ? ' off' : ''}`}>
+        <label>
+          <span>From</span>
+          <TimeInput label="From" value={from} disabled={disabled} onChange={(v) => onChange({ from: v, to })} />
+        </label>
+        <label>
+          <span>To</span>
+          <TimeInput label="To" value={to} disabled={disabled} onChange={(v) => onChange({ from, to: v })} />
+        </label>
+      </div>
+      {emptyWindow({ enabled: !disabled, from, to }) && (
+        <p class="set-error set-note" role="alert">
+          From and To are the same time, so this never turns on.
+        </p>
+      )}
+    </>
   );
 }

@@ -212,6 +212,25 @@ test('a message posted while the wall sleeps chimes only once someone wakes it',
   await expect.poll(tones).toBeGreaterThan(0);
 });
 
+test('a sleep or night window with the same From and To says it never turns on', async ({ page }) => {
+  await open(page);
+  await rail(page, 'Sleep').click();
+  await page.locator('.modal .set-switch').click();
+  await page.getByRole('textbox', { name: 'From' }).fill('22:00');
+  await page.getByRole('textbox', { name: 'To' }).fill('22:00');
+  await expect(page.locator('.modal [role=alert]')).toHaveText('From and To are the same time, so this never turns on.');
+  await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled();
+  await page.getByRole('textbox', { name: 'To' }).fill('06:00');
+  await expect(page.locator('.modal [role=alert]')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Save' })).toBeEnabled();
+  await page.locator('.scrim.top').click({ position: { x: 5, y: 5 } });
+
+  await openSettings(page, 'Display');
+  await page.getByRole('switch', { name: 'Dark theme at night' }).click();
+  await page.getByRole('textbox', { name: 'To' }).fill('20:30');
+  await expect(page.locator('.set-page [role=alert]')).toBeVisible();
+});
+
 test('five wrong PINs pause the pad; the right PIN works after the pause', async ({ page }) => {
   await page.clock.install();
   await open(page);

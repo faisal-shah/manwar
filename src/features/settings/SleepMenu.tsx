@@ -8,7 +8,7 @@ import { today } from '../../lib/clock';
 import { dateAt, formatTime } from '../../lib/date';
 import { Button } from '../../ui/controls';
 import { Modal } from '../../ui/overlays';
-import { ToggleRow, WindowRow } from './parts';
+import { ToggleRow, WindowRow, emptyWindow } from './parts';
 
 /** The rail's Sleep button: the nightly schedule (a parent change) and "Sleep now" (anyone). */
 export function SleepMenu({ onClose }: { onClose: () => void }) {
@@ -37,7 +37,7 @@ export function SleepMenu({ onClose }: { onClose: () => void }) {
             <Moon size="2rem" />
             Enter sleep mode now
           </Button>
-          <Button variant="primary" class="sleep-save" disabled={!dirty} onClick={() => void save()}>
+          <Button variant="primary" class="sleep-save" disabled={!dirty || emptyWindow(draft)} onClick={() => void save()}>
             Save
           </Button>
         </>
