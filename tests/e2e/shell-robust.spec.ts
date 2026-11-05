@@ -99,9 +99,8 @@ test('a first run that cannot reach the database yet seeds once it can', async (
   await expect(page.locator('.home-lists')).toContainText('Grocery List', { timeout: 60_000 });
 });
 
-test('a tablet that boots offline with an expired sign-in still opens its household', async ({ page }) => {
-  await open(page);
-  // Expire the stored ID token, then cut the token refresh (the Wi-Fi is not up yet).
+/** Expire the stored ID token, so reading the claims has to refresh it. */
+async function expireSignIn(page: Page): Promise<void> {
   await page.evaluate(async () => {
     const db = await new Promise<IDBDatabase>((resolve, reject) => {
       const r = indexedDB.open('firebaseLocalStorageDb');
@@ -119,10 +118,31 @@ test('a tablet that boots offline with an expired sign-in still opens its househ
     store.put(user);
     await new Promise((resolve) => (tx.oncomplete = resolve));
   });
-  await page.route('**/securetoken.googleapis.com/**', (r) => r.abort('internetdisconnected'));
+}
+
+const TOKEN_REFRESH = '**/securetoken.googleapis.com/**';
+
+test('a tablet that boots offline with an expired sign-in still opens its household', async ({ page }) => {
+  await open(page);
+  await expireSignIn(page);
+  // The Wi-Fi is not up yet: the token refresh fails.
+  await page.route(TOKEN_REFRESH, (r) => r.abort('internetdisconnected'));
   await page.reload();
   await expect(page.locator('.shell')).toBeVisible({ timeout: 15_000 });
   await expect(page.locator('.connect')).toHaveCount(0);
+});
+
+test('with no household remembered, an offline boot waits and opens once the network is back', async ({ page }) => {
+  await open(page);
+  await expireSignIn(page);
+  await page.evaluate(() => localStorage.removeItem('manwar.household.v1'));
+  await page.route(TOKEN_REFRESH, (r) => r.abort('internetdisconnected'));
+  await page.reload();
+  await expect(page.locator('.connect')).toContainText('Waiting for the network to open the household', {
+    timeout: 15_000,
+  });
+  await page.unroute(TOKEN_REFRESH);
+  await expect(page.locator('.shell')).toBeVisible({ timeout: 25_000 });
 });
 
 test('typing counts as activity: idle return does not pull the wall away from an editor', async ({ page }) => {
