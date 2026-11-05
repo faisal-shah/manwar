@@ -41,11 +41,10 @@ async function ask(request: () => Promise<boolean>, refused: string): Promise<bo
 
 /** More > Wall timer: start the wall's timer, watch it, stop it. */
 function TimerView() {
-  const guard = useOpeningTapGuard();
   const t = timer.value;
   const phase = timerPhase.value;
   return (
-    <div class="ph-stack" {...guard}>
+    <div class="ph-stack">
       {/* Keyed by its run, so a timer started elsewhere in its place is a new view (and drops the tap that started it). */}
       {t && phase ? <Running key={t.run} t={t} phase={phase} /> : <StartTimer />}
       <p class="muted pt-note">The wall shows the timer full screen and chimes when it ends.</p>

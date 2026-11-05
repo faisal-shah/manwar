@@ -515,9 +515,7 @@ test('an empty household: a typed dinner, a note from no one, and the timer', as
   expect([...w.errors, ...p.errors]).toEqual([]);
 });
 
-test("this week's days before today fold into one row, so today shows first; another week shows whole", async ({
-  browser,
-}) => {
+test("this week's days before today fold into one row, so today shows first; another week shows whole", async ({ browser }) => {
   const hh = name('mealsfold');
   await wall(browser, hh);
   const p = await phone(browser, hh);

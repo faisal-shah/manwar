@@ -1,5 +1,4 @@
 import './notes.css';
-import { effect, signal } from '@preact/signals';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { TargetedEvent } from 'preact';
 import { StickyNote } from 'lucide-preact';
@@ -10,59 +9,31 @@ import { MAX_MESSAGE_LENGTH, timeAgo } from '../../features/messages/logic';
 import { dismissMessage, pending, postMessage } from '../../features/messages/state';
 import { nowMs } from '../../lib/clock';
 import { Button, Field, SettingRow, Toggle } from '../../ui/controls';
-import { toast, useOpeningTapGuard } from '../../ui/overlays';
+import { stored } from '../../lib/stored';
+import { toast } from '../../ui/overlays';
 import { Avatar, ProfilePicker } from '../../ui/profile';
 import type { MoreItem } from '../more/items';
 import { askWall, wallSeemsAsleep } from '../wallscreen';
 
 /** Who this phone's notes are usually from, remembered on the phone. */
-const FROM_KEY = 'manwar.phone.noteFrom.v1';
-function loadFrom(): string | undefined {
-  try {
-    return localStorage.getItem(FROM_KEY) ?? undefined;
-  } catch {
-    return undefined;
-  }
-}
-function storeFrom(id: string | undefined): void {
-  try {
-    if (id) localStorage.setItem(FROM_KEY, id);
-    else localStorage.removeItem(FROM_KEY);
-  } catch {
-    // No storage: the choice lasts while the view is open.
-  }
-}
+const usualFrom = stored<string | null>(
+  'manwar.phone.noteFrom.v1',
+  null,
+  (v): v is string | null => v === null || typeof v === 'string',
+);
 
 /**
  * The note being written, until it is posted: kept when the view closes
  * (Back mid-sentence) and, in sessionStorage, through a reload (an update
  * applied while the phone sat idle, the browser restoring the tab).
  */
-const DRAFT_KEY = 'manwar.phone.noteDraft.v1';
-function loadDraft(): string {
-  try {
-    return sessionStorage.getItem(DRAFT_KEY) ?? '';
-  } catch {
-    return '';
-  }
-}
-const draft = signal(loadDraft());
-effect(() => {
-  const text = draft.value;
-  try {
-    if (text) sessionStorage.setItem(DRAFT_KEY, text);
-    else sessionStorage.removeItem(DRAFT_KEY);
-  } catch {
-    // No storage: the draft lasts for this page load.
-  }
-});
+const draft = stored('manwar.phone.noteDraft.v1', '', (v): v is string => typeof v === 'string', 'session');
 
 /** More > Note to the wall: write a note that pops up on the wall; see and dismiss what it shows. */
 function NoteView() {
-  const guard = useOpeningTapGuard();
   const text = draft.value;
   const setText = (v: string) => (draft.value = v);
-  const [chosen, setChosen] = useState<string | undefined>(loadFrom);
+  const [chosen, setChosen] = useState<string | undefined>(() => usualFrom.peek() ?? undefined);
   // A remembered profile deleted since is no one.
   const from = chosen && profileById.value.has(chosen) ? chosen : undefined;
   const [readAloud, setReadAloud] = useState(false);
@@ -81,7 +52,7 @@ function NoteView() {
   // Newest first, as the wall shows them: the first is on screen, the rest come after it is dismissed.
   const notes = pending.value;
   return (
-    <div class="ph-stack" {...guard}>
+    <div class="ph-stack">
       <section class="ph-card pn-compose">
         {/* A household with nobody in it yet has no one to send it from. */}
         {profiles.value.length > 0 && (
@@ -91,7 +62,7 @@ function NoteView() {
               onChange={(ids) => {
                 const next = ids.find((id) => id !== from);
                 setChosen(next);
-                storeFrom(next);
+                usualFrom.value = next ?? null;
               }}
             />
           </Field>
