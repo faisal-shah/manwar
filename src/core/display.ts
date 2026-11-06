@@ -32,8 +32,12 @@ function loadForced(): number {
  * turn the screen back on.
  */
 export const sleepForcedUntil = signal(typeof localStorage !== 'undefined' ? loadForced() : 0);
-/** Awake until this instant: a tap on the sleep screen, then each touch while awake, keeps it on. */
-export const wokenUntil = signal(0);
+/**
+ * Awake until this instant, on the monotonic clock (performance.now()): a
+ * tap on the sleep screen, then each touch while awake, keeps it on for
+ * WAKE_MS, however the wall clock is set meanwhile.
+ */
+const wokenUntil = signal(0);
 /** Scheduled sleep waits until this instant (a running timer holds it to 5 minutes past its end). */
 export const sleepHeldUntil = signal(0);
 /** Manual theme override for this session, null = follow the schedule. `?theme=dark` sets it (screenshots, tests). */
@@ -41,13 +45,16 @@ const themeParam = typeof location !== 'undefined' ? new URLSearchParams(locatio
 export const themeOverride = signal<'light' | 'dark' | null>(themeParam === 'dark' || themeParam === 'light' ? themeParam : null);
 
 /** Asleep by the sleep rule (core/sleep.ts), before the athan's hold. */
-export const scheduledSleep = computed(() =>
-  asleepAt(
-    now.value.getTime(),
-    { wokenUntil: wokenUntil.value, forcedUntil: sleepForcedUntil.value, heldUntil: sleepHeldUntil.value },
+export const scheduledSleep = computed(() => {
+  const t = now.value.getTime();
+  // The rule reads wall-clock instants: the wake is the time it has left, from now.
+  const woken = t + wokenUntil.value - performance.now();
+  return asleepAt(
+    t,
+    { wokenUntil: woken, forcedUntil: sleepForcedUntil.value, heldUntil: sleepHeldUntil.value },
     settings.value.sleep,
-  ),
-);
+  );
+});
 
 /**
  * Asleep now. The prayer clock's athan sequence outranks the rule, Sleep now
@@ -56,7 +63,7 @@ export const scheduledSleep = computed(() =>
  */
 export const sleeping = computed(() => !prayerSequence.value && scheduledSleep.value);
 
-/** The backlight behind the prayer face's night clock, the wall's night screen when it rests there (Fully Kiosk). */
+/** The backlight behind the prayer face's night clock, the wall's night screen when it rests there (under Fully Kiosk, which can set it). */
 const NIGHT_CLOCK_BRIGHTNESS = 8;
 
 export const theme = computed<'light' | 'dark'>(() => {
@@ -72,7 +79,7 @@ export function sleepNow(): void {
 
 export function wake(): void {
   sleepForcedUntil.value = 0;
-  wokenUntil.value = currentTime() + WAKE_MS;
+  wokenUntil.value = performance.now() + WAKE_MS;
   wakeScreen();
 }
 
@@ -88,7 +95,7 @@ export function startDisplay(): void {
   // WAKE_MS without a touch. A touch on the sleep screen itself wakes it
   // through wake(), and "Sleep now" (a touch too) clears this hold.
   onActivity(() => {
-    if (!sleeping.peek()) wokenUntil.value = Math.max(wokenUntil.peek(), currentTime() + WAKE_MS);
+    if (!sleeping.peek()) wokenUntil.value = Math.max(wokenUntil.peek(), performance.now() + WAKE_MS);
   });
   effect(() => {
     const until = sleepForcedUntil.value;

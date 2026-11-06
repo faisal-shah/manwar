@@ -144,20 +144,15 @@ function tx<T>(mode: IDBTransactionMode, run: (s: IDBObjectStore) => IDBRequest<
   );
 }
 
-/** IndexedDB is outside input: keep well-formed records, fill fields older versions did not store. */
+/** IndexedDB is outside input (storage can be cleared or damaged): only well-formed records are kept. */
 function parseUpload(raw: unknown): Upload | null {
   const r = raw as Record<string, unknown> | null;
   if (!r || typeof r.id !== 'string' || typeof r.name !== 'string' || !(r.blob instanceof Blob)) return null;
   if (r.kind === 'audio') {
-    return {
-      id: r.id,
-      kind: 'audio',
-      name: r.name,
-      durationSec: typeof r.durationSec === 'number' && Number.isFinite(r.durationSec) ? r.durationSec : 0,
-      blob: r.blob,
-    };
+    if (typeof r.durationSec !== 'number' || !Number.isFinite(r.durationSec)) return null;
+    return { id: r.id, kind: 'audio', name: r.name, durationSec: r.durationSec, blob: r.blob };
   }
-  if (r.kind !== 'image') return null;
+  if (r.kind !== 'image' || !(r.thumb instanceof Blob)) return null;
   const tone = (v: unknown): Tone => (v === 'dark' ? 'dark' : 'light');
   const t = (r.tones ?? {}) as Record<string, unknown>;
   return {
@@ -165,9 +160,9 @@ function parseUpload(raw: unknown): Upload | null {
     kind: 'image',
     name: r.name,
     fit: r.fit === 'contain' ? 'contain' : 'cover',
-    tones: { gallery: tone(t.gallery), calligraphy: tone(t.calligraphy ?? r.textTone) },
+    tones: { gallery: tone(t.gallery), calligraphy: tone(t.calligraphy) },
     blob: r.blob,
-    thumb: r.thumb instanceof Blob ? r.thumb : r.blob,
+    thumb: r.thumb,
   };
 }
 

@@ -1,7 +1,7 @@
 import { expect as baseExpect, test, type Page } from '@playwright/test';
 import { devices } from '@playwright/test';
 import { newContext } from './phone-helpers';
-import { face, openWall, writeFields } from './prayer-helpers';
+import { face, mainDoc, openWall, prayerDoc, writeFields } from './prayer-helpers';
 
 /*
  * The wall's two faces together (app/face.ts, prayer/stage.ts): the athan
@@ -209,5 +209,78 @@ test('an athan whose sound is off does not wake a sleeping wall', async ({ page 
   await page.waitForTimeout(500);
   await expect(page.locator('.prayer-face')).toHaveCount(0);
   await expect(page.locator('.sleep-screen')).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test('asleep on the prayer face, a silent phase keeps the night clock: no takeover lights the room', async ({ page }) => {
+  // 12:49:30 is Dhuhr's iqamah countdown, which never sounds: the wall stays asleep through it.
+  const sleep = { enabled: true, from: '12:00', to: '14:00' };
+  const { errors } = await openWall(page, '2026-10-29T12:49:30', {}, { face: 'family', wall: { restingFace: 'prayer', sleep } });
+  await expect(face(page).locator('.stage')).toHaveClass(/theme-night/);
+  await expect(face(page).locator('.nt')).toBeVisible();
+  await page.waitForTimeout(1000);
+  await expect(face(page).locator('.tk')).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+test('falling asleep puts the prayer face settings away', async ({ page }) => {
+  const { household, errors } = await openWall(page, '2026-10-29T14:53:00', {}, { wall: { restingFace: 'prayer' } });
+  await face(page).getByRole('button', { name: 'Settings' }).click();
+  await expect(face(page).locator('.pf-settings')).toBeVisible();
+  // A phone's Sleep now (as core/display.ts sendDisplayCommand writes it, on the wall's pinned day).
+  const at = new Date('2026-10-29T14:53:00-05:00').getTime();
+  await writeFields(household, 'commands/display', { id: 'display', kind: 'sleep', nonce: `n-${Date.now()}`, at });
+  await expect(face(page).locator('.stage')).toHaveClass(/theme-night/);
+  await expect(face(page).locator('.pf-settings')).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+test('a note that came while the wall slept is announced when someone wakes it, not when an athan does', async ({ page }) => {
+  const tones = await countTones(page);
+  // Ten seconds before Dhuhr's countdown (12:34); the athan (187 s) and no dua or iqamah countdown.
+  await page.clock.install({ time: new Date('2026-10-29T12:33:50-05:00') });
+  const { household, errors } = await openWall(
+    page,
+    '',
+    { sequence: { preCountdown: true, dua: false, iqamahCountdown: false } },
+    { face: 'family', wall: { sleep: { enabled: true, from: '12:00', to: '14:00' } } },
+  );
+  await expect(page.locator('.sleep-screen')).toBeVisible();
+  await postNote(household, 'Lunch is in the fridge');
+  await expect(page.locator('.message-layer')).toBeAttached();
+  const before = await tones();
+  // The athan wakes the wall for its sequence; the note under it stays silent, then and after.
+  await page.clock.fastForward('00:15');
+  await expect(face(page).locator('.tk-count')).toBeVisible();
+  await page.clock.fastForward('04:20');
+  await expect(page.locator('.prayer-face')).toHaveCount(0);
+  await expect(page.locator('.sleep-screen')).toBeVisible();
+  await page.clock.runFor(3000);
+  expect(await tones()).toBe(before);
+  // A tap wakes the wall: the note shows, and is announced.
+  await page.locator('.sleep-screen').click();
+  await expect(page.locator('.message-layer')).toContainText('Lunch is in the fridge');
+  await expect.poll(tones).toBeGreaterThan(before);
+  expect(errors).toEqual([]);
+});
+
+test('the wall moves the old places into the household place once', async ({ page }) => {
+  const houston = { name: 'Houston, Texas, United States', latitude: 29.7633, longitude: -95.3633, timezone: 'America/Chicago' };
+  const { household, errors } = await openWall(
+    page,
+    '2026-10-29T14:53:00',
+    { place: houston, clock24h: true, weather: { enabled: false, unit: 'c' }, dayTheme: 'kids' },
+    { face: 'family', place: null, wall: { weather: { lat: 29.7604, lon: -95.3698, name: 'Houston, Texas' } } },
+  );
+  await expect
+    .poll(async () => (await mainDoc(household)).place)
+    .toEqual({ name: 'Houston, Texas, United States', lat: 29.7633, lon: -95.3633, timezone: 'America/Chicago' });
+  await expect.poll(async () => Object.keys(await prayerDoc(household)).sort()).toEqual(['dayTheme', 'showWeather']);
+  expect(await mainDoc(household)).not.toHaveProperty('weather');
+  expect((await prayerDoc(household)).showWeather).toBe(false);
+  // The prayer face calculates for it, on the household's 12-hour clock.
+  await rail(page, 'Prayer').click();
+  await expect(face(page).locator('.kd')).toBeVisible();
+  await expect(face(page).locator('.kd-ampm')).toBeVisible();
   expect(errors).toEqual([]);
 });

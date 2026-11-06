@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
+import { timezoneNote } from '../../../core/place';
+import { settings as household } from '../../../data/store';
+import { laterBy } from '../../../lib/date';
 import { previewSound, setPreviewVolume, stopPreview } from '../../audio';
 import { clockFace } from '../../core/calendar';
-import { deviceTimezone, isDeviceTimezone } from '../../core/geo';
+import { jumuahLabel, LABELS } from '../../core/labels';
 import { MEDIA } from '../../core/media';
 import { audioDuration, type AudioUpload } from '../../core/media';
 import { PERIOD_NAMES, type ClockState } from '../../core/schedule';
@@ -27,6 +30,7 @@ import {
   chosenBackgrounds,
   clock,
   picking,
+  place,
   removeUpload,
   settings,
   setDayTheme,
@@ -39,8 +43,8 @@ import {
 } from '../../store';
 import { T } from '../parts';
 import { Row, Segmented, Select, Slider, Stepper, TimeInput, Toggle } from './controls';
+import { chooseLocation } from '../nav';
 import { PhotoThumb } from './Library';
-import { LocationPicker } from './LocationPicker';
 import { PreviewSection } from './PreviewSection';
 import { soundOptions } from '../../recordings';
 
@@ -59,36 +63,24 @@ type Section = keyof typeof SECTIONS;
 
 const set = (patch: (s: Settings) => Partial<Settings>) => updateSettings(patch);
 
+/** The household's place, which the panel opens with (it opens from the clock, which has one). */
 function PlaceSection() {
-  const s = settings.value;
-  const [changing, setChanging] = useState(false);
+  const p = place.value!;
+  const note = timezoneNote(p);
   return (
     <>
-      <Row label="This clock is in" hint={s.place && `${s.place.latitude.toFixed(4)}, ${s.place.longitude.toFixed(4)}`}>
-        <span class="row-value">{s.place?.name}</span>
+      <Row label="This clock is in" hint={`${p.lat.toFixed(4)}, ${p.lon.toFixed(4)} · ${p.timezone}`}>
+        <span class="row-value">
+          <bdi>{p.name}</bdi>
+        </span>
       </Row>
-      {s.place?.timezone && !isDeviceTimezone(s.place.timezone) && (
-        <p class="panel-warn">
-          This tablet's time zone is {deviceTimezone()}, but {s.place.name} uses {s.place.timezone}. Times are shown on the
-          tablet's clock, so set the tablet's time zone to match.
-        </p>
-      )}
-      {changing ? (
-        <div class="panel-block">
-          <LocationPicker
-            onPick={(place) => {
-              set(() => ({ place }));
-              setChanging(false);
-            }}
-          />
-        </div>
-      ) : (
-        <div class="panel-actions">
-          <button class="pf-btn" onClick={() => setChanging(true)}>
-            Change location
-          </button>
-        </div>
-      )}
+      {note && <p class="panel-warn">{note}</p>}
+      <p class="panel-note">The place is the household's, chosen in Settings under Location: the weather is for it too.</p>
+      <div class="panel-actions">
+        <button class="pf-btn" onClick={chooseLocation}>
+          Change location
+        </button>
+      </div>
     </>
   );
 }
@@ -116,29 +108,22 @@ function TimesSection() {
           ))}
         </div>
       )}
-      <Row label="Calculation method">
+      <Row label={LABELS.method.label}>
         <Select value={s.method} options={CALC_METHODS} onChange={(method) => set(() => ({ method }))} />
       </Row>
-      <Row label="Asr" hint="Hanafi: shadow twice an object's length. Standard: Shafi'i, Maliki, Hanbali.">
-        <Segmented
-          value={s.madhab}
-          options={[
-            ['hanafi', 'Hanafi'],
-            ['shafi', 'Standard'],
-          ]}
-          onChange={(madhab) => set(() => ({ madhab }))}
-        />
+      <Row label={LABELS.madhab.label} hint={LABELS.madhab.hint}>
+        <Segmented value={s.madhab} options={LABELS.madhab.options} onChange={(madhab) => set(() => ({ madhab }))} />
       </Row>
-      <Row label="High-latitude rule" hint="How Fajr and Isha are found when twilight never fully ends.">
+      <Row label={LABELS.highLatRule.label} hint={LABELS.highLatRule.hint}>
         <Select value={s.highLatRule} options={HIGH_LAT_RULES} onChange={(highLatRule) => set(() => ({ highLatRule }))} />
       </Row>
-      <div class="panel-sub">Adjust calculated athan times</div>
+      <div class="panel-sub">{LABELS.adjust.label}</div>
       {PRAYERS.map((p) => (
         <Row label={PERIOD_NAMES[p]}>
           <Stepper
             value={s.adjust[p]}
             {...limits('adjust.*')}
-            unit="min"
+            unit={LABELS.adjust.unit}
             signed
             onChange={(v) => set((x) => ({ adjust: { ...x.adjust, [p]: v } }))}
           />
@@ -154,25 +139,25 @@ function IqamahSection() {
   const setTimes = (t: string[]) => set((x) => ({ jumuah: { ...x.jumuah, times: t } }));
   return (
     <>
-      <div class="panel-sub">Iqamah, minutes after athan</div>
+      <div class="panel-sub">{LABELS.iqamah.label}</div>
       {PRAYERS.map((p) => (
         <Row label={PERIOD_NAMES[p]}>
           <Stepper
             value={s.iqamah[p]}
             {...limits('iqamah.*')}
-            unit="min"
+            unit={LABELS.iqamah.unit}
             onChange={(v) => set((x) => ({ iqamah: { ...x.iqamah, [p]: v } }))}
           />
         </Row>
       ))}
       <div class="panel-sub">Jumu'ah</div>
-      <Row label="Show Jumu'ah" hint="On Fridays Dhuhr becomes Jumu'ah and its iqamah is the first Jumu'ah time.">
+      <Row label={LABELS.jumuah.label} hint={LABELS.jumuah.hint}>
         <Toggle value={s.jumuah.enabled} onChange={(enabled) => set((x) => ({ jumuah: { ...x.jumuah, enabled } }))} />
       </Row>
       {s.jumuah.enabled && (
         <>
           {times.map((t, i) => (
-            <Row label={`Jumu'ah ${times.length > 1 ? i + 1 : ''}`}>
+            <Row label={jumuahLabel(i, times.length)}>
               <div class="inline">
                 <TimeInput value={t} onChange={(v) => setTimes(times.map((x, j) => (j === i ? v : x)).sort())} />
                 {times.length > 1 && (
@@ -185,8 +170,8 @@ function IqamahSection() {
           ))}
           {times.length < 2 && (
             <div class="panel-actions">
-              <button class="pf-btn" onClick={() => setTimes([...times, times[0] ? bump(times[0], 60) : '13:30'].sort())}>
-                Add a second Jumu'ah
+              <button class="pf-btn" onClick={() => setTimes([...times, laterBy(times[0] ?? '13:30', 60)].sort())}>
+                {LABELS.addJumuah.label}
               </button>
             </div>
           )}
@@ -196,16 +181,10 @@ function IqamahSection() {
   );
 }
 
-function bump(hhmm: string, minutes: number): string {
-  const [h, m] = hhmm.split(':').map(Number);
-  const t = Math.min(23 * 60 + 59, h * 60 + m + minutes);
-  return `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
-}
-
 /** What is covering the daytime theme right now, if anything. */
 function themeNote(st: ClockState, s: Settings): string {
   if (!st.themeUntil || st.theme === s.dayTheme) return 'Shown outside the calligraphy window and the night hours.';
-  const f = clockFace(st.themeUntil, s.clock24h);
+  const f = clockFace(st.themeUntil, household.value.timeFormat);
   const until = f.ampm ? `${f.hm}\u00a0${f.ampm}` : f.hm;
   if (st.theme === 'night') return `The night theme is on until ${until}, then this one.`;
   return `Calligraphy is on after the ${PERIOD_NAMES[st.current.name]} athan until ${until}. Choosing a theme here ends it now.`;
@@ -264,43 +243,20 @@ function DisplaySection() {
           onChange={(calligraphyFont) => set(() => ({ calligraphyFont }))}
         />
       </Row>
-      <Row label="24-hour clock">
-        <Toggle value={s.clock24h} onChange={(clock24h) => set(() => ({ clock24h }))} />
-      </Row>
-      <Row label="Hijri date adjustment" hint="Shift to match local moonsighting.">
+      <Row label={LABELS.hijriOffset.label} hint={LABELS.hijriOffset.hint}>
         <Stepper
           value={s.hijriOffset}
           {...limits('hijriOffset')}
-          unit="days"
+          unit={LABELS.hijriOffset.unit}
           signed
           onChange={(hijriOffset) => set(() => ({ hijriOffset }))}
         />
       </Row>
-      <Row label="Ramadan mode" hint="Suhoor and iftar countdowns and the iftar dua.">
-        <Segmented
-          value={s.ramadan}
-          options={[
-            ['auto', 'Auto'],
-            ['on', 'On'],
-            ['off', 'Off'],
-          ]}
-          onChange={(ramadan) => set(() => ({ ramadan }))}
-        />
+      <Row label={LABELS.ramadan.label} hint={LABELS.ramadan.hint}>
+        <Segmented value={s.ramadan} options={LABELS.ramadan.options} onChange={(ramadan) => set(() => ({ ramadan }))} />
       </Row>
-      <Row label="Weather">
-        <div class="inline">
-          {s.weather.enabled && (
-            <Segmented
-              value={s.weather.unit}
-              options={[
-                ['f', '°F'],
-                ['c', '°C'],
-              ]}
-              onChange={(unit) => set((x) => ({ weather: { ...x.weather, unit } }))}
-            />
-          )}
-          <Toggle value={s.weather.enabled} onChange={(enabled) => set((x) => ({ weather: { ...x.weather, enabled } }))} />
-        </div>
+      <Row label="Weather" hint="At the household's place, in the unit chosen in Settings, under Location.">
+        <Toggle value={s.showWeather} onChange={(showWeather) => set(() => ({ showWeather }))} />
       </Row>
       <Row label="Verse, hadith and dua of the day">
         <Toggle value={s.showDaily} onChange={(showDaily) => set(() => ({ showDaily }))} />
@@ -428,17 +384,17 @@ function SoundSection() {
   const setSeq = (patch: Partial<Settings['sequence']>) => set((x) => ({ sequence: { ...x.sequence, ...patch } }));
   return (
     <>
-      <div class="panel-sub">At each prayer</div>
-      <Row label="One-minute countdown before the athan">
+      <div class="panel-sub">{LABELS.atEachPrayer.label}</div>
+      <Row label={LABELS.preCountdown.label}>
         <Toggle value={seq.preCountdown} onChange={(preCountdown) => setSeq({ preCountdown })} />
       </Row>
-      <Row label="Dua after the athan">
+      <Row label={LABELS.dua.label}>
         <Toggle value={seq.dua} onChange={(dua) => setSeq({ dua })} />
       </Row>
-      <Row label="Full-screen iqamah countdown" hint="The last minute before iqamah.">
+      <Row label={LABELS.iqamahCountdown.label} hint={LABELS.iqamahCountdown.hint}>
         <Toggle value={seq.iqamahCountdown} onChange={(iqamahCountdown) => setSeq({ iqamahCountdown })} />
       </Row>
-      <Row label="Chime before the athan">
+      <Row label={LABELS.chime.label}>
         <div class="sound">
           <Toggle value={s.chime.enabled} onChange={(enabled) => set((x) => ({ chime: { ...x.chime, enabled } }))} />
           {s.chime.enabled && (
@@ -456,7 +412,7 @@ function SoundSection() {
           />
         </Row>
       ))}
-      <Row label="Tahajjud" hint="An athan at the start of the last third of the night.">
+      <Row label={LABELS.tahajjud.label} hint={LABELS.tahajjud.hint}>
         <SoundPicker choice={s.tahajjud} kind="athan" onChange={(tahajjud) => set(() => ({ tahajjud }))} />
       </Row>
       <div class="panel-sub">Your recordings</div>
@@ -492,7 +448,7 @@ function SoundSection() {
           />
         </label>
       </div>
-      {error && <div class="loc-error">{error}</div>}
+      {error && <div class="panel-error">{error}</div>}
     </>
   );
 }
@@ -556,7 +512,7 @@ function AboutSection() {
           class="pf-btn"
           onClick={() => {
             if (confirm('Reset all prayer settings? The location, uploaded photos and recordings are kept.')) {
-              updateSettings((s) => ({ ...DEFAULT_SETTINGS, place: s.place }));
+              updateSettings(() => DEFAULT_SETTINGS);
             }
           }}
         >

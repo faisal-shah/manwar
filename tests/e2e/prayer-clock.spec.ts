@@ -4,8 +4,8 @@ import { face, openWall, prayerDoc } from './prayer-helpers';
 /*
  * The prayer face on the wall: the prayer clock's themes, its athan
  * sequence and sound, previews, the photo library and its settings (the
- * household's `settings/prayer` document). Chicago, 29 October 2026: Fajr
- * about 6:02, Dhuhr 12:35, Asr 4:06.
+ * household's `settings/prayer` document; the place is the household's).
+ * Chicago, 29 October 2026: Fajr about 6:02, Dhuhr 12:35, Asr 4:06.
  */
 
 const expect = baseExpect.configure({ timeout: 15_000 });
@@ -36,10 +36,15 @@ async function openSettings(page: Page, section: string) {
   await face(page).locator('.panel-nav').getByRole('button', { name: section }).click();
 }
 
-test('with no place yet it asks for one, and the family face is a tap away', async ({ page }) => {
-  const { errors } = await openWall(page, '2026-10-29T14:53:00', { place: null });
+test('with no place yet it asks for one in Settings, and the family face is a tap away', async ({ page }) => {
+  const { errors } = await openWall(page, '2026-10-29T14:53:00', {}, { place: null });
   await expect(face(page).getByRole('heading', { name: 'Prayer times' })).toBeVisible();
-  await expect(face(page).getByRole('button', { name: "Use this tablet's location" })).toBeVisible();
+  await face(page).getByRole('button', { name: 'Choose the place' }).click();
+  await expect(page.locator('.prayer-face')).toHaveCount(0);
+  await expect(page.locator('.set-menu button[aria-current="page"]')).toHaveText('Location');
+  await expect(page.getByRole('searchbox', { name: 'Search for a place' })).toBeVisible();
+  await page.getByRole('button', { name: 'Close' }).click();
+  await page.locator('.rail button', { hasText: 'Prayer' }).click();
   await face(page).getByRole('button', { name: 'Family calendar' }).click();
   await expect(page.locator('.prayer-face')).toHaveCount(0);
   await expect(page.locator('.shell')).toBeVisible();
@@ -81,8 +86,8 @@ test('settings open, change the theme, and are the household’s', async ({ page
   await face(page).getByRole('button', { name: 'Close settings' }).click();
   await expect(face(page).locator('.kd')).toBeVisible();
   await stored(household, 'dayTheme').toBe('kids');
-  // Only what changed was written: the place stays as it was stored.
-  expect(((await prayerDoc(household)).place as { name: string }).name).toBe('Chicago, Illinois, United States');
+  // Only what changed was written.
+  expect(Object.keys(await prayerDoc(household))).toEqual(['dayTheme']);
 });
 
 test('preview jumps to the athan sequence and exits', async ({ page }) => {
@@ -156,6 +161,33 @@ test('a preview does not silence the real athan later that day', async ({ page }
   await page.clock.runFor(125_000); // to 16:06:15 on the wall clock
   await expect(face(page).locator('.tk-athan')).toBeVisible();
   await expect.poll(() => sounding(page)).toBe(true);
+});
+
+test('a preview left running ends before the real athan sequence, which then sounds', async ({ page }) => {
+  // Asr's countdown starts at 16:05: a preview started at 16:03 ends by 16:04:30.
+  await page.clock.install({ time: new Date('2026-10-29T16:03:00-05:00') });
+  await recordPlays(page);
+  const { errors } = await openWall(page, '');
+  await openSettings(page, 'Preview');
+  await face(page).getByRole('button', { name: 'Dhuhr athan' }).click();
+  await expect(face(page).locator('.preview-bar')).toBeVisible();
+  await page.clock.runFor(95_000);
+  await expect(face(page).locator('.preview-bar')).toHaveCount(0);
+  await page.clock.runFor(120_000); // to 16:06:35
+  await expect(face(page).locator('.tk-athan')).toBeVisible();
+  await expect.poll(() => sounding(page)).toBe(true);
+  expect(errors).toEqual([]);
+});
+
+test('previews wait while the real athan sequence is on, and leave its athan sounding', async ({ page }) => {
+  await recordPlays(page);
+  const { errors } = await openWall(page, '2026-10-29T12:35:10');
+  await expect.poll(() => sounding(page)).toBe(true);
+  await openSettings(page, 'Preview');
+  await expect(face(page).locator('.panel-warn')).toContainText('Previews wait until the athan sequence ends.');
+  await expect(face(page).getByRole('button', { name: 'Asr athan' })).toBeDisabled();
+  expect(await sounding(page)).toBe(true);
+  expect(errors).toEqual([]);
 });
 
 test('Fajr uses the Fajr athan', async ({ page }) => {

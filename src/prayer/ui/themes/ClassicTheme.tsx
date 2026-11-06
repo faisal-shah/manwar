@@ -1,7 +1,7 @@
 import { minutesLeft } from '../../core/calendar';
 import { dailyItem, DAILY_LABEL, isUthmani } from '../../core/content';
 import { PERIOD_NAMES, type ClockState } from '../../core/schedule';
-import { settings } from '../../store';
+import { place, settings } from '../../store';
 import { Clock, GreetingMark, MakruhBadge, T, WeatherGlyph, dateLine, useWeather } from '../parts';
 
 function Medallion({ st }: { st: ClockState }) {
@@ -119,7 +119,7 @@ export function ClassicTheme({ st }: { st: ClockState }) {
               </span>
             </div>
           ) : (
-            <div class="cl-daily-en">Prayer times for {s.title || s.place?.name}</div>
+            <div class="cl-daily-en">Prayer times for {s.title || place.value?.name}</div>
           )}
         </div>
       </div>

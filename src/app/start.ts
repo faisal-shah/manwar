@@ -11,6 +11,7 @@ import { seedIfEmpty } from '../data/seed';
 import { keepGroceryMemory } from '../features/lists/memory';
 import { ready, unsentWrites } from '../data/store';
 import { prayerBusy } from './face';
+import { movePlace } from './migrate';
 import { googleBusy, reconnectNote, session } from '../data/session';
 import { holdSleepForTimer } from '../features/timer/state';
 import { startPhoneTheme } from '../phone/theme';
@@ -21,8 +22,9 @@ import { startIdleReturn } from './nav';
 
 /**
  * Background services. The wall runs its display schedule, wake lock, idle
- * return and the first-run seed; a phone only follows the household (the
- * wall seeds it) and the phone's own light or dark setting.
+ * return, the weather, the first-run seed and the prayer clock; a phone only
+ * follows the household (the wall seeds it) and the phone's own light or
+ * dark setting.
  */
 export function startApp(): void {
   trackActivity();
@@ -48,8 +50,9 @@ export function startApp(): void {
     if (session.value.state !== 'signedIn' || !ready.value || started) return;
     started = true;
     startCalendarSync();
-    startWeather();
     if (isPhone) return;
+    void movePlace();
+    startWeather();
     // The grocery suggestions start from what the lists hold once a household's first-run seed is in.
     void seedIfEmpty()
       .catch((e: unknown) => console.warn('first-run seed failed', e))
@@ -57,15 +60,36 @@ export function startApp(): void {
     startIdleReturn();
     holdSleepForTimer();
     followDisplayCommands();
-    // The prayer face runs on the wall only: a phone never loads the clock or its rules (their code and fonts
-    // are in the precache, so a wall updated while offline still has them; the media is not).
-    import('../prayer/start').then((m) => m.startPrayer()).catch((e: unknown) => console.warn('prayer clock did not load', e));
+    loadPrayer();
   });
   startUpdates();
 }
 
+const PRAYER_RETRY_MS = 15_000;
+const PRAYER_TRIES = 4;
+
+/**
+ * The prayer face runs on the wall only: a phone never loads the clock or
+ * its rules (their code and fonts are in the precache, so a wall updated
+ * while offline still has them; the media is not). A module that does not
+ * load is tried again, backing off; a browser may keep a failed import for
+ * the page's life, so after the last try the page reloads once nothing would
+ * be interrupted (without the module no athan sounds).
+ */
+function loadPrayer(attempt = 1): void {
+  import('../prayer/start')
+    .then((m) => m.startPrayer())
+    .catch((e: unknown) => {
+      console.warn(`prayer clock did not load (try ${attempt} of ${PRAYER_TRIES})`, e);
+      if (attempt < PRAYER_TRIES) setTimeout(() => loadPrayer(attempt + 1), PRAYER_RETRY_MS * 4 ** (attempt - 1));
+      else reloadWanted = true;
+    });
+}
+
 const IDLE_MS = 2 * 60_000;
 const CHECK_MS = 30 * 60_000;
+/** A reload asked for outside a new deploy (the prayer module did not load); applied as safely as an update. */
+let reloadWanted = false;
 
 /**
  * New deploys. The service worker checks for a new version every 30 minutes;
@@ -74,9 +98,10 @@ const CHECK_MS = 30 * 60_000;
  * right away before sign-in, otherwise after two idle minutes
  * with no sheet, dialog, popover or running timer on screen (a note on the
  * wall is no reason to wait: it shows again, not announced again), nothing on
- * the prayer face a reload would cut short (the athan sequence, its settings,
- * a preview), and no change made here still on its way to the server (a phone
- * keeps those in memory only, so a reload would lose them).
+ * the prayer face a reload would cut short (the athan sequence now or within
+ * three minutes, its settings, a preview: prayer/rules.ts), and no change
+ * made here still on its way to the server (a phone keeps those in memory
+ * only, so a reload would lose them).
  */
 function startUpdates(): void {
   let waiting = false;
@@ -88,7 +113,9 @@ function startUpdates(): void {
         unsentWrites.peek() === 0 &&
         !prayerBusy.peek()));
   const tryApply = () => {
-    if (waiting && safe()) void update(true);
+    if (!safe()) return;
+    if (waiting) void update(true);
+    else if (reloadWanted) location.reload();
   };
   const update = registerSW({
     immediate: true,

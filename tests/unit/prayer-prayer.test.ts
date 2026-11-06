@@ -1,11 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { computeDay } from '../../src/prayer/core/prayer';
-import { DEFAULT_SETTINGS, type Settings } from '../../src/prayer/core/settings';
-
-export const CHICAGO: Settings = {
-  ...DEFAULT_SETTINGS,
-  place: { name: 'Chicago, Illinois', latitude: 41.8781, longitude: -87.6298, timezone: 'America/Chicago' },
-};
+import { DEFAULT_SETTINGS } from '../../src/prayer/core/settings';
+import { CHICAGO } from './prayer-fixtures';
 
 const hm = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 
@@ -13,7 +9,7 @@ describe('computeDay', () => {
   // Aladhan gives the same times except Dhuhr 12:34 (adhan-js applies ISNA's
   // +1 min Dhuhr adjustment) and Asr 16:07 (rounding).
   it('matches Aladhan (ISNA, Hanafi) for Chicago on 2026-10-29', () => {
-    const t = computeDay(new Date(2026, 9, 29), CHICAGO);
+    const t = computeDay(new Date(2026, 9, 29), CHICAGO, DEFAULT_SETTINGS);
     expect({
       fajr: hm(t.fajr),
       sunrise: hm(t.sunrise),

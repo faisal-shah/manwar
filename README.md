@@ -33,7 +33,8 @@ The product research behind it, with screenshots, is in
 **Sleep** blanks the screen on a schedule or on demand; a tap wakes it, and
 it stays awake while someone is using it.
 **Settings** covers people, calendars, display (night mode, text size, hidden
-tabs), weather, the parental PIN and meal categories.
+tabs), the family's location (the weather and the prayer times are for it),
+the parental PIN and meal categories.
 
 ### Two faces: family and prayer
 
@@ -49,8 +50,9 @@ athan to end. After three minutes without a touch, and at night, the tablet
 goes back to its resting screen (Settings → Display → Resting screen: Family
 or Prayer times; resting on Prayer times, the night screen is the prayer
 clock's dim night clock). The prayer clock's gear opens its own settings
-(location, calculation, iqamah, Jumu'ah, athans, themes, photos); they are
-the household's, so a parent's phone can change them too.
+(calculation, iqamah, Jumu'ah, athans, themes, photos); they are the
+household's, so a parent's phone can change them too. The prayer clock shows
+the time in the household's time format and the weather in its unit.
 
 ```mermaid
 flowchart LR
@@ -94,8 +96,8 @@ child, giving or taking stars and redeeming rewards, lists, the calendar
 (with adding events and assigning new ones), a note that pops up on the wall,
 the wall's timer, putting the wall to sleep or waking it, the meal plan, the
 family's people (added, edited, reordered and deleted as in the wall's
-Settings → Profiles), and the prayer times (More → Prayer times: the place,
-how the times are calculated, iqamah and Jumu'ah, and each athan's
+Settings → Profiles), and the prayer times (More → Prayer times: where the
+family lives, how the times are calculated, iqamah and Jumu'ah, and each athan's
 recording and volume; Today shows the next prayer).
 
 Phones are paired from the wall only: **Settings → Phones → Add a phone**
@@ -124,10 +126,12 @@ data in memory only, so a lost or removed one keeps none of it.
    calendar permissions ticked; the wall refuses a connection without them).
    Each Google account gets its own household: its own people, tasks, lists
    and meals.
-3. In Settings, add the family's profiles, pick the weather location and set a
-   parental PIN.
-4. Tap **Prayer** and choose where the family lives (or set it from a paired
-   phone, More → Prayer times); the prayer clock's gear has the rest.
+3. In Settings, add the family's profiles, choose where the family lives
+   (Settings → Location: the weather and the prayer times are for it) and set
+   a parental PIN.
+4. Tap **Prayer** for the prayer clock; its gear has the rest.
+   A paired phone can set the location and the prayer times too
+   (More → Prayer times).
 5. Pair the parents' phones: Settings → Phones → Add a phone.
 
 If the wall loses its Google connection (access revoked, or the calendar

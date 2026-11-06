@@ -5,6 +5,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { ArrowLeft, X } from 'lucide-preact';
 import { checkPin, pinPausedUntil, pinRequest } from '../core/lock';
 import { pauseSecondsLeft } from '../core/pin';
+import { errorMessage } from '../data/errors';
 import { currentTime, nowMs } from '../lib/clock';
 import { isPhone } from '../app/layout';
 import { useBack } from './back';
@@ -362,6 +363,14 @@ export function toast(text: string, action?: ToastItem['action'], ms = 5000): vo
   toasts.value = [...toasts.value.slice(-2), { id, text, action }];
   setTimeout(() => (toasts.value = toasts.value.filter((t) => t.id !== id)), ms);
 }
+
+/** A write the server refused, said in a toast (and logged) instead of dropped: `.catch(notSaved('Settings not saved'))`. */
+export const notSaved =
+  (what: string) =>
+  (e: unknown): void => {
+    console.warn(`${what}:`, e);
+    toast(`${what}: ${errorMessage(e)}`);
+  };
 
 export function ToastHost() {
   return (

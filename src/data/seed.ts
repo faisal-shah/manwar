@@ -349,6 +349,6 @@ async function seedDemo(): Promise<void> {
   assign(fam, 'birthday', ['hashim'], true);
   assign(fam, 'trip', [EVERYONE], true);
 
-  b.settings({ seededAt: now, weather: { lat: 30.2672, lon: -97.7431, name: 'Austin, Texas' } });
+  b.settings({ seededAt: now });
   await b.commit();
 }

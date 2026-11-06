@@ -1,15 +1,14 @@
-import { currentTime } from '../lib/clock';
-
 /**
  * Touches and key presses on the wall (or phone). Idle return, the parental
- * relock, the sleep wake, the update check and a phone's last-seen stamp
- * all read this one source. Typing counts:
+ * relock, the sleep wake, the update check, the prayer face's resting rule
+ * and a phone's last-seen stamp all read this one source. Typing counts:
  * the on-screen keyboard sends key and input events but no pointer events, so
  * a parent typing a long note is not idle.
  */
 const EVENTS = ['pointerdown', 'keydown', 'input'] as const;
 
-let last = currentTime();
+/** On the monotonic clock (performance.now()): a wall clock set back an hour must not make the wall look busy for that hour. */
+let last = performance.now();
 const listeners: (() => void)[] = [];
 let tracking = false;
 
@@ -17,7 +16,7 @@ export function trackActivity(): void {
   if (tracking) return;
   tracking = true;
   const mark = () => {
-    last = currentTime();
+    last = performance.now();
     for (const fn of listeners) fn();
   };
   for (const type of EVENTS) window.addEventListener(type, mark, { capture: true, passive: true });
@@ -33,4 +32,4 @@ export function onActivity(fn: () => void): () => void {
 }
 
 /** Milliseconds since the last touch or key press (or since the page loaded). */
-export const idleFor = () => currentTime() - last;
+export const idleFor = () => performance.now() - last;

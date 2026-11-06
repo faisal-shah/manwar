@@ -31,7 +31,6 @@ import { goPhone, type PhonePage } from '../nav';
 import { addFirstPerson } from '../people';
 import { openPrayerTimes, prayerNow } from '../prayer';
 import { nextLine } from '../prayer/logic';
-import { settings as prayerSettings } from '../../prayer/settingsStore';
 import { MosqueIcon } from '../../ui/MosqueIcon';
 import { showTasksOf } from '../tasks/state';
 import { capped, isNow, nextUp, type DayAgenda } from './logic';
@@ -55,7 +54,7 @@ function TodayBody() {
 
 /** The next prayer by the household's prayer clock, once it has a place; a tap opens More > Prayer times. */
 function PrayerLine() {
-  const place = prayerSettings.value.place;
+  const place = settings.value.place;
   const day = prayerNow.value;
   if (!place || !day) return null;
   return (

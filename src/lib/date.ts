@@ -59,6 +59,9 @@ export function hhmmToMinutes(t: HHMM): number {
 
 export const minutesToHHMM = (min: number): HHMM => `${pad(Math.floor(min / 60) % 24)}:${pad(min % 60)}`;
 
+/** `t` some minutes later, within its day (23:59 at the latest). */
+export const laterBy = (t: HHMM, minutes: number): HHMM => minutesToHHMM(Math.min(24 * 60 - 1, hhmmToMinutes(t) + minutes));
+
 /** The instant of an ISO date at a local time of day. */
 export function dateAt(s: ISODate, t: HHMM = '00:00'): Date {
   const d = fromISODate(s);

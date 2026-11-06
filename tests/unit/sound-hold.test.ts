@@ -7,7 +7,7 @@ vi.mock('../../src/data/store', async () => {
   return { settings: signal({ sounds: true }) };
 });
 
-const { soundsHeld, whenFree } = await import('../../src/core/sound');
+const { playCheck, soundsHeld, whenFree } = await import('../../src/core/sound');
 
 afterEach(() => {
   soundsHeld.value = false;
@@ -40,5 +40,35 @@ describe('sounds held for the athan', () => {
     soundsHeld.value = false;
     vi.advanceTimersByTime(5000);
     expect(played).toEqual(['speak', 'chime 2']);
+  });
+});
+
+describe('synthesized sounds', () => {
+  it('resume an audio context the browser suspended', () => {
+    const resumed: string[] = [];
+    const node = () => ({
+      connect: (n: unknown) => n ?? node(),
+      start() {},
+      stop() {},
+      frequency: {},
+      gain: { setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {} },
+    });
+    class Context {
+      state = 'suspended';
+      currentTime = 0;
+      destination = {};
+      resume() {
+        resumed.push(this.state);
+        this.state = 'running';
+        return Promise.resolve();
+      }
+      createOscillator = node;
+      createGain = node;
+    }
+    vi.stubGlobal('AudioContext', Context);
+    playCheck();
+    playCheck();
+    expect(resumed).toEqual(['suspended']);
+    vi.unstubAllGlobals();
   });
 });

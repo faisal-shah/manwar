@@ -1,11 +1,21 @@
 import { useState } from 'preact/hooks';
-import { stopAthan } from '../../audio';
 import { nextHijriDate } from '../../core/calendar';
 import type { CalligraphyArt } from '../../core/media';
 import { addDays, computeDay, startOfDay } from '../../core/prayer';
 import { PERIOD_NAMES, periodMoment, type ClockState, type PeriodKey } from '../../core/schedule';
 import { GALLERY_CATEGORIES, type ThemeKey } from '../../core/settings';
-import { calligraphyArt, photos, removeUpload, settings, settingsOpen, startPreview, viewer, type ViewItem } from '../../store';
+import {
+  calligraphyArt,
+  photos,
+  place,
+  previewRefusal,
+  removeUpload,
+  settings,
+  settingsOpen,
+  startPreview,
+  viewer,
+  type ViewItem,
+} from '../../store';
 import { Phrase } from '../parts';
 import { viewLabel } from '../Viewer';
 import { Segmented } from './controls';
@@ -25,7 +35,7 @@ function moments(st: ClockState): { title: string; note: string; items: Moment[]
   const today = startOfDay(st.now);
   const t = st.today;
   const plus = (d: Date, m: number) => new Date(d.getTime() + m * MIN);
-  const dayAt = (d: Date) => computeDay(d, s);
+  const dayAt = (d: Date) => computeDay(d, place.value!, s);
 
   const friday = addDays(today, (5 - today.getDay() + 7) % 7);
   const fri = dayAt(friday);
@@ -80,20 +90,21 @@ function moments(st: ClockState): { title: string; note: string; items: Moment[]
 }
 
 function MomentsTab({ st }: { st: ClockState }) {
+  // A preview never holds off the real athan sequence: none starts during it or just before it (store.ts startPreview).
+  const refused = previewRefusal();
   const go = (m: Moment) => {
-    stopAthan();
-    startPreview(m.at, m.theme ?? null);
-    settingsOpen.value = false;
+    if (startPreview(m.at, m.theme ?? null)) settingsOpen.value = false;
   };
   return (
     <>
+      {refused && <p class="panel-warn">{refused}</p>}
       {moments(st).map((g) => (
         <div class="pv-group">
           <div class="panel-sub">{g.title}</div>
           <p class="panel-note">{g.note}</p>
           <div class="preview-grid">
             {g.items.map((m) => (
-              <button class="pf-btn" onClick={() => go(m)}>
+              <button class="pf-btn" disabled={!!refused} onClick={() => go(m)}>
                 {m.label}
               </button>
             ))}

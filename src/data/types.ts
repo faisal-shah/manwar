@@ -311,6 +311,20 @@ type Patch<T> = T extends unknown[] ? T : T extends object ? { [K in keyof T]?: 
 /** A change to the settings document (saveSettings). */
 export type SettingsPatch = Patch<Settings>;
 
+/**
+ * Where the family lives (Settings > Location; a phone sets it in More >
+ * Prayer times): the weather and the prayer times are for this place.
+ * Written whole, so two devices choosing places never mix their fields.
+ */
+export interface Place {
+  /** "Houston, Texas" */
+  name: string;
+  lat: number;
+  lon: number;
+  /** IANA zone (America/Chicago): the prayer clock keeps the place's calendar day. */
+  timezone: string;
+}
+
 /** Household settings: one document, settings/main. */
 export interface Settings {
   // Calendar
@@ -344,8 +358,8 @@ export interface Settings {
    * write that keeps another's); shown in DEFAULT_MEAL_CATEGORIES order.
    */
   mealCategories: Record<MealCategoryId, MealCategory>;
-  // Weather
-  weather: { lat: number; lon: number; name: string } | null;
+  // Location
+  place: Place | null;
   tempUnit: 'f' | 'c';
   // Display
   hiddenTabs: TabId[];

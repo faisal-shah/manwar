@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { bundledPhoto, defaultIds, photoForDay, rotation, upcoming } from '../../src/prayer/core/library';
 import type { GalleryItem, Photo } from '../../src/prayer/core/media';
 import { dayNumber } from '../../src/prayer/core/prayer';
-import { BG_SLOTS, GALLERY_CATEGORIES, sanitizeSettings } from '../../src/prayer/core/settings';
+import { BG_SLOTS, GALLERY_CATEGORIES } from '../../src/prayer/core/settings';
 import indexJson from '../../public/prayer/gallery/index.json';
 
 const index = indexJson as GalleryItem[];
@@ -78,42 +78,6 @@ describe('background rotation', () => {
     expect(next).toHaveLength(3);
     next.forEach((id, i) => expect(photoForDay(pool, new Date(2026, 10, 1 + i, 12), 'isha')!.id).toBe(id));
     expect(upcoming([], new Date(), 'isha')).toEqual([]);
-  });
-});
-
-describe('background settings', () => {
-  it('keeps all or distinct photo ids (or none) and treats anything else as the defaults', () => {
-    const s = sanitizeSettings({
-      backgrounds: { fajr: ['a', 'a', 'upload:x'], sunrise: 'all', dhuhr: 'auto', asr: [], isha: [1, 2], night: 'x' },
-    });
-    expect(s.backgrounds.fajr).toEqual(['a', 'upload:x']);
-    expect(s.backgrounds.sunrise).toBe('all');
-    expect(s.backgrounds.dhuhr).toBeNull();
-    expect(s.backgrounds.asr).toEqual([]);
-    expect(s.backgrounds.isha).toBeNull();
-    expect(s.backgrounds.night).toBeNull();
-    expect(sanitizeSettings('junk').backgrounds.maghrib).toBeNull();
-  });
-
-  it("holds numbers to the ranges the controls allow, and keeps a Jumu'ah time", () => {
-    const s = sanitizeSettings({
-      hijriOffset: 1e9,
-      gallery: { minutes: 0 },
-      iqamah: { fajr: 500 },
-      adjust: { isha: -99 },
-      sounds: { fajr: { volume: 3 } },
-      jumuah: { times: [''] },
-    });
-    expect(s.hijriOffset).toBe(2);
-    expect(s.gallery.minutes).toBe(1);
-    expect(s.iqamah.fajr).toBe(90);
-    expect(s.adjust.isha).toBe(-30);
-    expect(s.sounds.fajr.volume).toBe(1);
-    expect(s.jumuah.times).toEqual(['13:30']);
-  });
-
-  it('shows uploads in the Gallery theme by default', () => {
-    expect(sanitizeSettings(undefined).gallery.categories.uploads).toBe(true);
   });
 });
 

@@ -22,25 +22,27 @@ import '../styles/night.css';
 import '../styles/takeover.css';
 import '../styles/settings.css';
 
-import { face, shownFace } from '../../app/face';
-import { sleeping, wake } from '../../core/display';
-import { getSpeed, isPreviewing, setSpeed } from '../core/clock';
+import { useLayoutEffect } from 'preact/hooks';
+import { shownFace } from '../../app/face';
+import { sleeping } from '../../core/display';
+import { previewing, setSpeed, speed } from '../core/clock';
 import { unlockAudio } from '../audio';
+import { clockView } from '../rules';
 import {
   audioBlocked,
   backgroundFor,
   clock,
   endPreview,
   picking,
+  place,
   previewTheme,
   settings,
   settingsOpen,
-  updateSettings,
   viewer,
 } from '../store';
+import { chooseLocation, toFamily } from './nav';
 import { Crossfade, GearIcon, Phrase, SpeakerIcon, findArt } from './parts';
 import { BackgroundPicker } from './settings/Library';
-import { LocationPicker } from './settings/LocationPicker';
 import { SettingsPanel } from './settings/SettingsPanel';
 import { TakeoverLayer } from './Takeover';
 import { Theme } from './themes/Theme';
@@ -51,19 +53,48 @@ export function PrayerLayer() {
   return shownFace.value === 'prayer' ? <PrayerFace /> : null;
 }
 
+/** What the family face has open outside #app (sheets, toasts portaled to the page) is inert under the prayer face too. */
+function coverFamily(covered: boolean): void {
+  for (const el of document.body.children) {
+    if (el.classList.contains('prayer-face')) continue;
+    if (covered && !el.hasAttribute('inert')) {
+      el.setAttribute('inert', '');
+      el.setAttribute('data-face-inert', '');
+    } else if (!covered && el.hasAttribute('data-face-inert')) {
+      el.removeAttribute('inert');
+      el.removeAttribute('data-face-inert');
+    }
+  }
+  // A field in a sheet keeps neither focus nor the on-screen keyboard behind the prayer face.
+  const active = document.activeElement;
+  if (covered && active instanceof HTMLElement && !active.closest('.prayer-face')) active.blur();
+}
+
+/**
+ * The family face under this one takes no taps, focus or reading for as
+ * long as it is mounted, and gets them back when it unmounts: the family
+ * face shown again, or the shell gone with the household (a sign-out).
+ */
+function useCoverFamily(): void {
+  useLayoutEffect(() => {
+    const cover = (on: boolean) => {
+      document.documentElement.dataset.face = on ? 'prayer' : 'family';
+      document.getElementById('app')?.toggleAttribute('inert', on);
+      coverFamily(on);
+    };
+    cover(true);
+    return () => cover(false);
+  }, []);
+}
+
 function PrayerFace() {
+  useCoverFamily();
   const s = settings.value;
   return (
     <div class="prayer-face" data-motion={s.motion}>
-      {s.place ? <Clock /> : <Setup />}
+      {place.value ? <Clock /> : <Setup />}
     </div>
   );
-}
-
-/** Back to the family face (waking the wall, if it slept behind the night clock). */
-function toFamily(): void {
-  if (sleeping.peek()) wake();
-  face.value = 'family';
 }
 
 function FamilyButton() {
@@ -95,10 +126,12 @@ function Setup() {
         </div>
         <h1>Prayer times</h1>
         <p>
-          Prayer times are calculated on this tablet from where the family lives. Choose the place (a phone can do it too, in
-          More, then Prayer times).
+          Prayer times are calculated on this tablet for where the family lives. Choose the place in Settings, under Location (a
+          phone can do it too, in More, then Prayer times); the weather is for it too.
         </p>
-        <LocationPicker onPick={(place) => updateSettings(() => ({ place }))} />
+        <button class="pf-btn primary" onClick={chooseLocation}>
+          Choose the place
+        </button>
       </div>
       <FamilyButton />
     </div>
@@ -108,32 +141,34 @@ function Setup() {
 function Clock() {
   const st = clock.value;
   if (!st) return null;
-  // While the wall sleeps (the resting face is this one), the night clock is the night screen.
-  const theme = (isPreviewing() && previewTheme.value) || (sleeping.value && !st.takeover ? 'night' : st.theme);
+  const { theme, takeover } = clockView(st, {
+    asleep: sleeping.value,
+    previewTheme: previewing.value ? previewTheme.value : null,
+  });
   return (
     <div class={`stage theme-${theme}`}>
       <Crossfade k={theme} ms={1600}>
         <Theme theme={theme} st={st} />
       </Crossfade>
-      <Crossfade k={st.takeover ? `${st.takeover.id}:${st.takeover.phase}` : 'none'} ms={1000} fadeOut={!st.takeover}>
-        {st.takeover && <TakeoverLayer st={st} />}
+      <Crossfade k={takeover ? `${takeover.id}:${takeover.phase}` : 'none'} ms={1000} fadeOut={!takeover}>
+        {takeover && <TakeoverLayer st={st} />}
       </Crossfade>
       <button class="gear" aria-label="Settings" onClick={() => (settingsOpen.value = true)}>
         <GearIcon />
       </button>
-      {!st.takeover && <FamilyButton />}
+      {!takeover && <FamilyButton />}
       {audioBlocked.value && (
         <button class="badge-sound" onClick={unlockAudio}>
           <SpeakerIcon /> Tap to enable athan sound
         </button>
       )}
-      {isPreviewing() && (
+      {previewing.value && (
         <div class="preview-bar">
           <span class="preview-when">
             Preview · {st.now.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
           </span>
-          <button class={getSpeed() > 1 ? 'on' : ''} onClick={() => setSpeed(getSpeed() > 1 ? 1 : 60)}>
-            {getSpeed() > 1 ? '60× · back to 1×' : 'Fast-forward 60×'}
+          <button class={speed.value > 1 ? 'on' : ''} onClick={() => setSpeed(speed.value > 1 ? 1 : 60)}>
+            {speed.value > 1 ? '60× · back to 1×' : 'Fast-forward 60×'}
           </button>
           <button class="primary" onClick={endPreview}>
             Exit

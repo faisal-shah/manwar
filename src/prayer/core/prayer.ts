@@ -1,5 +1,6 @@
 import { CalculationMethod, Coordinates, HighLatitudeRule, Madhab, PolarCircleResolution, PrayerTimes, SunnahTimes } from 'adhan';
-import type { PrayerKey, Settings } from './settings';
+import type { Place } from '../../data/types';
+import type { Settings } from './settings';
 
 export interface DayTimes {
   /** Local midnight of the day these times belong to. */
@@ -25,8 +26,7 @@ const dayFormats = new Map<string, Intl.DateTimeFormat>();
  * form computeDay takes). It differs from the tablet's own date only when the
  * tablet is set to another time zone.
  */
-export function placeDay(now: Date, timezone: string | null): Date {
-  if (!timezone) return startOfDay(now);
+export function placeDay(now: Date, timezone: string): Date {
   let f = dayFormats.get(timezone);
   if (!f) {
     try {
@@ -49,11 +49,11 @@ export function addDays(d: Date, n: number): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
 }
 
-type CalcSettings = Pick<Settings, 'place' | 'method' | 'madhab' | 'highLatRule' | 'adjust'>;
+export type CalcSettings = Pick<Settings, 'method' | 'madhab' | 'highLatRule' | 'adjust'>;
 
-export function computeDay(day: Date, s: CalcSettings): DayTimes {
-  if (!s.place) throw new Error('computeDay requires a place');
-  const coords = new Coordinates(s.place.latitude, s.place.longitude);
+/** The prayer times of `day` at `place`. */
+export function computeDay(day: Date, place: Place, s: CalcSettings): DayTimes {
+  const coords = new Coordinates(place.lat, place.lon);
   const params = CalculationMethod[s.method]();
   params.madhab = s.madhab === 'hanafi' ? Madhab.Hanafi : Madhab.Shafi;
   params.highLatitudeRule = s.highLatRule === 'recommended' ? HighLatitudeRule.recommended(coords) : s.highLatRule;
@@ -72,8 +72,4 @@ export function computeDay(day: Date, s: CalcSettings): DayTimes {
     isha: pt.isha,
     lastThird: new SunnahTimes(pt).lastThirdOfTheNight,
   };
-}
-
-export function athanOf(t: DayTimes, p: PrayerKey): Date {
-  return t[p];
 }

@@ -1,3 +1,5 @@
+import { formatTime, type TimeFormat } from '../../lib/date';
+
 export const HIJRI_MONTHS = [
   'Muharram',
   'Safar',
@@ -51,11 +53,10 @@ export interface ClockFace {
   ampm: string;
 }
 
-export function clockFace(d: Date, h24: boolean): ClockFace {
-  const m = String(d.getMinutes()).padStart(2, '0');
-  if (h24) return { hm: `${String(d.getHours()).padStart(2, '0')}:${m}`, ampm: '' };
-  const h = d.getHours() % 12 || 12;
-  return { hm: `${h}:${m}`, ampm: d.getHours() < 12 ? 'AM' : 'PM' };
+/** The household's time format (Settings > Calendar), with the meridiem apart for the faces to set smaller. */
+export function clockFace(d: Date, fmt: TimeFormat): ClockFace {
+  if (fmt === '24h') return { hm: formatTime(d, fmt), ampm: '' };
+  return { hm: formatTime(d, fmt, { meridiem: false, dropZeroMinutes: false }), ampm: d.getHours() < 12 ? 'AM' : 'PM' };
 }
 
 const gregFmt = new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: '2-digit' });
@@ -90,9 +91,4 @@ export function countdownFace(ms: number): CountdownFace {
 /** Whole minutes remaining, rounded up, for the round "NEXT IN 8" medallions. */
 export function minutesLeft(ms: number): number {
   return Math.max(0, Math.ceil(ms / 60000));
-}
-
-export function parseHHMM(day: Date, hhmm: string): Date {
-  const [h, m] = hhmm.split(':').map(Number);
-  return new Date(day.getFullYear(), day.getMonth(), day.getDate(), h, m);
 }

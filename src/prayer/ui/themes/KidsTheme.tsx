@@ -1,7 +1,7 @@
 import { clockFace, minutesLeft } from '../../core/calendar';
 import { greetingFor, kidReminder } from '../../core/content';
 import { PERIOD_NAMES, type ClockState } from '../../core/schedule';
-import { settings } from '../../store';
+import { settings as household } from '../../../data/store';
 import { T, WeatherGlyph, dateLine, useWeather } from '../parts';
 
 const CLOUD =
@@ -123,7 +123,7 @@ function WeatherCloud() {
 }
 
 export function KidsTheme({ st }: { st: ClockState }) {
-  const f = clockFace(st.now, settings.value.clock24h);
+  const f = clockFace(st.now, household.value.timeFormat);
   const c = st.countdown;
   const mins = minutesLeft(c.target.getTime() - st.now.getTime());
   const what =
