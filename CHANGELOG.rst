@@ -2,16 +2,17 @@
 Changelog
 =========
 
-0.3.1 (2026-11-05)
+0.3.2 (2026-11-05)
 ==================
 
 Fixed
 -----
 
-- Signing in from the installed app (Android's "Install app") ended with
-  "The Google window was closed before finishing": Google's popup opens
-  outside the app and cannot hand its code back. The installed app now
-  goes to Google's page and comes back by redirect; a browser tab keeps
+- Signing in with Google ended with "The Google window was closed before
+  finishing", in the installed app and in a Chrome tab on the tablet: the
+  popup never handed its code back. Sign-in now goes to Google's page and
+  comes back by redirect (a first visit waits a few seconds for the app to
+  finish installing itself); only a browser without service workers uses
   the popup.
 
 0.3.0 (2026-11-05)

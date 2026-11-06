@@ -97,19 +97,26 @@ interface ConnectOptions {
   onError?: (message: string) => void;
 }
 
-/** Running as an installed app (Android's "Install app"), where Google's popup cannot report back. */
-const installedApp = () => ['standalone', 'fullscreen', 'minimal-ui'].some((m) => matchMedia(`(display-mode: ${m})`).matches);
-
 const REDIRECT_KEY = 'manwar.googleRedirect.v1';
+/** How long a first visit's service worker may take to install before the redirect gives up waiting. */
+const SW_READY_MS = 20_000;
 
 /**
- * Open Google's account chooser and consent: a popup in a browser tab, a
- * redirect in an installed app (data/googleRedirect.ts; a reconnect then
- * reloads the wall, and its result shows on the page it comes back to).
+ * Open Google's account chooser and consent. By redirect
+ * (data/googleRedirect.ts): the page goes to Google and comes back with
+ * the code, which nothing can lose on the way (Google's popup must hand
+ * its code back to the page that opened it, which fails on an installed
+ * app and on Android tablets). A reconnect reloads the wall, and its
+ * result shows on the page it comes back to. Only a browser without
+ * service workers, which could not answer the return, uses the popup.
  * Must run in a tap handler.
  */
 export function startGoogleConnect(opts: ConnectOptions = {}): void {
-  if (installedApp()) return void redirectToGoogle();
+  if ('serviceWorker' in navigator) return void redirectToGoogle(opts.onError ?? fail);
+  popupConnect(opts);
+}
+
+function popupConnect(opts: ConnectOptions): void {
   const report = opts.onError ?? fail;
   const oauth2 = window.google?.accounts?.oauth2;
   if (!oauth2) {
@@ -136,19 +143,24 @@ export function startGoogleConnect(opts: ConnectOptions = {}): void {
     .requestCode();
 }
 
-async function redirectToGoogle(): Promise<void> {
+async function redirectToGoogle(report: (message: string) => void): Promise<void> {
   // The return is answered by the service worker (googleRedirect.ts): without an active one, Firebase's
-  // handler page would answer it instead.
-  const sw = await navigator.serviceWorker?.getRegistration().catch(() => undefined);
-  if (!sw?.active) {
-    fail('The app is still installing itself. Try again in a moment.');
+  // handler page would answer it instead. A first visit's is still installing for a few seconds.
+  const signingIn = session.value.state !== 'signedIn';
+  if (signingIn) session.value = { state: 'connecting' };
+  const active = await Promise.race([
+    navigator.serviceWorker.ready.then((r) => !!r.active),
+    new Promise<false>((resolve) => setTimeout(() => resolve(false), SW_READY_MS)),
+  ]);
+  if (!active) {
+    report('The app is still installing itself. Try again in a moment.');
     return;
   }
   const pending: PendingRedirect = { state: `${STATE_PREFIX}${crypto.randomUUID()}`, at: Date.now() };
   try {
     localStorage.setItem(REDIRECT_KEY, JSON.stringify(pending));
   } catch {
-    fail('This browser keeps no storage, so Google sign-in cannot come back to it.');
+    report('This browser keeps no storage, so Google sign-in cannot come back to it.');
     return;
   }
   location.assign(googleAuthUrl(googleClientId, googleScopes, canonicalHost, pending.state));

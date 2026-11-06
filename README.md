@@ -114,14 +114,12 @@ data in memory only, so a lost or removed one keeps none of it.
    **Fully Kiosk Browser** is the alternative that also starts the app when
    the tablet boots and dims the backlight at night: set its start URL to
    the live address, and in its settings turn on Web Content Settings →
-   **Enable Popups** (needed once, for the Google consent window), Web Content
-   Settings → **Autoplay audio** (the athan and chimes), and Advanced Web
-   Settings → **Enable JavaScript Interface** (dimming and blanking the
-   screen).
+   **Autoplay audio** (the athan and chimes) and Advanced Web Settings →
+   **Enable JavaScript Interface** (dimming and blanking the screen).
 2. Open the app, tap **Connect Google account** and sign in with the Google
    account whose calendars the wall should show (a shared family account
-   works well; in the installed app, Google's page opens in place of the app
-   and comes back to it). Google warns that the app is unverified: choose
+   works well; Google's page opens in place of the app and comes back to
+   it). Google warns that the app is unverified: choose
    **Advanced → Go to Manwar**, then allow calendar access (leave both
    calendar permissions ticked; the wall refuses a connection without them).
    Each Google account gets its own household: its own people, tasks, lists
