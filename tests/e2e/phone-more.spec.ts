@@ -44,21 +44,31 @@ const stored = async (household: string, path: string) => {
   return res.status === 200 ? ((await res.json()) as { fields: Record<string, Record<string, string>> }) : null;
 };
 /** The latest stored timer run (a wall's own document or the phones' `timers/wall`): its run, minutes, and the runs stopped. */
-async function timerDoc(household: string) {
-  type Fields = {
-    run: { stringValue: string };
-    minutes: { integerValue: string };
-    startAt: { integerValue: string };
-    stopped?: { mapValue: { fields?: Record<string, unknown> } };
-  };
+type TimerFields = {
+  run: { stringValue: string };
+  minutes: { integerValue: string };
+  stopped?: { mapValue: { fields?: Record<string, unknown> } };
+};
+const timerOf = (f: TimerFields) => ({
+  run: f.run.stringValue,
+  minutes: Number(f.minutes.integerValue),
+  stopped: Object.keys(f.stopped?.mapValue.fields ?? {}),
+});
+/**
+ * A timer document: the phones' (timers/wall, PHONE_TIMER), or the wall's
+ * own when it is the only one. Never "the latest" across documents: each
+ * page's ?now= clock starts when the page loads, so a wall's and a phone's
+ * start times do not compare.
+ */
+async function timerDoc(household: string, which: 'phones' | 'only') {
+  if (which === 'phones') {
+    const res = await fetch(`${FS}/households/demo-${household}/timers/wall`, { headers: OWNER });
+    return timerOf(((await res.json()) as { fields: TimerFields }).fields);
+  }
   const res = await fetch(`${FS}/households/demo-${household}/timers`, { headers: OWNER });
-  const docs = ((await res.json()) as { documents?: { fields: Fields }[] }).documents ?? [];
-  const f = docs.map((d) => d.fields).sort((a, b) => Number(b.startAt.integerValue) - Number(a.startAt.integerValue))[0];
-  return {
-    run: f.run.stringValue,
-    minutes: Number(f.minutes.integerValue),
-    stopped: Object.keys(f.stopped?.mapValue.fields ?? {}),
-  };
+  const docs = ((await res.json()) as { documents?: { fields: TimerFields }[] }).documents ?? [];
+  expect(docs).toHaveLength(1);
+  return timerOf(docs[0].fields);
 }
 /** Start a timer on the wall's own keypad (Home's Timer button). */
 async function startAtWall(w: Page, digit: string) {
@@ -228,7 +238,7 @@ test('a timer started on the phone runs on the wall; stopped on either side, it 
   await expect(p.page.getByRole('button', { name: '5 minutes', exact: true })).toBeVisible();
   await expect(p.page.locator('.pt-run')).toHaveCount(0);
   // The wall knows the stop, for this run (it resumes scheduled sleep from it).
-  const t = await timerDoc(hh);
+  const t = await timerDoc(hh, 'phones');
   expect(t.stopped).toEqual([t.run]);
   expect([...w.errors, ...p.errors]).toEqual([]);
 });
@@ -252,7 +262,7 @@ test('an offline phone queues no start or stop: it says it could not reach the w
   await expect(p.page.locator('.pt-total')).toContainText('9 min timer', { timeout: 30_000 });
   await w.page.waitForTimeout(1500);
   await expect(layer.locator('.timer-total')).toContainText('9 min');
-  expect((await timerDoc(hh)).minutes).toBe(9);
+  expect((await timerDoc(hh, 'only')).minutes).toBe(9);
 
   // Nor a stop: the timer runs on.
   await expect(unreachable).toHaveCount(0, { timeout: 10_000 });
@@ -263,7 +273,7 @@ test('an offline phone queues no start or stop: it says it could not reach the w
   await w.page.waitForTimeout(1500);
   await expect(layer.locator('.timer-total')).toContainText('9 min');
   await expect(p.page.locator('.pt-total')).toContainText('9 min timer');
-  expect((await timerDoc(hh)).stopped).toEqual([]);
+  expect((await timerDoc(hh, 'only')).stopped).toEqual([]);
   expect(real([...w.errors, ...p.errors])).toEqual([]);
 });
 
@@ -315,7 +325,7 @@ test('a stop that lands late, from a wall that was offline, leaves the timer sta
   await w.page.waitForTimeout(1500);
   await expect(layer.locator('.timer-total')).toContainText('10 min');
   await expect(p.page.locator('.pt-total')).toContainText('10 min timer');
-  const t = await timerDoc(hh);
+  const t = await timerDoc(hh, 'phones');
   expect(t.minutes).toBe(10);
   expect(t.stopped).not.toContain(t.run);
   expect(real([...w.errors, ...p.errors])).toEqual([]);
@@ -393,7 +403,7 @@ test('a double tap on Start does not stop the timer it started', async ({ browse
   await p.page.waitForTimeout(800);
   await expect(p.page.locator('.pt-run')).toBeVisible();
   await expect(w.page.locator('.timer-layer')).toBeVisible();
-  expect((await timerDoc(hh)).stopped).toEqual([]);
+  expect((await timerDoc(hh, 'phones')).stopped).toEqual([]);
   expect([...w.errors, ...p.errors]).toEqual([]);
 });
 
@@ -521,7 +531,7 @@ test("the phone shows tonight's dinner and plans the week, and the wall's grid s
   const modal = p.page.getByRole('dialog', { name: 'Add to Grocery List?' });
   await p.page.waitForTimeout(500);
   await modal.getByRole('button', { name: /^Add \d+ items?$/ }).click();
-  await expect(p.page.locator('.toast', { hasText: /Added \d+ items? to Grocery List/ })).toBeVisible();
+  await expect(p.page.locator('.toast', { hasText: /Added \d+ items? to \u2068Grocery List\u2069/ })).toBeVisible();
   await p.page.locator('.ph-nav').getByRole('button', { name: 'Lists' }).click();
   await p.page.locator('.phl-row', { hasText: 'Grocery List' }).click();
   await expect(p.page.locator('.phl-card .li-row', { hasText: /chicken thighs/i })).toBeVisible();
