@@ -23,7 +23,7 @@ The product research behind it, with screenshots, is in
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Home**     | Calendar, today's tasks and lists side by side; timer; wall messages                                                                                    |
 | **Calendar** | Schedule (1-7 day time grid), Day, Week and Month views; filter by person; countdowns; events created here are saved to the household's Google calendar |
-| **Lists**    | Grocery, to-do and other lists with sections; checked items sink to Done                                                                                |
+| **Lists**    | Grocery, to-do and other lists with sections; checked items sink to Done; grocery lists suggest what was bought before as you type                      |
 | **Tasks**    | A column per person: morning, afternoon and evening routines and chores, with stars, late chores and Up for Grabs                                       |
 | **Rewards**  | Rewards each person can redeem with stars; full star history with undo                                                                                  |
 | **Meals**    | A week of breakfast, lunch, dinner and snacks; planned meals show on the calendar                                                                       |

@@ -135,6 +135,61 @@
   margin: 0.4rem 0 0.8rem;
 }
 
+/* Suggestions under the Add item field of a grocery list, while typing */
+.li-sugs {
+  list-style: none;
+  margin: 0 1.6rem 0.8rem;
+  padding: 0.4rem 0;
+  border-radius: 1.4rem;
+  background: var(--surface-solid);
+  box-shadow: var(--shadow-soft);
+  flex: none;
+}
+.ls-group > .li-sugs {
+  margin: 0 0 0.8rem;
+}
+.li-sug {
+  display: flex;
+  align-items: center;
+}
+.li-sug + .li-sug {
+  border-top: 1px solid var(--line);
+}
+.li-sug-pick {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex: 1;
+  min-width: 0;
+  min-height: var(--touch);
+  padding: 0.6rem 1.8rem;
+  text-align: start;
+  font-size: 1.9rem;
+}
+.li-sug-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.li-sug.on-list .li-sug-pick {
+  color: var(--text-2);
+  cursor: default;
+}
+.li-sug-on {
+  flex: none;
+  padding: 0.2rem 1rem;
+  border-radius: 99rem;
+  background: color-mix(in srgb, var(--c-strong, var(--accent)) 14%, transparent);
+  color: var(--text-2);
+  font-size: 1.4rem;
+  font-weight: 600;
+}
+.li-sug-forget {
+  flex: none;
+  width: var(--touch);
+  height: var(--touch);
+  color: var(--text-3);
+}
+
 /* Body */
 .lc-body {
   position: relative;

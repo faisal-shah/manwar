@@ -2,6 +2,18 @@
 Changelog
 =========
 
+0.3.3 (2026-11-05)
+==================
+
+Added
+-----
+
+- Grocery suggestions: every item put on a grocery list is remembered
+  (shared by all grocery lists, started from what they hold), and Add
+  item suggests matching ones as you type, the closest and the most used
+  first. An item already on the list is marked; the trash next to a
+  suggestion forgets it, with Undo.
+
 0.3.2 (2026-11-05)
 ==================
 

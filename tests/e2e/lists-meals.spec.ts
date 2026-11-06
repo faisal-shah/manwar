@@ -160,6 +160,9 @@ test("adds a recipe's ingredients to the grocery list without duplicates", async
   for (const text of ['Chicken thighs', 'Basmati rice', 'Onions', 'Yogurt', 'Biryani masala', 'Fresh mint and cilantro'])
     await expect(card.locator('.li-row', { hasText: text })).toHaveCount(1);
   await expect(card.locator('.li-row', { hasText: 'Chicken thighs' }).locator('.li-qty')).toHaveText('2 lb');
+  // The ingredients are remembered for the grocery suggestions too.
+  await card.getByLabel('Add item to Grocery List').fill('biry');
+  await expect(card.locator('.li-sugs .li-sug-text')).toHaveText(['Biryani masala']);
 });
 
 test('creates a recipe and shows it with numbered steps', async ({ page }) => {

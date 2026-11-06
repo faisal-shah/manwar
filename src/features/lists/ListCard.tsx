@@ -1,15 +1,18 @@
 import { signal } from '@preact/signals';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { TargetedEvent } from 'preact';
-import { ArrowDown, ArrowUp, Check, ChevronDown, ChevronUp, Ellipsis, Plus, X } from 'lucide-preact';
+import { ArrowDown, ArrowUp, Check, ChevronDown, ChevronUp, Ellipsis, Plus, Trash2, X } from 'lucide-preact';
 import { isPhone } from '../../app/layout';
 import { asParent, pinRequest, requireParent, unlocked } from '../../core/lock';
-import { put } from '../../data/store';
-import type { List, ListItem } from '../../data/types';
+import { data, put } from '../../data/store';
+import type { GroceryMemory, List, ListItem } from '../../data/types';
+import { currentTime } from '../../lib/clock';
 import { Button, Chips, useAutoFocus } from '../../ui/controls';
-import { Popover, confirm, toast } from '../../ui/overlays';
+import { Popover, confirm, swallowRestOfTap, toast } from '../../ui/overlays';
 import { parseIngredient } from '../meals/ingredients';
-import { groupItems, listColor, moveBy, reorder, sectionOf, topOrder, type ListView } from './logic';
+import { groupItems, itemKey, listColor, moveBy, reorder, sectionOf, topOrder, type ListView } from './logic';
+import { forget } from './memory';
+import { suggest } from './suggest';
 import {
   addItem,
   addSection,
@@ -321,6 +324,26 @@ function AddItemField({
 }) {
   const [text, setText] = useState('');
   const ref = useAutoFocus<HTMLInputElement>(autoFocus);
+  // A grocery list suggests what the household has put on its grocery lists before, as it is typed.
+  const suggestions = list.kind === 'grocery' && text.trim() ? suggest(text, data.groceryMemory.value, currentTime()) : [];
+  const open = new Set((itemsByList.value.get(list.id) ?? []).filter((i) => !i.done).map((i) => itemKey(i.text)));
+  const pick = (m: GroceryMemory) => {
+    // The rest of a quick double tap would press what moves up under it once the list closes.
+    swallowRestOfTap();
+    if (open.has(m.key)) return;
+    void asParent(() => {
+      const r = addItem(list, m.text, sectionId);
+      onAdded(r.item.id);
+      setText('');
+    }, 'Enter the PIN to add items.');
+  };
+  const forgetIt = (m: GroceryMemory) => {
+    swallowRestOfTap();
+    void asParent(() => {
+      const undo = forget(m);
+      toast(`${m.text} is no longer suggested.`, { label: 'Undo', run: undo });
+    }, 'Enter the PIN to change the suggestions.');
+  };
   const submit = () => {
     const raw = text.trim();
     if (!raw) return;
@@ -334,50 +357,83 @@ function AddItemField({
     }, 'Enter the PIN to add items.');
   };
   return (
-    <form
-      class={`li-add${text ? ' typing' : ''}`}
-      onSubmit={(e) => {
-        e.preventDefault();
-        submit();
-      }}
-    >
-      <input
-        ref={ref}
-        class="li-add-input"
-        placeholder="Add item"
-        aria-label={`Add item to ${list.title}`}
-        value={text}
-        // A phone adds one item after another with the keyboard up: its Enter key reads as a return, not Done.
-        enterKeyHint={isPhone ? 'enter' : 'done'}
-        autoComplete="off"
-        onPointerDown={(e) => gateFocus(e, 'Enter the PIN to add items.')}
-        onFocus={(e) => gateFocus(e, 'Enter the PIN to add items.')}
-        onInput={(e: TargetedEvent<HTMLInputElement>) => setText(e.currentTarget.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Escape') {
-            setText('');
-            e.currentTarget.blur();
-          }
+    <>
+      <form
+        class={`li-add${text ? ' typing' : ''}`}
+        onSubmit={(e) => {
+          e.preventDefault();
+          submit();
         }}
-        onBlur={() => !text.trim() && onDone?.()}
-      />
-      {text && (
-        <button
-          type="button"
-          class="lc-icon"
-          aria-label="Clear"
-          onPointerDown={(e) => e.preventDefault()}
-          onClick={() => setText('')}
-        >
-          <X size="2.4rem" />
-        </button>
+      >
+        <input
+          ref={ref}
+          class="li-add-input"
+          placeholder="Add item"
+          aria-label={`Add item to ${list.title}`}
+          value={text}
+          // A phone adds one item after another with the keyboard up: its Enter key reads as a return, not Done.
+          enterKeyHint={isPhone ? 'enter' : 'done'}
+          autoComplete="off"
+          onPointerDown={(e) => gateFocus(e, 'Enter the PIN to add items.')}
+          onFocus={(e) => gateFocus(e, 'Enter the PIN to add items.')}
+          onInput={(e: TargetedEvent<HTMLInputElement>) => setText(e.currentTarget.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              setText('');
+              e.currentTarget.blur();
+            }
+          }}
+          onBlur={() => !text.trim() && onDone?.()}
+        />
+        {text && (
+          <button
+            type="button"
+            class="lc-icon"
+            aria-label="Clear"
+            onPointerDown={(e) => e.preventDefault()}
+            onClick={() => setText('')}
+          >
+            <X size="2.4rem" />
+          </button>
+        )}
+        {text.trim() && (
+          <button type="submit" class="li-add-ok" aria-label="Add" onPointerDown={(e) => e.preventDefault()}>
+            <Check size="2.6rem" strokeWidth={2.6} />
+          </button>
+        )}
+      </form>
+      {suggestions.length > 0 && (
+        <ul class="li-sugs" aria-label="Suggestions">
+          {suggestions.map(({ memory: m }) => {
+            const on = open.has(m.key);
+            return (
+              <li key={m.id} class={`li-sug${on ? ' on-list' : ''}`}>
+                {/* Pressing one keeps the field's focus (and the keyboard): the next item can be typed at once. */}
+                <button
+                  type="button"
+                  class="li-sug-pick"
+                  aria-label={on ? `${m.text}, on the list` : `Add ${m.text}`}
+                  onPointerDown={(e) => e.preventDefault()}
+                  onClick={() => pick(m)}
+                >
+                  <bdi class="li-sug-text">{m.text}</bdi>
+                  {on && <span class="li-sug-on">On the list</span>}
+                </button>
+                <button
+                  type="button"
+                  class="lc-icon li-sug-forget"
+                  aria-label={`Stop suggesting ${m.text}`}
+                  onPointerDown={(e) => e.preventDefault()}
+                  onClick={() => forgetIt(m)}
+                >
+                  <Trash2 size="2.2rem" />
+                </button>
+              </li>
+            );
+          })}
+        </ul>
       )}
-      {text.trim() && (
-        <button type="submit" class="li-add-ok" aria-label="Add" onPointerDown={(e) => e.preventDefault()}>
-          <Check size="2.6rem" strokeWidth={2.6} />
-        </button>
-      )}
-    </form>
+    </>
   );
 }
 

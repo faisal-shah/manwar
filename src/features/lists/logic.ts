@@ -193,7 +193,8 @@ export const KIND_COLORS: Record<ListKind, string> = { grocery: '#B5E085', todo:
 
 export const listColor = (l: Pick<List, 'color' | 'kind'>) => l.color ?? KIND_COLORS[l.kind];
 
-function singular(w: string): string {
+/** A word without its English plural ending ("tomatoes" -> "tomato", "berries" -> "berry"). */
+export function singular(w: string): string {
   if (w.length <= 3) return w;
   if (w.endsWith('ies')) return w.slice(0, -3) + 'y';
   if (/(?:ch|sh|x|ss|o)es$/.test(w)) return w.slice(0, -2);

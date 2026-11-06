@@ -912,6 +912,23 @@ generated from it: `node scripts/icons/render.mjs` after any brand change.
     cleared meanwhile on another device (the merge's whole batch with it),
     it is written back whole (`reopenedItem`) while its list is there. A
     refused item write says so in a toast (`notSaved`).
+  - Grocery suggestions (`lists/suggest.ts`, pure; `lists/memory.ts`):
+    every item put on a grocery list (typed, a suggestion tapped, a
+    recipe's ingredients) is remembered in `groceryMemory`, one document
+    per `itemKey` shared by every grocery list, with its latest spelling,
+    a `count` (an increment, so two devices adding at once both count)
+    and `lastAt`. The wall starts it once from what the grocery lists hold
+    (`seedMemory`, after the first-run seed; `settings.groceryMemorySince`).
+    A grocery list's Add item shows up to eight suggestions while text is
+    typed: every word typed must match a word of the item (by its start,
+    the same word in the plural, from four letters one slip), ranked by
+    the match, then the first word, then fewer other words, then how often
+    and how lately it was added. Case, accents, Arabic diacritics and the
+    Arabic article are ignored. An item open on this list shows "On the
+    list" and a tap adds nothing; a tap adds the name only, at the top
+    (a checked-off one comes back in its section, as typing it does); the
+    trash forgets it (with Undo), leaving the list as it is. Suggestion
+    buttons keep the field's focus and swallow the rest of a double tap.
   - `IngredientsHost` is mounted once in `app/tabs.tsx` `Overlays`, so
     `openIngredients` works from any tab (the planned-meal toast).
   - Editing one occurrence of a repeating meal goes through

@@ -18,6 +18,7 @@ import {
   type MergeItem,
   type OrderPatch,
 } from './logic';
+import { remember } from './memory';
 
 /** Reactive views of lists and their items, and every list write. Checking items off is open to everyone; callers wrap the rest in asParent(). */
 
@@ -119,6 +120,7 @@ export function addItem(list: List, text: string, sectionId: string | null, qty?
     const open = items.find((i) => !i.done && itemKey(i.text) === key);
     if (open) return { kind: 'already', item: open };
     const done = items.filter((i) => i.done && itemKey(i.text) === key).sort((a, b) => (b.doneAt ?? 0) - (a.doneAt ?? 0))[0];
+    remember([text]);
     if (done) {
       const section = sectionId ?? sectionOf(list, done);
       const order = topOrder(list, items, section);
@@ -178,7 +180,8 @@ export function mergeItems(list: List, rows: MergeItem[]): () => void {
   const now = currentTime();
   const items = itemsByList.value.get(list.id) ?? [];
   const taken = items.map((i) => ({ id: i.id }));
-  for (const { row, prior, order } of placeMerge(list, items, rows)) {
+  const placed = placeMerge(list, items, rows);
+  for (const { row, prior, order } of placed) {
     if (prior) {
       const changed: (keyof ListItem)[] = row.qty ? ['done', 'doneAt', 'order', 'qty'] : ['done', 'doneAt', 'order'];
       const section = sectionOf(list, prior);
@@ -219,6 +222,7 @@ export function mergeItems(list: List, rows: MergeItem[]): () => void {
     });
   };
   void b.commit().catch(unlessGone(list.id, retry, `The items were not added to ${list.title}`));
+  if (list.kind === 'grocery') remember(placed.map((p) => p.row.name));
   const reopened = reopens.map((r) => ({ id: r.whole.id, was: r.was }));
   return () => {
     undone = true;

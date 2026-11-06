@@ -150,6 +150,22 @@ export interface List {
   createdAt: number;
 }
 
+/**
+ * An item the household has put on a grocery list (`groceryMemory`, one
+ * per itemKey, shared by every grocery list): what Add item suggests.
+ */
+export interface GroceryMemory {
+  /** encodeURIComponent of `key`. */
+  id: string;
+  /** itemKey(text). */
+  key: string;
+  /** As last added (without a quantity). */
+  text: string;
+  /** Times added. */
+  count: number;
+  lastAt: number;
+}
+
 export interface ListItem {
   id: string;
   listId: string;
@@ -355,4 +371,6 @@ export interface Settings {
   sounds: boolean;
   /** When the household got its first-run data. A household is seeded once, ever: only while this is unset. */
   seededAt?: number;
+  /** When the grocery suggestions' memory was started from the lists (features/lists/memory.ts). */
+  groceryMemorySince?: number;
 }

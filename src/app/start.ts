@@ -8,6 +8,7 @@ import { startRelock } from '../core/lock';
 import { keepFieldAboveKeyboard, keepScaleWithKeyboard } from '../core/viewport';
 import { startWeather } from '../core/weather';
 import { seedIfEmpty } from '../data/seed';
+import { seedMemory } from '../features/lists/memory';
 import { ready, unsentWrites } from '../data/store';
 import { prayerBusy } from './face';
 import { session } from '../data/session';
@@ -41,7 +42,8 @@ export function startApp(): void {
     startCalendarSync();
     startWeather();
     if (isPhone) return;
-    void seedIfEmpty();
+    // The grocery suggestions start from what the lists hold once a household's first-run seed is in.
+    void seedIfEmpty().then(seedMemory);
     startIdleReturn();
     holdSleepForTimer();
     followDisplayCommands();

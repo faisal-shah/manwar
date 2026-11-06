@@ -31,6 +31,7 @@ import { DEFAULT_SETTINGS, mergeSettings } from './settings';
 import type {
   Device,
   DisplayCommand,
+  GroceryMemory,
   EventMeta,
   LedgerEntry,
   List,
@@ -63,6 +64,7 @@ export interface Collections {
   devices: Device;
   timers: WallTimer;
   commands: DisplayCommand;
+  groceryMemory: GroceryMemory;
 }
 export type CollectionName = keyof Collections;
 
@@ -81,6 +83,7 @@ const NAMES: CollectionName[] = [
   'devices',
   'timers',
   'commands',
+  'groceryMemory',
 ];
 
 /** Live contents of each collection, updated by Firestore snapshots (local writes show immediately). */
