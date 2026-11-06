@@ -10,7 +10,7 @@ import { Sheet, swallowRestOfTap, toast } from '../../ui/overlays';
 import { Avatar } from '../../ui/profile';
 import { historyFor, loadOlderLedger, moreLedger, olderLedger } from './history-state';
 import { MAX_REWARD_COST, REASON_LABEL, formatStars, relativeTime, undoable } from './logic';
-import { plural, pluralWord } from '../../lib/text';
+import { isolate, plural, pluralWord } from '../../lib/text';
 
 /** Star history for one profile: every ledger entry newest first, with undo, plus Give / Remove stars. */
 export function HistoryHost() {
@@ -35,7 +35,7 @@ function StarHistory({ profileId, onClose }: { profileId: string; onClose: () =>
   const p = profileById.value.get(profileId)!;
   const [adjust, setAdjust] = useState<'give' | 'remove' | null>(null);
   return (
-    <Sheet title={`${p.name}'s stars`} onClose={onClose}>
+    <Sheet title={`${isolate(p.name)}'s stars`} onClose={onClose}>
       <div class="hist-head" style={{ '--c': p.color }}>
         <Avatar profile={p} size={7.2} />
         <div class="hist-balance">
@@ -132,7 +132,7 @@ function Entry({ e, now, readOnly }: { e: LedgerEntry; now: number; readOnly: bo
           aria-label={`Undo ${e.label}`}
           onClick={() =>
             void asParent(() => {
-              if (undoLedgerEntry(e)) toast(`Undid "${e.label}"`);
+              if (undoLedgerEntry(e)) toast(`Undid "${isolate(e.label)}"`);
             }, 'Enter the PIN to undo stars.')
           }
         >
@@ -160,7 +160,8 @@ export function Adjust({
   const [amount, setAmount] = useState(kind === 'give' ? 5 : 1);
   const [text, setText] = useState(String(amount));
   const [note, setNote] = useState('');
-  // Removing stops at zero; it never takes a balance negative.
+  // Removing stops at the balance shown here. Stars spent meanwhile on another device that have not arrived yet can
+  // still take the balance below zero, which the rules allow: a removal is a parent's call.
   const max = kind === 'remove' ? Math.min(MAX_REWARD_COST, balance) : MAX_REWARD_COST;
   const valid = Number.isInteger(amount) && amount >= 1 && amount <= max;
   const after = balance + (kind === 'give' ? amount : -amount);
@@ -220,8 +221,9 @@ export function Adjust({
           disabled={!valid}
           onClick={() =>
             void asParent(() => {
+              // Written here at once, as every star write is; a refusal from the server rolls it back and says so.
+              if (!adjustStars(profileId, kind === 'give' ? amount : -amount, note.trim() || undefined)) return;
               swallowRestOfTap();
-              void adjustStars(profileId, kind === 'give' ? amount : -amount, note.trim() || undefined);
               toast(`${kind === 'give' ? 'Gave' : 'Removed'} ${plural(amount, 'star')}`);
               onDone();
             })

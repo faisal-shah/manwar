@@ -5,6 +5,9 @@ import {
   ingredientLines,
   ingredientRows,
   instructionSteps,
+  recipeChanges,
+  recipeDraft,
+  recipeFields,
   searchRecipes,
   sourceUrlError,
 } from '../../src/features/recipes/text';
@@ -88,5 +91,34 @@ describe('recipe text helpers', () => {
     expect(searchRecipes(all, 'كبسة').map((x) => x.name)).toEqual(['كبسة دجاج', 'كَبْسَة لحم']);
     expect(searchRecipes(all, 'كَبْسَة').map((x) => x.name)).toEqual(['كبسة دجاج', 'كَبْسَة لحم']);
     expect(searchRecipes(all, 'creme BRULEE').map((x) => x.name)).toEqual(['Crème brûlée']);
+  });
+});
+
+describe('recipe editor changes', () => {
+  const biryani: Recipe = {
+    id: 'r1',
+    name: 'Chicken biryani',
+    category: 'dinner',
+    emoji: '🍛',
+    ingredients: ['- 2 lb chicken thighs', '3 cups basmati rice'],
+    instructions: 'Cook the rice.',
+    servings: 6,
+    sourceUrl: 'https://example.com/biryani',
+    createdAt: 0,
+  };
+
+  it('writes nothing for an editor saved as it opened', () => {
+    expect(recipeChanges(biryani, recipeDraft(recipeFields(biryani)))).toEqual({});
+  });
+
+  it("names only the fields changed, so another parent's edit to the rest is kept", () => {
+    const f = recipeFields(biryani);
+    expect(recipeChanges(biryani, recipeDraft({ ...f, servings: 4 }))).toEqual({ servings: 4 });
+    expect(recipeChanges(biryani, recipeDraft({ ...f, ingredients: `${f.ingredients}\n2 onions` }))).toEqual({
+      ingredients: ['2 lb chicken thighs', '3 cups basmati rice', '2 onions'],
+    });
+    const cleared = recipeChanges(biryani, recipeDraft({ ...f, servings: 0, url: ' ' }));
+    expect(cleared).toEqual({ servings: undefined, sourceUrl: undefined });
+    expect(Object.keys(cleared).sort()).toEqual(['servings', 'sourceUrl']);
   });
 });

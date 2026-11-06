@@ -7,7 +7,7 @@ import { Button } from '../../ui/controls';
 import { Modal, toast } from '../../ui/overlays';
 import { ensureGroceryList, groceryList, itemsByList, mergeItems } from '../lists/state';
 import { classifyIngredients } from './ingredients';
-import { plural } from '../../lib/text';
+import { isolate, plural } from '../../lib/text';
 
 /** Open request for the "Add to Grocery List" modal; <IngredientsHost/> is mounted once by the shell (app/tabs Overlays). */
 const request = signal<Recipe | null>(null);
@@ -24,8 +24,9 @@ export function IngredientsHost() {
 
 /**
  * Each ingredient with a check (all on), merged into the default grocery
- * list: items already open on it are shown as such and never duplicated;
- * checked-off ones come back. Stays on the current tab afterwards.
+ * list: items already open on it are shown as such and never duplicated
+ * (mergeItems checks again as it writes); checked-off ones come back.
+ * Stays on the current tab afterwards.
  */
 function IngredientsModal({ recipe, onClose }: { recipe: Recipe; onClose: () => void }) {
   const list = groceryList.value;
@@ -47,15 +48,15 @@ function IngredientsModal({ recipe, onClose }: { recipe: Recipe; onClose: () => 
   const add = () =>
     void asParent(() => {
       const target = ensureGroceryList();
-      const undo = mergeItems(
+      // Decided again from the list as it is now: what was put on it while this was open is not added twice.
+      const { count, undo } = mergeItems(
         target,
-        picked.map((r) => ({ name: r.name, qty: r.qty, reopenId: r.status === 'reopen' ? r.itemId : undefined })),
+        picked.map((r) => ({ name: r.name, qty: r.qty })),
       );
       onClose();
-      toast(`Added ${plural(picked.length, 'item')} to ${target.title}.`, {
-        label: 'Undo',
-        run: () => void asParent(undo),
-      });
+      const title = isolate(target.title);
+      if (count) toast(`Added ${plural(count, 'item')} to ${title}.`, { label: 'Undo', run: () => void asParent(undo) });
+      else toast(`They are on ${title} already.`);
     });
 
   return (

@@ -55,7 +55,8 @@ vi.mock('firebase/firestore', () => {
   };
 });
 
-const { closeHousehold, data, loadError, openHousehold, ready, settings, whenShown } = await import('../../src/data/store');
+const { closeHousehold, confirmedByServer, data, loadError, openHousehold, ready, settings, whenConfirmed, whenShown } =
+  await import('../../src/data/store');
 const { nowMs, today } = await import('../../src/lib/clock');
 const { addDays } = await import('../../src/lib/date');
 
@@ -181,6 +182,35 @@ describe('store listeners', () => {
     closeHousehold();
     nowMs.value = Date.now() + 86_400_000;
     expect(live()).toHaveLength(0);
+  });
+
+  it('says when the server has answered for collections, not a cache that was cold or stale', async () => {
+    openHousehold('h1');
+    const done = vi.fn();
+    void whenConfirmed(['settings', 'listItems']).then(done);
+    const fromCache = (s: Sub) =>
+      s.next(
+        s.path.endsWith('settings/main')
+          ? { ...settingsDoc, metadata: { fromCache: true } }
+          : s.path.endsWith('settings/prayer')
+            ? { ...noDoc, metadata: { fromCache: true } }
+            : { docs: [], metadata: { fromCache: true } },
+      );
+    live().forEach(fromCache);
+    await Promise.resolve();
+    expect(done).not.toHaveBeenCalled();
+    expect(confirmedByServer('listItems')).toBe(false);
+    // The server answers, unchanged: the snapshot only says where it came from.
+    deliver(live().find((s) => s.path.endsWith('/listItems'))!);
+    await Promise.resolve();
+    expect(done).not.toHaveBeenCalled();
+    deliver(live().find((s) => s.path.endsWith('settings/main'))!);
+    await Promise.resolve();
+    expect(done).toHaveBeenCalledOnce();
+    expect(confirmedByServer('listItems')).toBe(true);
+    await expect(whenConfirmed(['listItems'])).resolves.toBeUndefined();
+    closeHousehold();
+    expect(confirmedByServer('listItems')).toBe(false);
   });
 
   it('drops a pending retry when the same household is opened again (signed out and back in)', () => {

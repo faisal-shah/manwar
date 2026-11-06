@@ -249,7 +249,7 @@ test("months of stars:a profile's history reaches past the newest thousand entri
   await expect(page.locator('.shell')).toBeVisible({ timeout: 30_000 });
   await rail(page, 'Rewards').click();
   await page.locator('[data-column="baba"] .star-pill').click();
-  const sheet = page.getByRole('dialog', { name: "Baba's stars" });
+  const sheet = page.getByRole('dialog', { name: "\u2068Baba\u2069's stars" });
   await expect(sheet.locator('.hist-balance')).toContainText('35');
   // Nothing of Baba's is among the newest thousand: the sheet says so and offers the rest.
   await expect(sheet.locator('.hist-empty')).toHaveText('Nothing recent.');

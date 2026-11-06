@@ -73,7 +73,7 @@ test('redeeming asks for the PIN, celebrates, and undoes from the history', asyn
   await expect(reward(page, 'asiyah', 'Movie night pick').locator('.rw-progress')).toHaveText('78/100');
 
   await stars(page, 'asiyah').click();
-  const sheet = page.getByRole('dialog', { name: "Asiyah's stars" });
+  const sheet = page.getByRole('dialog', { name: "\u2068Asiyah\u2069's stars" });
   const entry = sheet.locator('.hist-entry[data-reason="redeem"]');
   await expect(entry).toContainText('−50');
   await entry.getByRole('button', { name: 'Undo Ice cream trip' }).click();
@@ -87,7 +87,7 @@ test('giving stars unlocks a once-only reward, which then shows as redeemed', as
   await open(page, 'give', 'Rewards');
   await expect(reward(page, 'asiyah', 'New book').locator('.rw-progress')).toHaveText('128/150');
   await stars(page, 'asiyah').click();
-  const sheet = page.getByRole('dialog', { name: "Asiyah's stars" });
+  const sheet = page.getByRole('dialog', { name: "\u2068Asiyah\u2069's stars" });
   await sheet.getByRole('button', { name: 'Give', exact: true }).click();
   await enterPin(page);
   await sheet.getByRole('button', { name: '25', exact: true }).click();

@@ -1,29 +1,42 @@
 import type { GroceryMemory } from '../../data/types';
-import { fold } from '../../lib/text';
-import { singular } from './logic';
+import { parseIngredient } from '../meals/ingredients';
+import { itemWords, singular } from './logic';
 
 /**
  * Grocery suggestions as an item is typed (pure, unit-tested): the
- * household's remembered items (`groceryMemory`) ranked by how well they
- * match the words typed, then by how often and how lately each was added.
+ * household's remembered items (`groceryMemory`) that match the words
+ * typed.
  *
  * Matching suits short item names: every word typed must match a word of
  * the item (the last one typed is usually half a word, so a word that
  * starts with it matches; the same word in the plural matches too; from
- * four letters a one-letter slip still matches). Case, accents, Arabic
- * diacritics and the Arabic article (ال) are ignored.
+ * four letters a one-letter slip still matches). Words are read as item
+ * keys read them (itemWords): case, accents, Arabic diacritics and the
+ * Arabic article are ignored.
+ *
+ * Ranking: first the items whose name starts with what is typed (the
+ * first word typed matches the item's first word by its start), then the
+ * rest. People type an item's name from its start, so with "b" typed
+ * "brown sugar" is above "chicken breast" however often the chicken is
+ * bought: a short prefix matches many items, and a list that put a later
+ * word's match first would look random. Within each group one score
+ * orders them: how closely the words match, less a little for each word
+ * of the item nothing typed asks for, plus how often and how lately it
+ * was added, so the household's usual item comes first among those that
+ * match about as well ("egg": the eggplant bought every week before the
+ * eggs bought once last spring).
  */
 
 /** At most this many suggestions show. */
 export const SUGGESTIONS = 8;
 
-/** The words of a text for matching. */
-export function words(text: string): string[] {
-  return fold(text)
-    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((w) => (w.length > 3 && w.startsWith('ال') ? w.slice(2) : w));
+/**
+ * A grocery list's Add item text read as an item: a leading quantity is
+ * kept apart from the name ("2 gal milk", "1 dozen eggs"), as on the list.
+ */
+export function typedItem(text: string): { name: string; qty?: string } {
+  const p = parseIngredient(text);
+  return p ? { name: p.name, qty: p.qty } : { name: text.trim() };
 }
 
 /** Within one edit (a letter added, dropped, changed, or two swapped). */
@@ -53,7 +66,14 @@ function wordMatch(typed: string, word: string): number {
   return 0;
 }
 
-/** How well the typed words match an item's, 0 when one of them matches nothing. */
+/** A word typed that matches at least this well matches by the word's start (or is the word). */
+const BY_START = 0.75;
+
+/**
+ * How well the typed words match an item's words, 0 when one of them
+ * matches nothing: the closeness of each, less 0.03 for each word of the
+ * item nothing typed asks for (at most 0.15).
+ */
 export function matchScore(typed: string[], item: string[]): number {
   if (!typed.length || !item.length) return 0;
   let sum = 0;
@@ -62,13 +82,12 @@ export function matchScore(typed: string[], item: string[]): number {
     if (!best) return 0;
     sum += best;
   }
-  let score = sum / typed.length;
-  // The item's first word is the one typed first: "filter jug" before "hanging file folders" for "fil".
-  if (wordMatch(typed[0], item[0]) >= 0.75) score += 0.15;
-  // Words of the item nothing typed asks for: "fish fillets" before "wild caught fish fillet - cod, salmon".
-  score -= Math.min(0.15, 0.03 * Math.max(0, item.length - typed.length));
-  return score;
+  return sum / typed.length - Math.min(0.15, 0.03 * Math.max(0, item.length - typed.length));
 }
+
+/** The item's name starts with what is typed: its first word matches the first word typed by its start. */
+export const startsWithTyped = (typed: string[], item: string[]): boolean =>
+  !!typed.length && !!item.length && wordMatch(typed[0], item[0]) >= BY_START;
 
 const DAY_MS = 86_400_000;
 
@@ -81,21 +100,28 @@ function usage(m: GroceryMemory, mostAdded: number, now: number): number {
 
 export interface Suggestion {
   memory: GroceryMemory;
+  /** The name starts with what is typed (ranked above those that do not). */
+  starts: boolean;
   score: number;
 }
 
-/** The remembered items that match `typed`, best first (nothing for nothing typed). */
-export function suggest(typed: string, memory: readonly GroceryMemory[], now: number, limit = SUGGESTIONS): Suggestion[] {
-  const t = words(typed);
+/** The remembered items that match `name` (an item's name as typed, without a quantity), best first; nothing for nothing typed. */
+export function suggest(name: string, memory: readonly GroceryMemory[], now: number, limit = SUGGESTIONS): Suggestion[] {
+  const t = itemWords(name);
   if (!t.length) return [];
   const mostAdded = Math.max(1, ...memory.map((m) => m.count));
   return memory
     .flatMap((m) => {
-      const match = matchScore(t, words(m.text));
-      return match ? [{ memory: m, score: match + 0.3 * usage(m, mostAdded, now) }] : [];
+      const words = itemWords(m.text);
+      const match = matchScore(t, words);
+      return match ? [{ memory: m, starts: startsWithTyped(t, words), score: match + 0.3 * usage(m, mostAdded, now) }] : [];
     })
     .sort(
-      (a, b) => b.score - a.score || a.memory.text.length - b.memory.text.length || a.memory.text.localeCompare(b.memory.text),
+      (a, b) =>
+        Number(b.starts) - Number(a.starts) ||
+        b.score - a.score ||
+        a.memory.text.length - b.memory.text.length ||
+        a.memory.text.localeCompare(b.memory.text),
     )
     .slice(0, limit);
 }

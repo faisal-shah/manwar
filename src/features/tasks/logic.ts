@@ -94,6 +94,15 @@ export function completionEffects(column: Occurrence[], o: Occurrence): { sectio
   return { sectionDone: sec.total > 0 && sec.done === sec.total, allDone: isAllDone(after) };
 }
 
+/**
+ * `now` (the occurrence's state as the store has it) is the check-off
+ * `mine` wrote: the same person, moment and ledger entry. A check-off
+ * toast's Undo takes back only its own, not one another device (or a
+ * later tap here) made after this one was unchecked.
+ */
+export const sameCheckOff = (now: TaskState | undefined, mine: TaskState): boolean =>
+  now?.status === 'done' && now.by === mine.by && now.at === mine.at && now.ledgerId === mine.ledgerId;
+
 export const lateLabel = (days: number) => `${plural(days, 'day')} late`;
 
 /**

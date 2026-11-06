@@ -244,10 +244,15 @@ flowchart LR
   one is a delete and a create, never an update; a ledger entry is added,
   and marked `undoneAt` once; a `redeem` entry may not leave the balance
   below zero (`getAfter` on the profile); a one-time reward's `redeemedBy`
-  stamp is never written over. The device's own change rolls back,
+  stamp is never written over. A `remove` (Give and Remove go through
+  `exclusive()` too, keyed by the balance) may leave it below zero: the
+  form stops at the balance shown, and a removal from a stale copy is a
+  parent's call. The device's own change rolls back,
   `exclusive()` says so in a toast, and the write's promise resolves false
   (the redeemed dialog closes on it). A check-off is written only where no
-  state is (a skip is undone first).
+  state is (a skip is undone first). `completeTask` returns the state it
+  wrote, and the check-off toast's Undo takes back only that one
+  (`sameCheckOff`): not a check-off made after it on another device.
 - **Parental lock** (`core/lock.ts`): with a PIN set, only checking off tasks
   is open; wrap every other mutation in `asParent(() => ...)` or
   `await requireParent()`; an editor asks again on Save, since the lock can
@@ -928,36 +933,72 @@ generated from it: `node scripts/icons/render.mjs` after any brand change.
   `logic.ts`, `plan.ts`, `ingredients.ts` (unit-tested); the ingredients
   modal merges into the default grocery list without duplicates;
   `MealCategoriesEditor` is mounted by Settings.
-  - "Already on the list" (`itemKey`) and recipe search ignore case,
-    accents and Arabic diacritics (`lib/text.ts` `fold`); an emoji-only
-    item is its own key. Ingredient lines lose pasted bullets and "1."
-    numbering (`stripMarker`) on save and on display.
+  - `itemWords` (`lists/logic.ts`) is the one tokenizer for item
+    matching: "Already on the list" (`itemKey`: the words, the last one
+    singular) and the grocery suggestions both read it. It ignores case,
+    accents and Arabic diacritics (`lib/text.ts` `fold`), parentheticals,
+    the note after a comma (`,` or `،`), punctuation, emoji and the Arabic
+    article (`ال` alone is no word), so "البيض" and "بيض" are one item;
+    an emoji-only item is its own key. `itemsByKey` gives a list's open
+    item and latest checked-off one per key: Add item, the ingredients
+    modal and the merge follow it. Recipe search folds the same way.
+    Ingredient lines lose pasted bullets and "1." numbering
+    (`stripMarker`) on save and on display.
+  - Add item on a grocery list keeps a leading quantity in its own field
+    (`typedItem` in `lists/suggest.ts`, by `parseIngredient`): "2 gal
+    milk" adds Milk with 2 gal, suggests by "milk", and a suggestion
+    picked takes the quantity typed.
   - The `isDefaultGrocery` flag only ever passes to a grocery list (on
     delete, or to a new grocery list when none has it); with none, the
     next Add to grocery list makes a "Grocery List".
-  - A done item added again (Add item, the ingredients merge) writes only
-    what that changes (`reopenedChanges`), so a rename or move made
-    elsewhere is kept; when the server refuses it because the item was
-    cleared meanwhile on another device (the merge's whole batch with it),
-    it is written back whole (`reopenedItem`) while its list is there. A
-    refused item write says so in a toast (`notSaved`).
+  - A done item added again (Add item, the ingredients merge) or unchecked
+    writes only what that changes (`reopenedChanges`, `done: false`), so a
+    rename or move made elsewhere is kept; when the server refuses it
+    because the item was cleared meanwhile on another device (the merge's
+    whole batch with it), it is written back whole (`reopenedItem`) while
+    its list is there. The item editor writes only the fields it changed
+    (`itemChanges`), a move to another section at the top of that section.
+    The ingredients merge decides from the list as it is when Add is
+    pressed (`planMerge`): what was put on the list while the modal was
+    open is not added twice. An undo that puts removed items back (Clear
+    done, an item deleted) skips lists deleted since and ids an item has
+    now (`restorable`: a grocery "milk" added again has the cleared one's
+    id). A refused item or list write says so in a toast (`notSaved`).
+    Batches are not split: Firestore has no per-commit write cap (only
+    the 10 MiB request size).
   - Grocery suggestions (`lists/suggest.ts`, pure; `lists/memory.ts`):
     every item put on a grocery list (typed, a suggestion tapped, a
     recipe's ingredients) is remembered in `groceryMemory`, one document
-    per `itemKey` shared by every grocery list, with its latest spelling,
-    a `count` (an increment, so two devices adding at once both count)
-    and `lastAt`. The wall starts it once from what the grocery lists hold
-    (`seedMemory`, after the first-run seed; `settings.groceryMemorySince`).
+    per `itemKey` (id `memoryId`: a hash of the key) shared by every
+    grocery list, with its latest spelling, a `count` (an increment, so
+    two devices adding at once both count) and `lastAt`. The wall keeps
+    it (`keepGroceryMemory`, after the first-run seed) once the server has
+    answered for the settings, lists, items and memory (`whenConfirmed` in
+    the store; the listeners hear metadata changes, so a warm cache's
+    unchanged answer counts): it merges documents whose id or key does not
+    follow from their text (`planMemoryTidy`: counts summed, the latest
+    text kept, written whole so two walls write the same), then, once in a
+    household's life (`settings.groceryMemorySince`), starts it from what
+    the grocery lists hold (`memorySeed`) in a transaction that only
+    creates documents, so a count a phone raised is never reset.
     A grocery list's Add item shows up to eight suggestions while text is
     typed: every word typed must match a word of the item (by its start,
-    the same word in the plural, from four letters one slip), ranked by
-    the match, then the first word, then fewer other words, then how often
-    and how lately it was added. Case, accents, Arabic diacritics and the
-    Arabic article are ignored. An item open on this list shows "On the
-    list" and a tap adds nothing; a tap adds the name only, at the top
-    (a checked-off one comes back in its section, as typing it does); the
-    trash forgets it (with Undo), leaving the list as it is. Suggestion
-    buttons keep the field's focus and swallow the rest of a double tap.
+    the same word in the plural, from four letters one slip). Items whose
+    first word matches the first word typed by its start come first, the
+    rest after: people type a name from its start, so for "b" "brown
+    sugar" is above "chicken breast" however often the chicken is bought.
+    Within each group one score orders them: how closely the words match,
+    less a little per word of the item nothing typed asks for, plus how
+    often and how lately it was added (so for "egg" the eggplant bought
+    weekly is above the eggs bought once months ago). An item open on this
+    list shows "On the list" and a tap adds nothing; a tap adds the name
+    only, at the top (a checked-off one comes back in its section, as
+    typing it does); the trash forgets it (with Undo), leaving the list as
+    it is. Suggestion buttons keep the field's focus and swallow the rest
+    of a double tap.
+  - Recipe saves write only the fields changed in the editor
+    (`recipeChanges` in `recipes/text.ts`, from `recipeFields`/`recipeDraft`,
+    the editor's own fields), so another parent's edit to the rest is kept.
   - `IngredientsHost` is mounted once in `app/tabs.tsx` `Overlays`, so
     `openIngredients` works from any tab (the planned-meal toast).
   - Editing one occurrence of a repeating meal goes through

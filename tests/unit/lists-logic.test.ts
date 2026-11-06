@@ -1,16 +1,23 @@
 import { describe, expect, it } from 'vitest';
-import type { List, ListItem } from '../../src/data/types';
+import type { GroceryMemory, List, ListItem } from '../../src/data/types';
 import {
   defaultGroceryList,
   groceryItemId,
   groupItems,
+  itemChanges,
   itemKey,
+  itemsByKey,
+  itemWords,
+  memoryId,
+  memorySeed,
   moveBy,
   nextDefaultGrocery,
-  placeMerge,
+  planMemoryTidy,
+  planMerge,
   reopenedChanges,
   reopenedItem,
   reorder,
+  restorable,
   topOrder,
 } from '../../src/features/lists/logic';
 
@@ -161,31 +168,171 @@ describe('itemKey', () => {
     expect(itemKey('حَلِيب')).toBe(itemKey('حليب'));
     expect(itemKey('حَلِيب')).not.toContain(' ');
   });
+
+  it('reads Arabic with or without the article, and drops the note after an Arabic comma', () => {
+    expect(itemKey('البيض')).toBe(itemKey('بيض'));
+    expect(itemKey('الحليب الطازج')).toBe(itemKey('حليب طازج'));
+    expect(itemKey('ثوم، مفروم')).toBe(itemKey('ثوم'));
+    expect(itemKey('بيض')).not.toBe(itemKey('خبز'));
+  });
 });
 
-describe('placeMerge', () => {
+describe('itemWords', () => {
+  it('is the words of the name: folded, without notes, punctuation, emoji or the Arabic article', () => {
+    expect(itemWords('Crème Fraîche (full fat), 2%')).toEqual(['creme', 'fraiche']);
+    expect(itemWords('🥚 Free-range eggs')).toEqual(['free', 'range', 'eggs']);
+    expect(itemWords('الحليب الطازج')).toEqual(['حليب', 'طازج']);
+    expect(itemWords('الح')).toEqual(['ح']);
+    // The article alone is no word yet.
+    expect(itemWords('ال')).toEqual([]);
+    expect(itemWords('  ')).toEqual([]);
+  });
+});
+
+describe('itemsByKey', () => {
+  it('gives each key its open item and its latest checked-off one', () => {
+    const k = itemsByKey([
+      item('Onions'),
+      item('Oil', { done: true, doneAt: 5 }),
+      item('olive', { id: 'a', done: true, doneAt: 5 }),
+      item('Oils', { id: 'oil2', done: true, doneAt: 9 }),
+      item('البيض'),
+    ]);
+    expect(k.get(itemKey('onion'))?.open?.text).toBe('Onions');
+    expect(k.get(itemKey('oil'))).toEqual({ done: expect.objectContaining({ id: 'oil2' }) });
+    expect(k.get(itemKey('بيض'))?.open?.text).toBe('البيض');
+  });
+});
+
+describe('planMerge', () => {
+  const items = [
+    item('Pepper', { order: 0 }),
+    item('Salt', { order: 1 }),
+    item('Kale', { order: 4, sectionId: 'prod' }),
+    item('Oil', { order: 7, done: true, doneAt: 1 }),
+    item('Leek', { order: 9, done: true, doneAt: 1, sectionId: 'prod' }),
+  ];
+
   it('stacks new rows above the open unsectioned items with distinct orders, and reopens done ones atop their own section', () => {
-    const items = [
-      item('Pepper', { order: 0 }),
-      item('Salt', { order: 1 }),
-      item('Kale', { order: 4, sectionId: 'prod' }),
-      item('Oil', { order: 7, done: true, doneAt: 1 }),
-      item('Leek', { order: 9, done: true, doneAt: 1, sectionId: 'prod' }),
-    ];
-    const placed = placeMerge(list(), items, [
-      { name: 'Rice' },
-      { name: 'Oil', reopenId: 'oil' },
-      { name: 'Leek', reopenId: 'leek' },
-      { name: 'Beans' },
-      { name: 'Gone', reopenId: 'deleted-meanwhile' },
-    ]);
+    const placed = planMerge(list(), items, [{ name: 'Rice' }, { name: 'Oil' }, { name: 'Leek' }, { name: 'Beans' }]);
     expect(placed.map((p) => [p.row.name, p.prior?.id ?? null, p.order])).toEqual([
-      ['Rice', null, -4],
-      ['Oil', 'oil', -3],
+      ['Rice', null, -3],
+      ['Oil', 'oil', -2],
       ['Leek', 'leek', 3],
-      ['Beans', null, -2],
-      ['Gone', null, -1],
+      ['Beans', null, -1],
     ]);
+  });
+
+  it('decides from the list as it is now: what is open there, or repeated, is left out', () => {
+    // "Salt" and "Kale" were put on the list (here or on another device) while the ingredients modal was open.
+    const placed = planMerge(list(), items, [
+      { name: 'Salt', qty: '1 tsp' },
+      { name: 'Rice' },
+      { name: 'kale' },
+      { name: 'rice' },
+    ]);
+    expect(placed.map((p) => p.row.name)).toEqual(['Rice']);
+    expect(planMerge(list(), items, [{ name: 'Salt' }])).toEqual([]);
+  });
+});
+
+describe('restorable', () => {
+  it('puts back only onto lists that exist, and never over an item that has the id now', () => {
+    const milk = item('Milk', { id: 'g-milk', done: true, doneAt: 1 });
+    const eggs = item('Eggs', { id: 'g-eggs', done: true, doneAt: 1 });
+    const tent = item('Tent', { id: 't-tent', listId: 'gone' });
+    // "Milk" was added again since (a grocery id is the same for the same list and item).
+    expect(restorable([milk, eggs, tent], new Set(['g']), new Set(['g-milk']))).toEqual([eggs]);
+  });
+});
+
+describe('itemChanges', () => {
+  const opened = item('Milk', { sectionId: 'dairy', qty: '1 gal' });
+  const order = () => -7;
+  it('names only what the editor changed', () => {
+    expect(itemChanges(list(), opened, { text: 'Milk ', qty: ' 1 gal', sectionId: 'dairy' }, order)).toEqual({});
+    expect(itemChanges(list(), opened, { text: 'Oat milk', qty: '1 gal', sectionId: 'dairy' }, order)).toEqual({
+      text: 'Oat milk',
+    });
+    expect(itemChanges(list(), opened, { text: 'Milk', qty: '', sectionId: 'dairy' }, order)).toEqual({ qty: undefined });
+  });
+  it('moves the item to the top of a section chosen, and to none', () => {
+    expect(itemChanges(list(), opened, { text: 'Milk', qty: '1 gal', sectionId: 'prod' }, order)).toEqual({
+      sectionId: 'prod',
+      order: -7,
+    });
+    const out = itemChanges(list(), opened, { text: 'Milk', qty: '1 gal', sectionId: null }, order);
+    expect(out).toEqual({ sectionId: undefined, order: -7 });
+    expect('sectionId' in out).toBe(true);
+  });
+  it('compares the section the editor showed: one pointing at a deleted section showed as none', () => {
+    const stray = item('Bread', { sectionId: 'gone' });
+    expect(itemChanges(list(), stray, { text: 'Bread', qty: '', sectionId: null }, order)).toEqual({});
+  });
+});
+
+describe('grocery memory', () => {
+  const mem = (p: Partial<GroceryMemory> & { text: string }): GroceryMemory => {
+    const key = itemKey(p.text);
+    return { id: memoryId(key), key, count: 1, lastAt: 0, ...p };
+  };
+
+  it('names a document by a hash of its key: always a valid document id', () => {
+    for (const text of ['.', '..', '__x__', 'a/b', 'x'.repeat(2000), 'حليب', '🍎']) {
+      const id = memoryId(itemKey(text));
+      expect(id).toMatch(/^[0-9a-z]+$/);
+      expect(id.length).toBeLessThanOrEqual(12);
+    }
+    expect(memoryId(itemKey('Milk'))).toBe(memoryId(itemKey('milk')));
+    expect(memoryId(itemKey('Milk'))).not.toBe(memoryId(itemKey('Eggs')));
+  });
+
+  it('starts from what the grocery lists hold: counted, with the latest spelling, leaving out what it has', () => {
+    const lists = [list(), list({ id: 't', kind: 'todo' })];
+    const items = [
+      item('Onions', { createdAt: 5 }),
+      item('onion', { id: 'o2', done: true, doneAt: 9 }),
+      item('Milk', { createdAt: 1 }),
+      item('Call the plumber', { listId: 't' }),
+    ];
+    const seed = memorySeed(lists, items, new Set([memoryId(itemKey('milk'))]));
+    expect(seed).toEqual([{ id: memoryId('onion'), key: 'onion', text: 'onion', count: 2, lastAt: 9 }]);
+  });
+
+  it('merges documents an earlier key or id rule wrote into the one their text belongs to', () => {
+    const docs = [
+      // An encoded id and a key that kept the article.
+      { id: encodeURIComponent('البيض'), key: 'البيض', text: 'البيض', count: 3, lastAt: 10 },
+      { id: encodeURIComponent('بيض'), key: 'بيض', text: 'بيض', count: 2, lastAt: 20 },
+      { id: encodeURIComponent('milk'), key: 'milk', text: 'Milk', count: 4, lastAt: 5 },
+      mem({ text: 'Eggs', count: 7 }),
+    ];
+    const plan = planMemoryTidy(docs);
+    expect(plan.write).toEqual([
+      { id: memoryId('بيض'), key: 'بيض', text: 'بيض', count: 5, lastAt: 20 },
+      { id: memoryId('milk'), key: 'milk', text: 'Milk', count: 4, lastAt: 5 },
+    ]);
+    expect(plan.remove.sort()).toEqual(
+      [encodeURIComponent('البيض'), encodeURIComponent('بيض'), encodeURIComponent('milk')].sort(),
+    );
+  });
+
+  it('keeps a canonical document and adds what an old one counted', () => {
+    const plan = planMemoryTidy([
+      mem({ text: 'Milk', count: 2, lastAt: 9 }),
+      { id: 'milk', key: 'milk', text: 'milk', count: 1, lastAt: 3 },
+    ]);
+    expect(plan).toEqual({
+      write: [{ id: memoryId('milk'), key: 'milk', text: 'Milk', count: 3, lastAt: 9 }],
+      remove: ['milk'],
+    });
+  });
+
+  it('has nothing to do once tidy, so a second wall running it writes nothing', () => {
+    const docs = [mem({ text: 'Milk' }), mem({ text: 'البيض' }), mem({ text: '🍎' })];
+    expect(planMemoryTidy(docs)).toEqual({ write: [], remove: [] });
+    const once = planMemoryTidy([{ id: 'milk', key: 'milk', text: 'Milk', count: 1, lastAt: 0 }]);
+    expect(planMemoryTidy(once.write)).toEqual({ write: [], remove: [] });
   });
 });
 

@@ -155,7 +155,7 @@ export interface List {
  * per itemKey, shared by every grocery list): what Add item suggests.
  */
 export interface GroceryMemory {
-  /** encodeURIComponent of `key`. */
+  /** memoryId(key): a hash of the key (lists/logic.ts). */
   id: string;
   /** itemKey(text). */
   key: string;

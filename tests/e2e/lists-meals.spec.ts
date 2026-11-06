@@ -103,7 +103,55 @@ test('edits a list item: quantity, section and delete', async ({ page }) => {
   await dairy.locator('.li-text', { hasText: 'Bananas' }).click();
   await page.locator('.popover .item-editor').getByRole('button', { name: 'Delete' }).click();
   await expect(card.locator('.li-row', { hasText: 'Bananas' })).toHaveCount(0);
-  await expect(page.locator('.toast')).toContainText('Deleted Bananas');
+  await expect(page.locator('.toast')).toContainText('Deleted \u2068Bananas\u2069');
+});
+
+/** A Firestore REST value, as far as these tests read one. */
+interface Value {
+  stringValue?: string;
+  arrayValue?: { values?: Value[] };
+  mapValue?: { fields: Record<string, Value> };
+}
+
+/** The demo household's documents in a collection, by their `text` or `title` field. */
+async function serverDocs(name: string, collection: string): Promise<Map<string, Record<string, Value>>> {
+  const res = await fetch(`${FIRESTORE}/households/demo-e2e-meals-${RUN}-${name}/${collection}?pageSize=500`, {
+    headers: { Authorization: 'Bearer owner' },
+  });
+  const body = (await res.json()) as { documents: { fields: Record<string, Value> }[] };
+  return new Map(body.documents.map((d) => [(d.fields.text ?? d.fields.title).stringValue!, d.fields]));
+}
+
+/** Change some fields of a document, as another device would; the rest stay. */
+async function patchFields(name: string, path: string, fields: Record<string, Plain>) {
+  const mask = Object.keys(fields)
+    .map((f) => `updateMask.fieldPaths=${f}`)
+    .join('&');
+  const res = await fetch(`${FIRESTORE}/households/demo-e2e-meals-${RUN}-${name}/${path}?${mask}`, {
+    method: 'PATCH',
+    headers: { Authorization: 'Bearer owner', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fields: Object.fromEntries(Object.entries(fields).map(([k, x]) => [k, enc(x)])) }),
+  });
+  expect(res.ok).toBe(true);
+}
+
+test('the item editor writes only what it changed: a move made meanwhile on another device stays', async ({ page }) => {
+  await open(page, 'item-edit-merge', 'Lists');
+  const card = groceryCard(page);
+  await card.locator('.li-text', { hasText: 'Milk' }).click();
+  const pop = page.locator('.popover .item-editor');
+  await pop.getByLabel('Quantity').fill('1 gal');
+  // Another device moves Milk to Produce while the editor is open here.
+  const milk = (await serverDocs('item-edit-merge', 'listItems')).get('Milk')!;
+  const list = (await serverDocs('item-edit-merge', 'lists')).get('Grocery List')!;
+  const produce = list.sections!.arrayValue!.values!.map((v) => v.mapValue!.fields).find((s) => s.name.stringValue === 'Produce')!
+    .id.stringValue!;
+  await patchFields('item-edit-merge', `listItems/${milk.id.stringValue}`, { sectionId: produce });
+  await expect(card.locator('.ls-group', { has: page.locator('.ls-title', { hasText: 'Produce' }) })).toContainText('Milk');
+  await pop.getByRole('button', { name: 'Save' }).click();
+  const group = (title: string) => card.locator('.ls-group', { has: page.locator('.ls-title', { hasText: title }) });
+  await expect(group('Produce').locator('.li-row', { hasText: 'Milk' }).locator('.li-qty')).toHaveText('1 gal');
+  await expect(group('Dairy').locator('.li-row', { hasText: 'Milk' })).toHaveCount(0);
 });
 
 test('plans a meal from a recipe into an empty cell', async ({ page }) => {
@@ -148,7 +196,7 @@ test("adds a recipe's ingredients to the grocery list without duplicates", async
   await expect(modal.locator('.im-row')).toHaveCount(6);
   await expect(modal.locator('.im-row.on-list')).toHaveCount(3);
   await modal.getByRole('button', { name: 'Add 3 items' }).click();
-  await expect(page.locator('.toast')).toContainText('Added 3 items to Grocery List.');
+  await expect(page.locator('.toast')).toContainText('Added 3 items to \u2068Grocery List\u2069.');
 
   await page.getByRole('button', { name: 'Add to grocery list' }).click();
   await expect(modal).toContainText('Every Chicken biryani ingredient is already on Grocery List.');
@@ -163,6 +211,32 @@ test("adds a recipe's ingredients to the grocery list without duplicates", async
   // The ingredients are remembered for the grocery suggestions too.
   await card.getByLabel('Add item to Grocery List').fill('biry');
   await expect(card.locator('.li-sugs .li-sug-text')).toHaveText(['Biryani masala']);
+});
+
+test('an ingredient put on the list while the modal is open is not added twice', async ({ page }) => {
+  await open(page, 'ingredients-race', 'Recipes');
+  await page.locator('.rl-row', { hasText: 'Chicken biryani' }).click();
+  await page.getByRole('button', { name: 'Add to grocery list' }).click();
+  const modal = page.getByRole('dialog', { name: 'Add to Grocery List?' });
+  await expect(modal.getByRole('button', { name: 'Add 3 items' })).toBeVisible();
+  // Another device puts chicken thighs on the list meanwhile.
+  const list = (await serverDocs('ingredients-race', 'lists')).get('Grocery List')!;
+  await seedDoc('ingredients-race', 'listItems', {
+    id: 'from-phone',
+    listId: list.id.stringValue!,
+    text: 'Chicken thighs',
+    done: false,
+    order: -50,
+    createdAt: 2,
+  });
+  await page.waitForTimeout(500);
+  await modal.getByRole('button', { name: 'Add 3 items' }).click();
+  await expect(page.locator('.toast')).toContainText('Added 2 items to ⁨Grocery List⁩.');
+  await page.locator('.rail button', { hasText: 'Lists' }).click();
+  const card = groceryCard(page);
+  await expect(card.locator('.li-row', { hasText: 'Chicken thighs' })).toHaveCount(1);
+  await expect(card.locator('.li-row', { hasText: 'Biryani masala' })).toHaveCount(1);
+  await expect(card.locator('.lc-count')).toHaveText('10');
 });
 
 test('creates a recipe and shows it with numbered steps', async ({ page }) => {
@@ -266,7 +340,7 @@ test('a long list scrolls to the item just added, or to the one already on it', 
   await expect(card.locator('.li-row', { hasText: 'Pita bread' })).not.toBeInViewport();
   await field.fill('pita bread');
   await field.press('Enter');
-  await expect(page.locator('.toast')).toContainText('Pita bread is already on Grocery List.');
+  await expect(page.locator('.toast')).toContainText('\u2068Pita bread\u2069 is already on \u2068Grocery List\u2069.');
   await expect(card.locator('.li-row', { hasText: 'Pita bread' })).toBeInViewport();
 });
 

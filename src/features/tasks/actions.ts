@@ -2,15 +2,15 @@ import { signal } from '@preact/signals';
 import { asParent } from '../../core/lock';
 import { playCheck } from '../../core/sound';
 import { data, patch, profileById } from '../../data/store';
-import { UP_FOR_GRABS, type Task } from '../../data/types';
+import { UP_FOR_GRABS, type Task, type TaskState } from '../../data/types';
 import { today } from '../../lib/clock';
 import { formatHeaderDate } from '../../lib/date';
 import { forProfile, type Occurrence } from '../../tasks/engine';
 import { completeTask, occurrencesFor, skipTask, statesById, uncompleteTask, unskipTask } from '../../tasks/state';
 import { confirm, toast } from '../../ui/overlays';
 import { celebrate, confettiAt, flyStars } from './effects';
-import { completionEffects } from './logic';
-import { plural } from '../../lib/text';
+import { completionEffects, sameCheckOff } from './logic';
+import { isolate, plural } from '../../lib/text';
 
 /**
  * Task actions shared by the Day view, the Week grid and the Home pane.
@@ -77,11 +77,25 @@ function spentStars(o: Occurrence): boolean {
   return !!p && p.stars < st.stars;
 }
 
-/** The Undo on a check-off toast, with the same rule as unchecking. */
-function undoCheck(o: Occurrence): void {
+/**
+ * The Undo on a check-off toast, with the same rule as unchecking: it takes
+ * back the check-off it announced (`mine`), nothing else. Unchecked since,
+ * there is nothing to do; checked off again since (another device, or a
+ * later tap here with its own toast), that one stays.
+ */
+function undoCheck(o: Occurrence, mine: TaskState): void {
   const cur = fresh(o);
-  if (spentStars(cur)) void asParent(() => void uncompleteTask(cur), SPENT_REASON);
-  else void uncompleteTask(cur);
+  if (!cur.state) return;
+  if (!sameCheckOff(cur.state, mine)) {
+    toast(`${isolate(cur.task.title)} was checked off again since. It stays checked off.`);
+    return;
+  }
+  const undo = () => {
+    const now = fresh(o);
+    if (sameCheckOff(now.state, mine)) void uncompleteTask(now);
+  };
+  if (spentStars(cur)) void asParent(undo, SPENT_REASON);
+  else undo();
 }
 
 /*
@@ -117,11 +131,12 @@ function firstCelebration(key: string): boolean {
 export function complete(o: Occurrence, by: string, day: string, origin?: DOMRect): void {
   const column = forProfile(occurrencesFor(day), by);
   const fx = completionEffects(column, o);
-  if (!completeTask(o, by, day)) return;
+  const done = completeTask(o, by, day);
+  if (!done) return;
   playCheck();
   if (origin && o.task.stars > 0) flyStars(origin, by, o.task.stars);
   const who = o.profileId === UP_FOR_GRABS ? ` by ${profileById.value.get(by)?.name ?? 'someone'}` : '';
-  toast(`${o.task.title} completed${who}`, { label: 'Undo', run: () => undoCheck(o) });
+  toast(`${o.task.title} completed${who}`, { label: 'Undo', run: () => undoCheck(o, done.state) });
   const p = profileById.value.get(by);
   if (!p || day !== today.value) return;
   const section = `${by}:${o.section}`;

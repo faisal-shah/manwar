@@ -88,7 +88,10 @@ test('a suggestion can be forgotten, with Undo; a to-do list suggests nothing', 
   // Forgetting a suggestion leaves the list alone.
   await expect(card.locator('.li-row', { hasText: 'Yogurt' })).toHaveCount(1);
   await expect(field).toBeFocused();
-  await page.locator('.toast', { hasText: 'Yogurt is no longer suggested.' }).getByRole('button', { name: 'Undo' }).click();
+  await page
+    .locator('.toast', { hasText: '\u2068Yogurt\u2069 is no longer suggested.' })
+    .getByRole('button', { name: 'Undo' })
+    .click();
   await field.fill('yogu');
   await expect(suggestions(card)).toHaveText(['Yogurt']);
 
@@ -96,6 +99,41 @@ test('a suggestion can be forgotten, with Undo; a to-do list suggests nothing', 
   await todo.getByLabel('Add item to To Do').fill('cal');
   await page.waitForTimeout(300);
   await expect(todo.locator('.li-sugs')).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+test('a quantity typed first leaves the suggestions to the name, and goes with the one picked', async ({ page }) => {
+  const errors = await openLists(page, 'qty');
+  const card = groceryCard(page);
+  const field = card.getByLabel('Add item to Grocery List');
+  await field.fill('2 mil');
+  await expect(suggestions(card)).toHaveText(['Milk']);
+  await field.fill('2 bottles oli');
+  await expect(suggestions(card)).toHaveText(['Olive oil']);
+  await card.getByRole('button', { name: 'Add Olive oil' }).click();
+  const row = card.locator('.li-row', { hasText: 'Olive oil' });
+  await expect(row.getByRole('checkbox')).toHaveAttribute('aria-checked', 'false');
+  await expect(row.locator('.li-qty')).toHaveText('2 bottles');
+  expect(errors).toEqual([]);
+});
+
+test('Arabic items match with the article typed or not, and one is not added twice', async ({ page }) => {
+  const errors = await openLists(page, 'arabic');
+  const card = groceryCard(page);
+  const field = card.getByLabel('Add item to Grocery List');
+  await field.fill('بيض');
+  await field.press('Enter');
+  await expect(card.locator('.li-row', { hasText: 'بيض' })).toHaveCount(1);
+  await page.waitForTimeout(500);
+  // With the article it is the same item: already on the list.
+  await field.fill('البيض');
+  await field.press('Enter');
+  await expect(page.locator('.toast')).toContainText('⁨بيض⁩ is already on ⁨Grocery List⁩.');
+  await expect(card.locator('.li-row', { hasText: 'بيض' })).toHaveCount(1);
+  // The article and a letter find it.
+  await field.fill('الب');
+  await expect(suggestions(card)).toHaveText(['بيض']);
+  await expect(card.getByRole('button', { name: 'بيض, on the list' })).toBeVisible();
   expect(errors).toEqual([]);
 });
 
