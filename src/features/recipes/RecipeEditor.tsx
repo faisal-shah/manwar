@@ -11,17 +11,18 @@ import { categories } from '../meals/state';
 import { CategoryPicker } from '../meals/ui';
 import { askDeleteRecipe } from './RecipeView';
 import { createRecipe, showRecipe, updateRecipe } from './state';
-import { ingredientLines, sourceUrlError } from './text';
+import { recipeDraft, recipeFields, sourceUrlError } from './text';
 
 /** Add or edit a recipe: name, emoji, category, servings, ingredients (one per line), instructions, source URL. */
 export function RecipeEditor({ recipe, onClose }: { recipe?: Recipe; onClose: () => void }) {
-  const [name, setName] = useState(recipe?.name ?? '');
-  const [emoji, setEmoji] = useState(recipe?.emoji);
-  const [category, setCategory] = useState<MealCategoryId>(recipe?.category ?? 'dinner');
-  const [servings, setServings] = useState(recipe?.servings ?? 0);
-  const [ingredients, setIngredients] = useState(recipe?.ingredients.join('\n') ?? '');
-  const [instructions, setInstructions] = useState(recipe?.instructions ?? '');
-  const [url, setUrl] = useState(recipe?.sourceUrl ?? '');
+  const [opened] = useState(() => recipeFields(recipe));
+  const [name, setName] = useState(opened.name);
+  const [emoji, setEmoji] = useState(opened.emoji);
+  const [category, setCategory] = useState<MealCategoryId>(opened.category);
+  const [servings, setServings] = useState(opened.servings);
+  const [ingredients, setIngredients] = useState(opened.ingredients);
+  const [instructions, setInstructions] = useState(opened.instructions);
+  const [url, setUrl] = useState(opened.url);
   const [pickEmoji, setPickEmoji] = useState(false);
   const urlError = sourceUrlError(url);
   const valid = !!name.trim() && !urlError;
@@ -34,15 +35,8 @@ export function RecipeEditor({ recipe, onClose }: { recipe?: Recipe; onClose: ()
 
   const save = () =>
     void asParent(() => {
-      const draft = {
-        name: name.trim(),
-        emoji,
-        category,
-        servings: servings || undefined,
-        ingredients: ingredientLines(ingredients),
-        instructions: instructions.trim(),
-        sourceUrl: url.trim() || undefined,
-      };
+      const draft = recipeDraft({ name, emoji, category, servings, ingredients, instructions, url });
+      // Only what was changed here is written (recipeChanges against the recipe as it opened).
       if (recipe) updateRecipe(recipe, draft);
       else showRecipe(createRecipe(draft).id);
       onClose();

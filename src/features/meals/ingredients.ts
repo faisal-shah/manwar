@@ -1,5 +1,5 @@
 import type { ListItem } from '../../data/types';
-import { itemKey } from '../lists/logic';
+import { itemKey, itemsByKey } from '../lists/logic';
 
 /**
  * Recipe ingredients to grocery items. A recipe stores one ingredient per
@@ -98,23 +98,17 @@ export type IngredientStatus = 'new' | 'reopen' | 'onList';
 export interface IngredientRow extends ParsedIngredient {
   key: string;
   status: IngredientStatus;
-  /** For 'reopen': the checked-off item that comes back; for 'onList': the open item. */
-  itemId?: string;
 }
 
 /**
- * Classify each ingredient against a grocery list: already open on it,
- * checked off earlier (adding it reopens that item, keeping its section),
- * or new. Repeated lines collapse to the first.
+ * Classify each ingredient against a grocery list (lists/logic itemsByKey,
+ * the rule adding an item follows): already open on it, checked off
+ * earlier (adding it reopens that item, keeping its section), or new.
+ * Repeated lines collapse to the first. For showing: the merge decides
+ * again from the list as it is when the rows are added.
  */
 export function classifyIngredients(lines: string[], existing: ListItem[]): IngredientRow[] {
-  const open = new Map<string, ListItem>();
-  const done = new Map<string, ListItem>();
-  for (const it of existing) {
-    const k = itemKey(it.text);
-    if (!it.done) open.set(k, it);
-    else if (!done.has(k) || (it.doneAt ?? 0) > (done.get(k)!.doneAt ?? 0)) done.set(k, it);
-  }
+  const keyed = itemsByKey(existing);
   const seen = new Set<string>();
   const rows: IngredientRow[] = [];
   for (const raw of lines) {
@@ -123,11 +117,8 @@ export function classifyIngredients(lines: string[], existing: ListItem[]): Ingr
     const key = itemKey(p.name);
     if (!key || seen.has(key)) continue;
     seen.add(key);
-    const o = open.get(key);
-    const d = done.get(key);
-    if (o) rows.push({ ...p, key, status: 'onList', itemId: o.id });
-    else if (d) rows.push({ ...p, key, status: 'reopen', itemId: d.id });
-    else rows.push({ ...p, key, status: 'new' });
+    const { open, done } = keyed.get(key) ?? {};
+    rows.push({ ...p, key, status: open ? 'onList' : done ? 'reopen' : 'new' });
   }
   return rows;
 }

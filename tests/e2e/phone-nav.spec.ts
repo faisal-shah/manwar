@@ -172,7 +172,7 @@ test('a list deleted on the wall while the phone was away is closed, with one wo
   await w.page.locator('.rail button', { hasText: 'Lists' }).click();
   await w.page.getByRole('button', { name: 'To Do menu' }).click();
   await w.page.locator('.popover .menu').getByRole('button', { name: 'Delete list' }).click();
-  await w.page.getByRole('dialog', { name: 'Delete To Do?' }).getByRole('button', { name: 'Delete' }).click();
+  await w.page.getByRole('dialog', { name: 'Delete \u2068To Do\u2069?' }).getByRole('button', { name: 'Delete' }).click();
   await expect(w.page.locator('.lc-title', { hasText: 'To Do' })).toHaveCount(0);
   await p.goto(url);
   await expect(title(p)).toHaveText('Lists');

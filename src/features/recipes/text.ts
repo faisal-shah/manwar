@@ -40,6 +40,57 @@ export function ingredientRows(lines: string[]): { text: string; heading: boolea
 /** Ingredients typed or pasted one per line: bullets and list numbers dropped, blank lines dropped. */
 export const ingredientLines = (text: string): string[] => text.split('\n').map(stripMarker).filter(Boolean);
 
+/** A recipe as an editor saves it. */
+export type RecipeDraft = Omit<Recipe, 'id' | 'createdAt'>;
+
+/** What the recipe editor's fields hold. */
+export interface RecipeFields {
+  name: string;
+  emoji?: string;
+  category: Recipe['category'];
+  /** 0: not set. */
+  servings: number;
+  /** One per line. */
+  ingredients: string;
+  instructions: string;
+  url: string;
+}
+
+/** The editor's fields for a recipe, or for a new one. */
+export const recipeFields = (r?: Recipe): RecipeFields => ({
+  name: r?.name ?? '',
+  emoji: r?.emoji,
+  category: r?.category ?? 'dinner',
+  servings: r?.servings ?? 0,
+  ingredients: r?.ingredients.join('\n') ?? '',
+  instructions: r?.instructions ?? '',
+  url: r?.sourceUrl ?? '',
+});
+
+/** The recipe the editor's fields describe. */
+export const recipeDraft = (f: RecipeFields): RecipeDraft => ({
+  name: f.name.trim(),
+  emoji: f.emoji,
+  category: f.category,
+  servings: f.servings || undefined,
+  ingredients: ingredientLines(f.ingredients),
+  instructions: f.instructions.trim(),
+  sourceUrl: f.url.trim() || undefined,
+});
+
+/**
+ * The fields of `draft` that differ from what the editor opened with
+ * (`opened`, read through the editor's fields), so a field left alone is
+ * not written and another device's change to it meanwhile is kept.
+ * Ingredients compare line by line.
+ */
+export function recipeChanges(opened: Recipe, draft: RecipeDraft): Partial<RecipeDraft> {
+  const was = recipeDraft(recipeFields(opened));
+  const same = (k: keyof RecipeDraft) =>
+    k === 'ingredients' ? was.ingredients.join('\n') === draft.ingredients.join('\n') : was[k] === draft[k];
+  return Object.fromEntries(Object.entries(draft).filter(([k]) => !same(k as keyof RecipeDraft))) as Partial<RecipeDraft>;
+}
+
 /** Validates an optional source URL typed into the recipe editor. Returns an error message or null. */
 export function sourceUrlError(value: string): string | null {
   const v = value.trim();

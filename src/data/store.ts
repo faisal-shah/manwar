@@ -133,13 +133,41 @@ export const LEDGER_LIVE = 1000;
  * settings document); more than one only while a new one replaces another.
  */
 const listeners = new Map<string, Set<Unsubscribe>>();
-/** Collections (and 'settings') whose latest snapshot came from the server, not only the local cache. */
-const fromServer = new Set<CollectionName | 'settings'>();
-export const confirmedByServer = (name: CollectionName | 'settings') => fromServer.has(name);
-const noteSource = (name: CollectionName | 'settings', fromCache: boolean) => {
-  if (fromCache) fromServer.delete(name);
-  else fromServer.add(name);
+type Source = CollectionName | 'settings';
+/**
+ * Collections (and 'settings') whose latest snapshot came from the server,
+ * not only the local cache. The listeners hear metadata changes, so the
+ * server's answer counts even when it changes nothing the cache held.
+ */
+const fromServer = signal<ReadonlySet<Source>>(new Set());
+/** The server has answered for `name` (reactive). */
+export const confirmedByServer = (name: Source) => fromServer.value.has(name);
+const noteSource = (name: Source, fromCache: boolean) => {
+  if (fromServer.peek().has(name) === !fromCache) return;
+  const next = new Set(fromServer.peek());
+  if (fromCache) next.delete(name);
+  else next.add(name);
+  fromServer.value = next;
 };
+
+/**
+ * Resolves once the server has answered for every one of `names`, so what
+ * the store shows of them is the household's data, not a cold or stale
+ * cache. Callers check the household is still the one they started with.
+ */
+export function whenConfirmed(names: readonly Source[]): Promise<void> {
+  const all = (s: ReadonlySet<Source>) => names.every((n) => s.has(n));
+  if (all(fromServer.peek())) return Promise.resolve();
+  return new Promise((resolve) => {
+    let finished = false;
+    const off = fromServer.subscribe((s) => {
+      if (finished || !all(s)) return;
+      finished = true;
+      off();
+      resolve();
+    });
+  });
+}
 
 /** Listeners that failed (and wait to resubscribe), with the reason. */
 const failed = signal<ReadonlyMap<string, string>>(new Map());
@@ -247,8 +275,8 @@ export function openHousehold(id: string): void {
       let first = true;
       return onSnapshot(
         q,
-        // A phone needs to hear that the server answered even when its answer changes nothing (an empty collection).
-        { includeMetadataChanges: isPhone },
+        // Hear that the server answered even when its answer changes nothing (an empty collection, a warm cache).
+        { includeMetadataChanges: true },
         (snap) => {
           if (!current()) return;
           noteSource(name, snap.metadata.fromCache);
@@ -265,7 +293,7 @@ export function openHousehold(id: string): void {
   listen('settings', (current, onError) =>
     onSnapshot(
       settingsRef(),
-      { includeMetadataChanges: isPhone },
+      { includeMetadataChanges: true },
       (snap) => {
         if (!current()) return;
         noteSource('settings', snap.metadata.fromCache);
@@ -306,7 +334,7 @@ export function closeHousehold(): void {
   stopDayWatch = null;
   listeners.forEach((subs) => [...subs].forEach((u) => u()));
   listeners.clear();
-  fromServer.clear();
+  fromServer.value = new Set();
   failed.value = new Map();
   unsentWrites.value = 0;
   signalBatch(() => {
@@ -428,11 +456,15 @@ export function saveSettings(partial: SettingsPatch): Promise<void> {
   return sent(setDoc(settingsRef(), partial, { merge: true }));
 }
 
-/** The reads and writes of a transaction. */
+/** The reads and writes of a transaction (every read before the first write). */
 export interface Tx {
   get<K extends CollectionName>(name: K, id: string): Promise<Collections[K] | undefined>;
+  /** The settings document as stored, over the defaults. */
+  getSettings(): Promise<Settings>;
   put<K extends CollectionName>(name: K, value: Collections[K]): void;
   patch<K extends CollectionName>(name: K, id: string, partial: Partial<Collections[K]>): void;
+  /** Merge into the settings document, as saveSettings does. */
+  saveSettings(partial: SettingsPatch): void;
 }
 
 /**
@@ -456,8 +488,10 @@ export function transaction<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
     (t) =>
       fn({
         get: async (name, id) => (await t.get(docRef(name, id))).data() as never,
+        getSettings: async () => mergeSettings((await t.get(settingsRef())).data() ?? {}),
         put: (name, value) => void t.set(docRef(name, value.id), value as object),
         patch: (name, id, partial) => void t.update(docRef(name, id), partial as object),
+        saveSettings: (partial) => void t.set(settingsRef(), partial, { merge: true }),
       }),
     { maxAttempts: TRANSACTION_ATTEMPTS },
   );

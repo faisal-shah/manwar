@@ -49,7 +49,8 @@ vi.mock('../../src/data/store', async () => {
   return { data, profiles, profileById, batch, whenShown, newId: () => `id${++id}` };
 });
 
-const { completeTask, occurrencesFor } = await import('../../src/tasks/state');
+const { adjustStars, completeTask, occurrencesFor } = await import('../../src/tasks/state');
+const { sameCheckOff } = await import('../../src/features/tasks/logic');
 const { data } = await import('../../src/data/store');
 const { today } = await import('../../src/lib/clock');
 
@@ -136,11 +137,49 @@ describe('task write guard', () => {
     toasts.length = 0;
     const [o] = occurrencesFor(today.value);
     commits.refuse = { code: 'permission-denied', message: 'Missing or insufficient permissions.' };
-    expect(await completeTask(o, 'kid', today.value)).toBe(false);
+    expect(await completeTask(o, 'kid', today.value)?.saved).toBe(false);
     expect(toasts).toEqual(['"Feed the cat" was not checked off: another device changed it first.']);
     inSync();
-    expect(await completeTask(o, 'kid', today.value)).toBe(true);
+    expect(await completeTask(o, 'kid', today.value)?.saved).toBe(true);
     expect(toasts).toHaveLength(1);
+    inSync();
+  });
+
+  it('hands back the check-off it wrote, which only that check-off matches (an Undo takes back its own)', () => {
+    const [o] = occurrencesFor(today.value);
+    const mine = completeTask(o, 'kid', today.value)!.state;
+    expect(mine).toMatchObject({ id: o.id, by: 'kid', status: 'done', stars: 2 });
+    expect(mine.ledgerId).toBeTruthy();
+    inSync();
+    expect(sameCheckOff(mine, mine)).toBe(true);
+    // Unchecked, then checked off again on another device: a check-off of its own.
+    expect(sameCheckOff({ ...mine, at: mine.at + 4000, ledgerId: 'other' }, mine)).toBe(false);
+    expect(sameCheckOff({ ...mine, by: 'sibling' }, mine)).toBe(false);
+    expect(sameCheckOff(undefined, mine)).toBe(false);
+    expect(sameCheckOff({ ...mine, status: 'skipped' }, mine)).toBe(false);
+  });
+});
+
+describe('giving and removing stars', () => {
+  it('says so when the server refuses (the profile deleted meanwhile), and resolves false', async () => {
+    toasts.length = 0;
+    commits.n = 0;
+    commits.refuse = { code: 'not-found', message: 'No document to update' };
+    expect(await adjustStars('kid', 5)).toBe(false);
+    expect(toasts).toEqual(['The stars were not given: another device changed it first.']);
+    inSync();
+    expect(await adjustStars('kid', -2)).toBe(true);
+    expect(toasts).toHaveLength(1);
+    inSync();
+  });
+
+  it('waits while another change to the same balance from here is landing', () => {
+    commits.n = 0;
+    expect(adjustStars('kid', 5)).not.toBeNull();
+    expect(adjustStars('kid', 5)).toBeNull();
+    expect(commits.n).toBe(1);
+    inSync();
+    expect(adjustStars('kid', 5)).not.toBeNull();
     inSync();
   });
 });

@@ -126,7 +126,7 @@ test('undo in the star history reverses a completion once', async ({ page }) => 
   await card(page, 'mamma', 'Reading').locator('.tk-check').click();
   await expect(stars(page, 'mamma')).toHaveText('45');
   await stars(page, 'mamma').click();
-  const sheet = page.getByRole('dialog', { name: "Mamma's stars" });
+  const sheet = page.getByRole('dialog', { name: "\u2068Mamma\u2069's stars" });
   await clickTwiceAtOnce(sheet.getByRole('button', { name: 'Undo Reading' }));
   await expect(sheet.locator('.hist-entry[data-reason="untask"]')).toHaveCount(1);
   await expect(sheet.locator('.hist-balance')).toContainText('42');
@@ -253,7 +253,7 @@ test('a late chore in the week grid is open and checks off as today', async ({ p
 test('removing stars stops at the balance', async ({ page }) => {
   await openTasks(page, 'remove');
   await stars(page, 'baba').click();
-  const sheet = page.getByRole('dialog', { name: "Baba's stars" });
+  const sheet = page.getByRole('dialog', { name: "\u2068Baba\u2069's stars" });
   await sheet.getByRole('button', { name: 'Remove', exact: true }).click();
   await sheet.getByLabel('Number of stars').fill('36');
   await expect(sheet.getByRole('button', { name: 'Remove 36' })).toBeDisabled();
@@ -309,7 +309,7 @@ test('a once-only reward redeemed and undone is available again', async ({ page 
   const book = column(page, 'asiyah').locator('.rw-card[data-reward="New book"]');
   await expect(book.locator('.rw-progress')).toHaveText('128/150', { timeout: 15_000 });
   await stars(page, 'asiyah').click();
-  const sheet = page.getByRole('dialog', { name: "Asiyah's stars" });
+  const sheet = page.getByRole('dialog', { name: "\u2068Asiyah\u2069's stars" });
   await sheet.getByRole('button', { name: 'Give', exact: true }).click();
   await sheet.getByRole('button', { name: '25', exact: true }).click();
   await sheet.getByRole('button', { name: 'Give 25' }).click();

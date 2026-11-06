@@ -125,7 +125,7 @@ test('the same item rules as the wall: no duplicate, a done one comes back', asy
   const field = p.page.getByLabel('Add item to Grocery List');
   await field.fill('bananas');
   await field.press('Enter');
-  await expect(p.page.locator('.toast')).toContainText('Bananas is already on Grocery List.');
+  await expect(p.page.locator('.toast')).toContainText('\u2068Bananas\u2069 is already on \u2068Grocery List\u2069.');
   await expect(phoneRow(p.page, /bananas/i)).toHaveCount(1);
   // Olive oil is checked off in the demo: typing it brings it back unchecked.
   await field.fill('• Olive oil');
@@ -200,7 +200,10 @@ test('a list deleted on the wall closes on the phone, with one word of why', asy
   await wallLists(w.page);
   await w.page.getByRole('button', { name: 'Camping packing menu' }).click();
   await w.page.locator('.popover .menu').getByRole('button', { name: 'Delete list' }).click();
-  await w.page.getByRole('dialog', { name: 'Delete Camping packing?' }).getByRole('button', { name: 'Delete' }).click();
+  await w.page
+    .getByRole('dialog', { name: 'Delete \u2068Camping packing\u2069?' })
+    .getByRole('button', { name: 'Delete' })
+    .click();
   await expect(p.page.getByRole('dialog', { name: 'Edit list' })).toHaveCount(0);
   await expect(p.page.locator('.ph-head h1')).toHaveText('Lists');
   await expect(p.page.locator('.phl-row', { hasText: 'Camping packing' })).toHaveCount(0);
@@ -220,7 +223,7 @@ test('a list deleted on the wall while the phone shows another tab is closed on 
   await wallLists(w.page);
   await w.page.getByRole('button', { name: 'To Do menu' }).click();
   await w.page.locator('.popover .menu').getByRole('button', { name: 'Delete list' }).click();
-  await w.page.getByRole('dialog', { name: 'Delete To Do?' }).getByRole('button', { name: 'Delete' }).click();
+  await w.page.getByRole('dialog', { name: 'Delete \u2068To Do\u2069?' }).getByRole('button', { name: 'Delete' }).click();
   // Gone on the server, and heard on the phone, before it comes back to Lists.
   await expect
     .poll(async () => (await fetch(`${FS}/households/demo-${hh}/lists`, { headers: OWNER })).text())
@@ -290,9 +293,9 @@ test('a list deleted on the phone closes without a word about another device', a
   await openList(p.page, 'To Do');
   await p.page.getByRole('button', { name: 'To Do menu' }).click();
   await p.page.locator('.popover .menu').getByRole('button', { name: 'Delete list' }).click();
-  await p.page.getByRole('dialog', { name: 'Delete To Do?' }).getByRole('button', { name: 'Delete' }).click();
+  await p.page.getByRole('dialog', { name: 'Delete \u2068To Do\u2069?' }).getByRole('button', { name: 'Delete' }).click();
   await expect(p.page.locator('.ph-head h1')).toHaveText('Lists');
-  await expect(p.page.locator('.toast')).toHaveText('Deleted To Do');
+  await expect(p.page.locator('.toast')).toHaveText('Deleted \u2068To Do\u2069');
   expect(p.errors).toEqual([]);
 });
 
@@ -435,6 +438,93 @@ test('done items cleared at the wall while the phone was offline come back whole
   await expect(phoneRow(p.page, /yogurt/i).getByRole('checkbox')).toHaveAttribute('aria-checked', 'false');
   expect(w.errors).toEqual([]);
   expect(p.errors.filter((e) => !/ERR_INTERNET_DISCONNECTED/.test(e))).toEqual([]);
+});
+
+test('an item unchecked on the phone offline, cleared at the wall meanwhile, comes back unchecked', async ({ browser }) => {
+  const hh = name('stale-uncheck');
+  const w = await wall(browser, hh);
+  const p = await phone(browser, hh);
+  await openList(p.page, 'Grocery List');
+  await expect(phoneRow(p.page, 'Olive oil').getByRole('checkbox')).toHaveAttribute('aria-checked', 'true');
+  await p.page.context().setOffline(true);
+  const before = await serverItems(hh);
+  const res = await fetch(`${FS}/households/demo-${hh}/listItems/${before.get('Olive oil')!.id}`, {
+    method: 'DELETE',
+    headers: OWNER,
+  });
+  expect(res.ok).toBe(true);
+  // The phone, offline, still shows it checked off: unchecking it there puts it back on the list.
+  await phoneRow(p.page, 'Olive oil').getByRole('checkbox').click();
+  await expect(phoneRow(p.page, 'Olive oil').getByRole('checkbox')).toHaveAttribute('aria-checked', 'false');
+  await p.page.context().setOffline(false);
+  await expect
+    .poll(async () => (await serverItems(hh)).get('Olive oil')?.fields.done, { timeout: 30_000 })
+    .toEqual({
+      booleanValue: false,
+    });
+  await wallLists(w.page);
+  const row = wallCard(w.page, 'Grocery List').locator('.li-row', { hasText: 'Olive oil' });
+  await expect(row.getByRole('checkbox')).toHaveAttribute('aria-checked', 'false');
+  await expect(p.page.locator('.toast', { hasText: 'was not unchecked' })).toHaveCount(0);
+  expect(w.errors).toEqual([]);
+  expect(p.errors.filter((e) => !/ERR_INTERNET_DISCONNECTED/.test(e))).toEqual([]);
+});
+
+test("Clear done's Undo leaves alone an item added again since", async ({ browser }) => {
+  const hh = name('undo-readded');
+  const w = await wall(browser, hh);
+  const p = await phone(browser, hh);
+  await openList(p.page, 'Grocery List');
+  const field = p.page.getByLabel('Add item to Grocery List');
+  await field.fill('Saffron');
+  await field.press('Enter');
+  await phoneRow(p.page, 'Saffron').getByRole('checkbox').click();
+  const doneGroup = p.page.locator('.phl-card .ls-group', { has: p.page.locator('.done-head') });
+  await expect(doneGroup.locator('.li-row')).toHaveCount(2);
+  await p.page.getByRole('button', { name: 'Grocery List menu' }).click();
+  await p.page.locator('.popover .menu').getByRole('button', { name: 'Clear done (2)' }).click();
+  // The wall adds Saffron again: a new item with the id the cleared one had (one list, one item key).
+  await wallLists(w.page);
+  const card = wallCard(w.page, 'Grocery List');
+  await expect(card.locator('.li-row', { hasText: 'Saffron' })).toHaveCount(0);
+  const wallField = card.getByLabel('Add item to Grocery List');
+  await wallField.fill('Saffron');
+  await wallField.press('Enter');
+  await expect(phoneRow(p.page, 'Saffron').getByRole('checkbox')).toHaveAttribute('aria-checked', 'false');
+  await p.page.locator('.toast', { hasText: 'Cleared 2 done items' }).getByRole('button', { name: 'Undo' }).click();
+  // Olive oil comes back checked off; the Saffron on the list now stays open.
+  await expect(phoneRow(p.page, 'Olive oil').getByRole('checkbox')).toHaveAttribute('aria-checked', 'true');
+  await expect(card.locator('.li-row', { hasText: 'Olive oil' })).toHaveCount(1);
+  await p.page.waitForTimeout(1000);
+  await expect(phoneRow(p.page, 'Saffron')).toHaveCount(1);
+  await expect(phoneRow(p.page, 'Saffron').getByRole('checkbox')).toHaveAttribute('aria-checked', 'false');
+  await expect(card.locator('.li-row', { hasText: 'Saffron' }).getByRole('checkbox')).toHaveAttribute('aria-checked', 'false');
+  expect([...w.errors, ...p.errors]).toEqual([]);
+});
+
+test('a paired phone clears and restores a long Done group in one write', async ({ browser }) => {
+  const hh = name('many-done');
+  const w = await wall(browser, hh);
+  const p = await pairPhone(browser, w.page, hh);
+  const listId = (await serverItems(hh)).get('Bananas')!.fields.listId as { stringValue: string };
+  await seed(
+    hh,
+    Array.from({ length: 30 }, (_, i) => ({
+      collection: 'listItems',
+      id: `bulk-${i}`,
+      fields: { listId: listId.stringValue, text: `Bulk item ${i}`, done: true, doneAt: 1000 + i, order: i, createdAt: 1 },
+    })),
+  );
+  await openList(p.page, 'Grocery List');
+  const doneGroup = p.page.locator('.phl-card .ls-group', { has: p.page.locator('.done-head') });
+  await expect(doneGroup.locator('.ls-count')).toHaveText('31');
+  await p.page.getByRole('button', { name: 'Grocery List menu' }).click();
+  await p.page.locator('.popover .menu').getByRole('button', { name: 'Clear done (31)' }).click();
+  await expect.poll(async () => [...(await serverItems(hh)).keys()].filter((t) => t.startsWith('Bulk')).length).toBe(0);
+  await p.page.locator('.toast', { hasText: 'Cleared 31 done items' }).getByRole('button', { name: 'Undo' }).click();
+  await expect.poll(async () => [...(await serverItems(hh)).keys()].filter((t) => t.startsWith('Bulk')).length).toBe(30);
+  await expect(p.page.locator('.toast', { hasText: 'were not' })).toHaveCount(0);
+  expect([...w.errors, ...p.errors]).toEqual([]);
 });
 
 test('a phone signed in as the wall asks for the PIN before adding; a paired phone never does', async ({ browser }) => {

@@ -70,11 +70,11 @@ describe('classifyIngredients', () => {
 
   it('marks open items as on the list, checked-off ones to reopen, the rest new', () => {
     const rows = classifyIngredients(['2 onions', '3 cups basmati rice', '2 tbsp olive oil', '1 cup yogurt'], grocery);
-    expect(rows.map((r) => [r.name, r.status, r.itemId])).toEqual([
-      ['Onions', 'onList', 'onions'],
-      ['Basmati rice', 'onList', 'rice'],
-      ['Olive oil', 'reopen', 'oil2'],
-      ['Yogurt', 'new', undefined],
+    expect(rows.map((r) => [r.name, r.status])).toEqual([
+      ['Onions', 'onList'],
+      ['Basmati rice', 'onList'],
+      ['Olive oil', 'reopen'],
+      ['Yogurt', 'new'],
     ]);
   });
 

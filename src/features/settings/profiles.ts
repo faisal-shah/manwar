@@ -22,8 +22,6 @@ import {
  */
 
 const REASON = 'Enter the PIN to change profiles.';
-/** Firestore batches hold at most 500 writes. */
-const BATCH_LIMIT = 450;
 
 /** The first palette color no profile has yet (the first one when all are taken). */
 function nextColor(): string {
@@ -115,11 +113,11 @@ function applyDelete(p: Profile): void {
   plan.unassignRewards.forEach(({ id }) => b.patch('rewards', id, { profiles: without }));
   b.remove('profiles', p.id);
   void b.commit();
-  const at = currentTime();
-  // Two writes per document at most, so half a batch of documents per batch.
-  for (let i = 0; i < plan.eventMeta.length; i += BATCH_LIMIT / 2) {
+  // Apart from the profile's batch: an event's document deleted meanwhile refuses only this one.
+  if (plan.eventMeta.length) {
+    const at = currentTime();
     const mb = batch();
-    for (const { id, profiles: rest } of plan.eventMeta.slice(i, i + BATCH_LIMIT / 2)) {
+    for (const { id, profiles: rest } of plan.eventMeta) {
       mb.patch('eventMeta', id, { profiles: without, updatedAt: at });
       // Left with nobody: marked so, which an assignment made elsewhere meanwhile outranks (NOBODY beside a profile is ignored).
       if (rest.includes(NOBODY)) mb.patch('eventMeta', id, { profiles: arrayUnion(NOBODY) as never });

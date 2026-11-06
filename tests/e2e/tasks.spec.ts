@@ -112,7 +112,7 @@ test('undoing a completion from the star history', async ({ page }) => {
   await expect(stars(page, 'mamma')).toHaveText('45');
 
   await stars(page, 'mamma').click();
-  const sheet = page.getByRole('dialog', { name: "Mamma's stars" });
+  const sheet = page.getByRole('dialog', { name: "\u2068Mamma\u2069's stars" });
   await expect(sheet).toBeVisible();
   const entry = sheet.locator('.hist-entry[data-reason="task"]', { hasText: 'Reading' });
   await expect(entry).toContainText('+3');

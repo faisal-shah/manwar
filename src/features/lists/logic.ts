@@ -1,4 +1,4 @@
-import type { List, ListItem, ListKind, ListSection } from '../../data/types';
+import type { GroceryMemory, List, ListItem, ListKind, ListSection } from '../../data/types';
 import { fold } from '../../lib/text';
 
 /**
@@ -103,29 +103,55 @@ export function reopenedItem(prior: ListItem, order: number, sectionId: string |
   return { ...rest, ...reopenedChanges(order, sectionId), done: false, ...(q ? { qty: q } : {}) };
 }
 
-export interface MergeItem {
+/** A row to put on a list: its name and the quantity given with it. */
+export interface MergeRow {
   name: string;
   qty?: string;
-  /** A checked-off item that comes back instead of a new one. */
-  reopenId?: string;
+}
+
+/** What a list holds under one item key: the first open item, and the checked-off one checked last. */
+export interface KeyedItems {
+  open?: ListItem;
+  done?: ListItem;
+}
+
+/** A list's items by item key: the one rule for "already on the list" and "add again". */
+export function itemsByKey(items: readonly ListItem[]): Map<string, KeyedItems> {
+  const out = new Map<string, KeyedItems>();
+  for (const it of items) {
+    const key = itemKey(it.text);
+    const k = out.get(key) ?? {};
+    if (!it.done) k.open ??= it;
+    else if (!k.done || (it.doneAt ?? 0) > (k.done.doneAt ?? 0)) k.done = it;
+    out.set(key, k);
+  }
+  return out;
 }
 
 /**
- * Where each merged row goes: new rows at the top of the unsectioned group,
- * checked-off ones (`prior`, when still on the list) back at the top of
- * their own section, each group's rows in the given order above the items
- * already open there, with distinct orders.
+ * Where each row goes when several are put on a list at once, decided
+ * from the list as it is now (`items`): a row already open there, or
+ * repeated, is left out; a checked-off one (`prior`) comes back at the top
+ * of its own section; a new one goes at the top of the unsectioned group.
+ * Each group's rows keep the given order, above the items already open
+ * there, with distinct orders.
  */
-export function placeMerge(
+export function planMerge(
   list: List,
   items: ListItem[],
-  rows: MergeItem[],
-): { row: MergeItem; prior?: ListItem; order: number }[] {
-  const byId = new Map(items.map((i) => [i.id, i]));
-  const placed = rows.map((row) => {
-    const prior = row.reopenId ? byId.get(row.reopenId) : undefined;
-    return { row, prior, section: prior ? sectionOf(list, prior) : null };
-  });
+  rows: readonly MergeRow[],
+): { row: MergeRow; prior?: ListItem; order: number }[] {
+  const keyed = itemsByKey(items);
+  const seen = new Set<string>();
+  const placed: { row: MergeRow; prior?: ListItem; section: string | null }[] = [];
+  for (const row of rows) {
+    const key = itemKey(row.name);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const { open, done } = keyed.get(key) ?? {};
+    if (open) continue;
+    placed.push({ row, prior: done, section: done ? sectionOf(list, done) : null });
+  }
   const next = new Map<string | null, number>();
   for (const p of placed) next.set(p.section, (next.get(p.section) ?? 0) + 1);
   for (const [s, n] of next) next.set(s, topOrder(list, items, s) - n + 1);
@@ -134,6 +160,43 @@ export function placeMerge(
     next.set(section, order + 1);
     return prior ? { row, prior, order } : { row, order };
   });
+}
+
+/**
+ * Removed items an undo may put back: those on a list that still exists
+ * whose id is free. A grocery item's id comes from its list and its key,
+ * so a "milk" added again since has the id of the "milk" removed, and
+ * putting the old one back would write over the new one.
+ */
+export function restorable(removed: readonly ListItem[], listIds: ReadonlySet<string>, itemIds: ReadonlySet<string>): ListItem[] {
+  return removed.filter((i) => listIds.has(i.listId) && !itemIds.has(i.id));
+}
+
+/** What the item editor's fields hold on Save. */
+export interface ItemEdit {
+  text: string;
+  qty: string;
+  /** null: no section. */
+  sectionId: string | null;
+}
+
+/**
+ * The fields the item editor changed against the item as it opened
+ * (`opened`; undefined deletes the field), so a change made meanwhile on
+ * another device to a field left alone is kept. A new section puts the
+ * item at `order()` in it.
+ */
+export function itemChanges(list: List, opened: ListItem, edit: ItemEdit, order: () => number): Partial<ListItem> {
+  const out: Partial<ListItem> = {};
+  const text = edit.text.trim();
+  const qty = edit.qty.trim();
+  if (text !== opened.text) out.text = text;
+  if (qty !== (opened.qty ?? '')) out.qty = qty || undefined;
+  if (edit.sectionId !== sectionOf(list, opened)) {
+    out.sectionId = edit.sectionId ?? undefined;
+    out.order = order();
+  }
+  return out;
 }
 
 /** Move an item one place up (-1) or down (+1) within its section. Empty when already at that end. */
@@ -203,19 +266,92 @@ export function singular(w: string): string {
 }
 
 /**
- * Key for "is this already on the list": case- and accent-insensitive,
- * ignores parentheticals, text after a comma, punctuation, emoji and a
- * plural last word ("Onions" = "onion", "Basmati rice (aged)" = "basmati
- * rice"). Text with no letters or digits ("🍎") is its own key.
+ * The words of an item's name: the one tokenizer behind item keys and
+ * grocery suggestions. Folded (case, accents, Arabic diacritics), without
+ * parentheticals, the note after a comma (Latin or Arabic), punctuation
+ * and emoji, and each word without the Arabic article ("الحليب" reads
+ * "حليب"; the article alone is no word).
  */
-export function itemKey(text: string): string {
-  const words = fold(text)
+export function itemWords(text: string): string[] {
+  return fold(text)
     .replace(/\([^)]*\)/g, ' ')
-    .split(',')[0]
+    .split(/[,،]/)[0]
     .replace(/[^\p{L}\p{N}\s]/gu, ' ')
     .split(/\s+/)
+    .map((w) => (w.startsWith('ال') ? w.slice(2) : w))
     .filter(Boolean);
+}
+
+/**
+ * Key for "is this already on the list": the item's words with a plural
+ * last word made singular ("Onions" = "onion", "Basmati rice (aged)" =
+ * "basmati rice", "البيض" = "بيض"). Text with no letters or digits ("🍎")
+ * is its own key.
+ */
+export function itemKey(text: string): string {
+  const words = itemWords(text);
   if (!words.length) return text.trim().replace(/\s+/g, ' ');
   words[words.length - 1] = singular(words[words.length - 1]);
   return words.join(' ');
+}
+
+/* ---------- Grocery memory (memory.ts writes it) ---------- */
+
+/** A grocery memory document's id: a hash of its item key, so any text makes a valid document id. */
+export const memoryId = (key: string): string => hash53(key);
+
+/**
+ * The grocery memory the lists hold now (open and checked-off items), to
+ * start it: each key counted as often as it is on the grocery lists, with
+ * its latest spelling and time. Ids in `have` are left out.
+ */
+export function memorySeed(lists: readonly List[], items: readonly ListItem[], have: ReadonlySet<string>): GroceryMemory[] {
+  const grocery = new Set(lists.filter((l) => l.kind === 'grocery').map((l) => l.id));
+  const byId = new Map<string, GroceryMemory>();
+  for (const item of items) {
+    if (!grocery.has(item.listId)) continue;
+    const key = itemKey(item.text);
+    const id = memoryId(key);
+    if (!key || have.has(id)) continue;
+    const at = item.doneAt ?? item.createdAt;
+    const seen = byId.get(id);
+    if (!seen) byId.set(id, { id, key, text: item.text, count: 1, lastAt: at });
+    else {
+      seen.count++;
+      if (at > seen.lastAt) Object.assign(seen, { text: item.text, lastAt: at });
+    }
+  }
+  return [...byId.values()];
+}
+
+/**
+ * Memory documents whose id or key does not follow from their text
+ * (memoryId(itemKey(text)), as an earlier rule wrote them), merged into
+ * the document they belong to: counts summed, the latest spelling and
+ * time kept, written whole (`write`), the others removed (`remove`). The
+ * same documents give the same plan on every wall, so two walls tidying
+ * at once write the same. Empty once tidy.
+ */
+export function planMemoryTidy(docs: readonly GroceryMemory[]): { write: GroceryMemory[]; remove: string[] } {
+  const groups = new Map<string, { key: string; docs: GroceryMemory[] }>();
+  const remove: string[] = [];
+  for (const d of docs) {
+    const key = itemKey(d.text);
+    if (!key) {
+      remove.push(d.id);
+      continue;
+    }
+    const id = memoryId(key);
+    const g = groups.get(id);
+    if (g) g.docs.push(d);
+    else groups.set(id, { key, docs: [d] });
+  }
+  const write: GroceryMemory[] = [];
+  for (const [id, { key, docs: group }] of groups) {
+    if (group.length === 1 && group[0].id === id && group[0].key === key) continue;
+    const latest = group.reduce((a, b) => (b.lastAt > a.lastAt ? b : a));
+    write.push({ id, key, text: latest.text, count: group.reduce((n, d) => n + d.count, 0), lastAt: latest.lastAt });
+    for (const d of group) if (d.id !== id) remove.push(d.id);
+  }
+  return { write, remove };
 }

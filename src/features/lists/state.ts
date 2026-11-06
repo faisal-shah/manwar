@@ -1,21 +1,24 @@
 import { computed, signal } from '@preact/signals';
 import { arrayUnion, deleteField } from 'firebase/firestore';
 import { errorMessage } from '../../data/errors';
-import { batch, data, fieldChanges, newId, patch, put, transaction } from '../../data/store';
+import { batch, data, fieldChanges, newId, patch, put, remove, transaction } from '../../data/store';
 import type { List, ListItem, ListKind, ListSection } from '../../data/types';
 import { currentTime } from '../../lib/clock';
+import { isolate } from '../../lib/text';
 import { toast } from '../../ui/overlays';
 import {
   defaultGroceryList,
   groceryItemId,
   itemKey,
+  itemsByKey,
   nextDefaultGrocery,
-  placeMerge,
+  planMerge,
   reopenedChanges,
   reopenedItem,
+  restorable,
   sectionOf,
   topOrder,
-  type MergeItem,
+  type MergeRow,
   type OrderPatch,
 } from './logic';
 import { remember } from './memory';
@@ -70,15 +73,17 @@ const notSaved = (what: string) => (e: unknown) => {
   toast(`${what}: ${errorMessage(e)}`);
 };
 
+const isGone = (e: unknown) => (e as { code?: string }).code === 'not-found';
+
 /**
- * A reopening refused because the item is gone from the server (deleted on
- * another device meanwhile, Clear done there): `whole` writes it back
- * complete while its list is still there. Any other refusal is said.
+ * A reopening (an item added again, or unchecked) refused because the item
+ * is gone from the server (deleted on another device meanwhile, Clear done
+ * there): `whole` writes it back complete while its list is still there
+ * (a list deleted says so itself). Any other refusal is said.
  */
 const unlessGone = (listId: string, whole: () => Promise<void>, what: string) => (e: unknown) => {
-  if ((e as { code?: string }).code === 'not-found' && lists.peek().some((l) => l.id === listId))
-    return void whole().catch(notSaved(what));
-  notSaved(what)(e);
+  if (!isGone(e)) return notSaved(what)(e);
+  if (lists.peek().some((l) => l.id === listId)) void whole().catch(notSaved(what));
 };
 
 const settleTimers = new Map<string, number>();
@@ -92,7 +97,12 @@ function unsettle(id: string): void {
   settling.value = next;
 }
 
-/** Check an item off (it settles in place, then sinks to Done) or back on (at once, even mid-settle). */
+/**
+ * Check an item off (it settles in place, then sinks to Done) or back on
+ * (at once, even mid-settle). An uncheck that reaches the server after the
+ * item was cleared on another device writes the item back, unchecked; a
+ * check-off of an item gone meanwhile has nothing left to do.
+ */
 export function setDone(item: ListItem, done: boolean): void {
   unsettle(item.id);
   if (done) {
@@ -101,8 +111,18 @@ export function setDone(item: ListItem, done: boolean): void {
       item.id,
       window.setTimeout(() => unsettle(item.id), SETTLE_MS),
     );
+    void patch('listItems', item.id, { done: true, doneAt: currentTime() }).catch(
+      (e: unknown) => isGone(e) || notSaved(`${isolate(item.text)} was not checked off`)(e),
+    );
+    return;
   }
-  void patch('listItems', item.id, done ? { done: true, doneAt: currentTime() } : { done: false });
+  void patch('listItems', item.id, { done: false }).catch(
+    unlessGone(
+      item.listId,
+      () => put('listItems', reopenedItem(item, item.order, item.sectionId ?? null)),
+      `${isolate(item.text)} was not unchecked`,
+    ),
+  );
 }
 
 export type AddResult = { kind: 'added' | 'reopened' | 'already'; item: ListItem };
@@ -116,16 +136,18 @@ export type AddResult = { kind: 'added' | 'reopened' | 'already'; item: ListItem
 export function addItem(list: List, text: string, sectionId: string | null, qty?: string): AddResult {
   const items = itemsByList.value.get(list.id) ?? [];
   if (list.kind === 'grocery') {
-    const key = itemKey(text);
-    const open = items.find((i) => !i.done && itemKey(i.text) === key);
+    const { open, done } = itemsByKey(items).get(itemKey(text)) ?? {};
     if (open) return { kind: 'already', item: open };
-    const done = items.filter((i) => i.done && itemKey(i.text) === key).sort((a, b) => (b.doneAt ?? 0) - (a.doneAt ?? 0))[0];
     remember([text]);
     if (done) {
       const section = sectionId ?? sectionOf(list, done);
       const order = topOrder(list, items, section);
       void patch('listItems', done.id, fieldChanges(reopenedChanges(order, section, qty)) as Partial<ListItem>).catch(
-        unlessGone(list.id, () => put('listItems', reopenedItem(done, order, section, qty)), `"${done.text}" was not added back`),
+        unlessGone(
+          list.id,
+          () => put('listItems', reopenedItem(done, order, section, qty)),
+          `${isolate(done.text)} was not added back`,
+        ),
       );
       return { kind: 'reopened', item: done };
     }
@@ -140,26 +162,25 @@ export function addItem(list: List, text: string, sectionId: string | null, qty?
     order: topOrder(list, items, sectionId),
     createdAt: currentTime(),
   };
-  void put('listItems', item).catch(notSaved(`"${text}" was not added`));
+  void put('listItems', item).catch(notSaved(`${isolate(text)} was not added`));
   return { kind: 'added', item };
 }
 
 /**
- * Set text, quantity and section (empty quantity or no section removes the
- * field), and order when given. Only these fields are written, so a check-off
- * or reorder made meanwhile (here or on another device) is kept.
+ * Write the item editor's changes (logic.itemChanges: only the fields it
+ * changed, undefined deleting one), so a check-off, rename or move made
+ * meanwhile to the others (here or on another device) is kept.
  */
-export function updateItem(id: string, text: string, qty: string, sectionId: string | null, order?: number): void {
-  const q = qty.trim();
-  void patch('listItems', id, {
-    text,
-    qty: (q || deleteField()) as string,
-    sectionId: (sectionId ?? deleteField()) as string,
-    ...(order === undefined ? {} : { order }),
-  });
+export function editItem(item: ListItem, changes: Partial<ListItem>): void {
+  if (!Object.keys(changes).length) return;
+  void patch('listItems', item.id, fieldChanges(changes) as Partial<ListItem>).catch(
+    (e: unknown) => isGone(e) || notSaved(`${isolate(item.text)} was not changed`)(e),
+  );
 }
 
-export const deleteItem = (item: ListItem) => batch().remove('listItems', item.id).commit();
+export function deleteItem(item: ListItem): void {
+  void remove('listItems', item.id).catch(notSaved(`${isolate(item.text)} was not deleted`));
+}
 
 export function applyOrder(patches: OrderPatch[]): void {
   if (!patches.length) return;
@@ -172,15 +193,22 @@ export function applyOrder(patches: OrderPatch[]): void {
   void b.commit();
 }
 
-/** Put several items on a list in one batch (see logic.placeMerge). Returns an undo that restores the list as it was. */
-export function mergeItems(list: List, rows: MergeItem[]): () => void {
+/**
+ * Put several items on a list in one batch, decided from the list as the
+ * store has it now (logic.planMerge): one put on it meanwhile, here or on
+ * another device while the ingredients modal was open, is not added
+ * twice. Returns how many were added or brought back, and an undo that
+ * restores the list as it was.
+ */
+export function mergeItems(list: List, rows: readonly MergeRow[]): { count: number; undo: () => void } {
   const created: ListItem[] = [];
   /** Checked-off items that come back: what changes, the whole item, and what the undo puts back (only the fields the merge changed). */
   const reopens: { changes: Partial<ListItem>; whole: ListItem; was: Partial<ListItem> }[] = [];
   const now = currentTime();
   const items = itemsByList.value.get(list.id) ?? [];
   const taken = items.map((i) => ({ id: i.id }));
-  const placed = placeMerge(list, items, rows);
+  const placed = planMerge(list, items, rows);
+  if (!placed.length) return { count: 0, undo: () => {} };
   for (const { row, prior, order } of placed) {
     if (prior) {
       const changed: (keyof ListItem)[] = row.qty ? ['done', 'doneAt', 'order', 'qty'] : ['done', 'doneAt', 'order'];
@@ -221,40 +249,44 @@ export function mergeItems(list: List, rows: MergeItem[]): () => void {
       created.forEach((item) => tx.put('listItems', item));
     });
   };
-  void b.commit().catch(unlessGone(list.id, retry, `The items were not added to ${list.title}`));
+  void b.commit().catch(unlessGone(list.id, retry, `The items were not added to ${isolate(list.title)}`));
   if (list.kind === 'grocery') remember(placed.map((p) => p.row.name));
   const reopened = reopens.map((r) => ({ id: r.whole.id, was: r.was }));
-  return () => {
+  const undo = () => {
     undone = true;
     const u = batch();
     created.forEach((item) => u.remove('listItems', item.id));
     // Only the merged fields go back: a rename or move made since is kept, and an item deleted since stays deleted.
     const live = new Set((itemsByList.value.get(list.id) ?? []).map((i) => i.id));
     reopened.forEach(({ id, was }) => live.has(id) && u.patch('listItems', id, fieldChanges(was) as Partial<ListItem>));
-    void u.commit();
+    void u.commit().catch(notSaved(`The items were not taken off ${isolate(list.title)}`));
   };
+  return { count: placed.length, undo };
 }
 
 /** Remove the list's checked-off items; returns them, for restoreItems (an undo). */
 export function clearDone(list: List): ListItem[] {
   const done = (itemsByList.value.get(list.id) ?? []).filter((i) => i.done);
+  if (!done.length) return done;
   const b = batch();
   done.forEach((i) => b.remove('listItems', i.id));
-  void b.commit();
+  void b.commit().catch(notSaved(`The done items were not cleared from ${isolate(list.title)}`));
   return done;
 }
 
 /**
- * Put removed items back as they were (an undo), onto lists that still
- * exist: not onto one deleted since on another device.
+ * Put removed items back as they were (an undo; logic.restorable): onto
+ * lists that still exist, and none whose id an item has now (added again
+ * since, here or on another device), which would be written over.
  */
-export function restoreItems(items: ListItem[]): void {
-  const live = new Set(lists.value.map((l) => l.id));
-  const back = items.filter((i) => live.has(i.listId));
+export function restoreItems(items: readonly ListItem[]): void {
+  const back = restorable(items, new Set(lists.value.map((l) => l.id)), new Set(data.listItems.value.map((i) => i.id)));
   if (!back.length) return;
   const b = batch();
   back.forEach((i) => b.put('listItems', i));
-  void b.commit();
+  void b
+    .commit()
+    .catch(notSaved(back.length === 1 ? `${isolate(back[0].text)} was not put back` : 'The items were not put back'));
 }
 
 /* ---------- Lists ---------- */
@@ -346,7 +378,7 @@ export function deleteList(list: List): void {
     const next = nextDefaultGrocery(lists.value, list.id);
     if (next) b.patch('lists', next.id, { isDefaultGrocery: true });
   }
-  void b.commit();
+  void b.commit().catch(notSaved(`${isolate(list.title)} was not deleted`));
 }
 
 /** The default grocery list, created when the household has none. */

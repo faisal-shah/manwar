@@ -4,15 +4,14 @@ import type { TargetedEvent } from 'preact';
 import { ArrowDown, ArrowUp, Check, ChevronDown, ChevronUp, Ellipsis, Plus, Trash2, X } from 'lucide-preact';
 import { isPhone } from '../../app/layout';
 import { asParent, pinRequest, requireParent, unlocked } from '../../core/lock';
-import { data, put } from '../../data/store';
+import { data } from '../../data/store';
 import type { GroceryMemory, List, ListItem } from '../../data/types';
 import { currentTime } from '../../lib/clock';
 import { Button, Chips, useAutoFocus } from '../../ui/controls';
 import { Popover, confirm, swallowRestOfTap, toast } from '../../ui/overlays';
-import { parseIngredient } from '../meals/ingredients';
-import { groupItems, itemKey, listColor, moveBy, reorder, sectionOf, topOrder, type ListView } from './logic';
+import { groupItems, itemChanges, itemKey, listColor, moveBy, reorder, sectionOf, topOrder, type ListView } from './logic';
 import { forget } from './memory';
-import { suggest } from './suggest';
+import { suggest, typedItem } from './suggest';
 import {
   addItem,
   addSection,
@@ -21,14 +20,14 @@ import {
   collapsed,
   deleteItem,
   deleteList,
+  editItem,
   itemsByList,
-  lists,
+  restoreItems,
   setDone,
   settling,
   toggleCollapsed,
-  updateItem,
 } from './state';
-import { plural } from '../../lib/text';
+import { isolate, plural } from '../../lib/text';
 
 /** The list editor sheet (new list or edit), opened from the + button or a card menu. Hosted by the Lists tab body. */
 export const listEditor = signal<{ list?: List } | null>(null);
@@ -267,7 +266,7 @@ async function askClearDone(list: List, n: number) {
   await asParent(async () => {
     if (
       !(await confirm(`Clear ${plural(n, 'done item')}?`, {
-        body: `They are removed from ${list.title}.`,
+        body: `They are removed from ${isolate(list.title)}.`,
         ok: 'Clear',
         danger: true,
       }))
@@ -281,10 +280,11 @@ export async function askDeleteList(list: List, n: number): Promise<boolean> {
   let deleted = false;
   await asParent(async () => {
     const body = n ? `The list and its ${plural(n, 'item')} are deleted.` : 'The list is deleted.';
-    if (!(await confirm(`Delete ${list.title}?`, { body: `${body} This cannot be undone.`, ok: 'Delete', danger: true }))) return;
+    const title = isolate(list.title);
+    if (!(await confirm(`Delete ${title}?`, { body: `${body} This cannot be undone.`, ok: 'Delete', danger: true }))) return;
     deleteList(list);
     deleted = true;
-    toast(`Deleted ${list.title}`);
+    toast(`Deleted ${title}`);
   });
   return deleted;
 }
@@ -324,15 +324,18 @@ function AddItemField({
 }) {
   const [text, setText] = useState('');
   const ref = useAutoFocus<HTMLInputElement>(autoFocus);
+  // A grocery list keeps a leading quantity in its own field ("2 gal milk"): it suggests, and adds, by the name.
+  const typed = list.kind === 'grocery' ? typedItem(text) : { name: text.trim() };
   // A grocery list suggests what the household has put on its grocery lists before, as it is typed.
-  const suggestions = list.kind === 'grocery' && text.trim() ? suggest(text, data.groceryMemory.value, currentTime()) : [];
+  const suggestions = list.kind === 'grocery' && typed.name ? suggest(typed.name, data.groceryMemory.value, currentTime()) : [];
   const open = new Set((itemsByList.value.get(list.id) ?? []).filter((i) => !i.done).map((i) => itemKey(i.text)));
   const pick = (m: GroceryMemory) => {
     // The rest of a quick double tap would press what moves up under it once the list closes.
     swallowRestOfTap();
-    if (open.has(m.key)) return;
+    if (open.has(itemKey(m.text))) return;
     void asParent(() => {
-      const r = addItem(list, m.text, sectionId);
+      // The quantity typed before the name goes with the item picked.
+      const r = addItem(list, m.text, sectionId, typed.qty);
       onAdded(r.item.id);
       setText('');
     }, 'Enter the PIN to add items.');
@@ -341,17 +344,14 @@ function AddItemField({
     swallowRestOfTap();
     void asParent(() => {
       const undo = forget(m);
-      toast(`${m.text} is no longer suggested.`, { label: 'Undo', run: undo });
+      toast(`${isolate(m.text)} is no longer suggested.`, { label: 'Undo', run: undo });
     }, 'Enter the PIN to change the suggestions.');
   };
   const submit = () => {
-    const raw = text.trim();
-    if (!raw) return;
+    if (!typed.name) return;
     void asParent(() => {
-      // Grocery lists keep a leading quantity in its own field ("2 gal milk").
-      const p = list.kind === 'grocery' ? parseIngredient(raw) : null;
-      const r = addItem(list, p?.name ?? raw, sectionId, p?.qty);
-      if (r.kind === 'already') toast(`${r.item.text} is already on ${list.title}.`);
+      const r = addItem(list, typed.name, sectionId, typed.qty);
+      if (r.kind === 'already') toast(`${isolate(r.item.text)} is already on ${isolate(list.title)}.`);
       onAdded(r.item.id);
       setText('');
     }, 'Enter the PIN to add items.');
@@ -405,7 +405,7 @@ function AddItemField({
       {suggestions.length > 0 && (
         <ul class="li-sugs" aria-label="Suggestions">
           {suggestions.map(({ memory: m }) => {
-            const on = open.has(m.key);
+            const on = open.has(itemKey(m.text));
             return (
               <li key={m.id} class={`li-sug${on ? ' on-list' : ''}`}>
                 {/* Pressing one keeps the field's focus (and the keyboard): the next item can be typed at once. */}
@@ -507,18 +507,20 @@ function ItemEditor({
   const idx = group.findIndex((i) => i.id === item.id);
   const save = () =>
     void asParent(() => {
-      const order = section !== from ? topOrder(list, itemsByList.value.get(list.id) ?? [], section) : undefined;
-      updateItem(item.id, text.trim(), qty, section, order);
+      // Only what was changed here is written: a move or check-off made meanwhile on another device stays.
+      const changes = itemChanges(list, opened, { text, qty, sectionId: section }, () =>
+        topOrder(list, itemsByList.value.get(list.id) ?? [], section),
+      );
+      editItem(item, changes);
       onClose();
     });
   const move = (d: -1 | 1) => void asParent(() => applyOrder(moveBy(group, item.id, d, from)));
   const del = () =>
     void asParent(() => {
-      void deleteItem(item);
+      deleteItem(item);
       onClose();
-      // The undo brings the item back only onto a list that still exists (not one deleted since on another device).
-      const restore = () => lists.value.some((l) => l.id === item.listId) && void put('listItems', item);
-      toast(`Deleted ${item.text}`, { label: 'Undo', run: () => void asParent(restore) });
+      // The undo brings the item back only onto a list that still exists and where nothing took its id since.
+      toast(`Deleted ${isolate(item.text)}`, { label: 'Undo', run: () => void asParent(() => restoreItems([item])) });
     });
   return (
     <Popover anchor={anchor} width={48} onClose={onClose}>

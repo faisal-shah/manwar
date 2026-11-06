@@ -110,39 +110,38 @@ function ledgerEntry(
  * Check off an occurrence while viewing `day`. `by` is who did it (the
  * claimer for Up for Grabs). Null when it is already done or skipped (a
  * skip is undone first; the "Who did it?" dialog can outlive a skip made
- * elsewhere), is no longer on the day, or `by` is no longer a profile.
+ * elsewhere), is no longer on the day, or `by` is no longer a profile;
+ * otherwise the state written (for an undo: sameCheckOff) and whether the
+ * server took it.
  */
-export function completeTask(o: Occurrence, by: string, day: ISODate): Promise<boolean> | null {
+export function completeTask(o: Occurrence, by: string, day: ISODate): { state: TaskState; saved: Promise<boolean> } | null {
   if (by === UP_FOR_GRABS) throw new Error('completeTask: an Up for Grabs chore needs a claimer');
   if (statesById.value.has(o.id) || !canMark(o, day) || !profileById.value.has(by)) return null;
   const task = taskOf(o.task.id, o.task);
-  return exclusive([o.id], `"${task.title}" was not checked off`, () => {
+  const stars = task.stars;
+  const entry = stars > 0 ? ledgerEntry(by, stars, 'task', task.title, task.id) : undefined;
+  const at = madeAt(day, currentTime());
+  const state: TaskState = {
+    id: o.id,
+    taskId: task.id,
+    date: o.date,
+    part: o.part,
+    profileId: o.profileId,
+    by,
+    status: 'done',
+    at,
+    stars,
+    ledgerId: entry?.id,
+  };
+  const saved = exclusive([o.id], `"${task.title}" was not checked off`, () => {
     const b = batch();
-    const stars = task.stars;
-    let ledgerId: string | undefined;
-    if (stars > 0) {
-      const e = ledgerEntry(by, stars, 'task', task.title, task.id);
-      ledgerId = e.id;
-      b.put('ledger', e).stars(by, stars);
-    }
-    const at = madeAt(day, currentTime());
-    const state: TaskState = {
-      id: o.id,
-      taskId: task.id,
-      date: o.date,
-      part: o.part,
-      profileId: o.profileId,
-      by,
-      status: 'done',
-      at,
-      stars,
-      ledgerId,
-    };
+    if (entry) b.put('ledger', entry).stars(by, stars);
     b.put('taskStates', state);
     if (task.repeatAfterDone)
       b.patch('tasks', task.id, { [`lastDone.${lastDoneKey(o.profileId)}`]: toISODate(new Date(at)) } as never);
     return b.commit();
   });
+  return saved && { state, saved };
 }
 
 /**
@@ -210,13 +209,21 @@ export function unskipTask(o: Occurrence): Promise<boolean> | null {
   });
 }
 
-/** Parent gives (delta > 0) or removes (delta < 0) stars. */
-export function adjustStars(profileId: string, delta: number, note?: string): Promise<void> {
-  const label = delta > 0 ? 'Stars given' : 'Stars removed';
-  return batch()
-    .put('ledger', ledgerEntry(profileId, delta, delta > 0 ? 'give' : 'remove', label, undefined, note))
-    .stars(profileId, delta)
-    .commit();
+/**
+ * Parent gives (delta > 0) or removes (delta < 0) stars. Null while another
+ * change to the profile's balance from here is landing (a redemption);
+ * otherwise whether the server took it (refused, say, when the profile was
+ * deleted meanwhile on another device: it rolls back here and says so).
+ */
+export function adjustStars(profileId: string, delta: number, note?: string): Promise<boolean> | null {
+  const give = delta > 0;
+  const label = give ? 'Stars given' : 'Stars removed';
+  return exclusive([`stars:${profileId}`], give ? 'The stars were not given' : 'The stars were not removed', () =>
+    batch()
+      .put('ledger', ledgerEntry(profileId, delta, give ? 'give' : 'remove', label, undefined, note))
+      .stars(profileId, delta)
+      .commit(),
+  );
 }
 
 /**
