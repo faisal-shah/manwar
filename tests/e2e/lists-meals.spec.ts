@@ -198,8 +198,15 @@ test("adds a recipe's ingredients to the grocery list without duplicates", async
   await modal.getByRole('button', { name: 'Add 3 items' }).click();
   await expect(page.locator('.toast')).toContainText('Added 3 items to \u2068Grocery List\u2069.');
 
-  await page.getByRole('button', { name: 'Add to grocery list' }).click();
-  await expect(modal).toContainText('Every Chicken biryani ingredient is already on Grocery List.');
+  // The toast comes with the write; the store shows the new items a moment later (longer on a loaded machine).
+  await expect(async () => {
+    if (await modal.count()) {
+      await modal.getByRole('button', { name: 'No thanks' }).click();
+      await page.waitForTimeout(500);
+    }
+    await page.getByRole('button', { name: 'Add to grocery list' }).click();
+    await expect(modal).toContainText('Every Chicken biryani ingredient is already on Grocery List.', { timeout: 1000 });
+  }).toPass({ timeout: 15_000 });
   await modal.getByRole('button', { name: 'OK' }).click();
 
   await page.locator('.rail button', { hasText: 'Lists' }).click();

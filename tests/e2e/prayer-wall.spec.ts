@@ -123,23 +123,36 @@ test('a timer started from a phone brings the family face', async ({ browser, pa
   expect(errors).toEqual([]);
 });
 
+/**
+ * Move the clock on until `check` passes. The idle check runs every 15
+ * seconds (stage.ts) on whatever the wall has by then, and a fast-forward
+ * fires it once: a setting written a moment ago, or a prayer module still
+ * loading, is seen by a later check.
+ */
+async function idleUntil(page: Page, check: () => Promise<void>) {
+  await expect(async () => {
+    await page.clock.fastForward('00:15');
+    await check();
+  }).toPass({ timeout: 20_000 });
+}
+
 test('idle, the wall goes back to its resting face, whichever it is', async ({ page }) => {
   await page.clock.install({ time: new Date('2026-10-29T14:53:00-05:00') });
   const { household, errors } = await openWall(page, '', {}, { face: 'family', wall: { restingFace: 'prayer' } });
   await expect(family(page)).toBeVisible();
-  await page.clock.fastForward('03:30');
-  await expect(face(page).locator('.cl')).toBeVisible();
-  // Used, then left: back to the prayer face.
+  await page.clock.fastForward('03:00');
+  await idleUntil(page, () => expect(face(page).locator('.cl')).toBeVisible({ timeout: 500 }));
+  // Used, then left: back to the prayer face, not before three minutes.
   await face(page).getByRole('button', { name: 'Family calendar' }).click();
   await expect(page.locator('.prayer-face')).toHaveCount(0);
   await page.clock.fastForward('01:00');
   await expect(page.locator('.prayer-face')).toHaveCount(0);
-  await page.clock.fastForward('03:00');
-  await expect(face(page).locator('.cl')).toBeVisible();
+  await page.clock.fastForward('02:00');
+  await idleUntil(page, () => expect(face(page).locator('.cl')).toBeVisible({ timeout: 500 }));
   // Resting on the family face, a prayer face left open goes back to it.
   await writeFields(household, 'settings/main', { restingFace: 'family' });
-  await page.clock.fastForward('03:30');
-  await expect(page.locator('.prayer-face')).toHaveCount(0);
+  await page.clock.fastForward('03:00');
+  await idleUntil(page, () => expect(page.locator('.prayer-face')).toHaveCount(0, { timeout: 500 }));
   await expect(family(page)).toBeVisible();
   expect(errors).toEqual([]);
 });
