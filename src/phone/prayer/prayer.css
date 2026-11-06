@@ -1,0 +1,126 @@
+/* More > Prayer times (phone) */
+.ppt-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.2rem;
+}
+.ppt-head .ph-card-title {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.ppt-times {
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0;
+}
+.ppt-times li {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: baseline;
+  gap: 1.2rem;
+  padding: 0.8rem 1rem;
+  border-radius: 1rem;
+  font-variant-numeric: tabular-nums;
+}
+.ppt-times li + li {
+  border-top: 1px solid var(--line);
+}
+.ppt-times li.next {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-top-color: transparent;
+}
+.ppt-times li.next + li {
+  border-top-color: transparent;
+}
+.ppt-name {
+  font-weight: 600;
+}
+.ppt-times .muted {
+  font-size: 1.4rem;
+}
+.ppt-sub {
+  margin: 1.6rem 0 0.4rem;
+  color: var(--text-2);
+  font-size: 1.4rem;
+  font-weight: 600;
+}
+.ppt-inline {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  min-width: 0;
+}
+.ppt-select {
+  flex: 1;
+  min-width: 0;
+  min-height: 4.8rem;
+}
+.ppt-time {
+  min-height: 4.8rem;
+  width: 12rem;
+}
+.ppt-sound + .ppt-sound {
+  border-top: 1px solid var(--line);
+  margin-top: 0.4rem;
+}
+.ppt-sound .ppt-inline {
+  margin: 0.4rem 0;
+}
+.ppt-volume {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  min-height: 4.8rem;
+  font-size: 1.4rem;
+}
+.ppt-volume input {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--accent);
+  height: 4.8rem;
+}
+.ppt-volume-n {
+  width: 4.4rem;
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+.ppt-note {
+  margin: 0 0.4rem;
+  font-size: 1.4rem;
+}
+.ppt-place .ph-card-title {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+.ppt-place > .btn {
+  width: 100%;
+}
+.ppt-search {
+  display: flex;
+  gap: 0.8rem;
+  margin-top: 1.2rem;
+}
+.ppt-search .input {
+  flex: 1;
+  min-width: 0;
+}
+.ppt-results {
+  list-style: none;
+  margin: 1rem 0;
+  padding: 0;
+}
+.ppt-results button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+  min-height: 5.6rem;
+  padding: 0.8rem 0;
+  text-align: start;
+}
+.ppt-results li + li {
+  border-top: 1px solid var(--line);
+}

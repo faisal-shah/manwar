@@ -10,6 +10,7 @@ import type { MoreItem } from './items';
 import { ThisPhone } from './ThisPhone';
 import { starsItem } from '../stars';
 import { peopleItem } from '../people';
+import { prayerItem } from '../prayer';
 import { moreView } from './view';
 
 export { moreView };
@@ -17,11 +18,12 @@ export { moreView };
 /** The More tab's rows, in order. */
 export const MORE_ITEMS: MoreItem[] = [
   starsItem,
+  peopleItem,
   timerItem,
   notesItem,
   mealsItem,
   wallScreenItem,
-  peopleItem,
+  prayerItem,
   { id: 'phone', label: 'This phone', icon: Smartphone, View: ThisPhone },
 ];
 

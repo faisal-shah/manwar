@@ -33,6 +33,7 @@ export const DEFAULT_SETTINGS: Settings = {
   night: { enabled: false, from: '20:30', to: '06:30' },
   sleep: { enabled: false, from: '22:30', to: '06:00' },
   idleHomeMinutes: 0,
+  restingFace: 'family',
   lock: { relockMinutes: 2 },
   tasksShowAllParts: true,
   sounds: true,

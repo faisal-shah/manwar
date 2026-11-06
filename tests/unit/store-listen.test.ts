@@ -62,7 +62,10 @@ const { addDays } = await import('../../src/lib/date');
 const live = () => subs.filter((s) => !s.closed);
 const empty = { docs: [], metadata: { fromCache: false } };
 const settingsDoc = { exists: () => true, data: () => ({ idleHomeMinutes: 5 }), metadata: { fromCache: false } };
-const deliver = (sub: Sub) => sub.next(sub.path.endsWith('settings/main') ? settingsDoc : empty);
+const noDoc = { exists: () => false, data: () => undefined, metadata: { fromCache: false } };
+// The settings document, the prayer clock's settings document (none yet), or a collection.
+const deliver = (sub: Sub) =>
+  sub.next(sub.path.endsWith('settings/main') ? settingsDoc : sub.path.endsWith('settings/prayer') ? noDoc : empty);
 
 describe('store listeners', () => {
   beforeEach(() => {

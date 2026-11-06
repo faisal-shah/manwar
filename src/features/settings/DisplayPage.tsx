@@ -75,6 +75,20 @@ export function DisplayPage() {
           onChange={(w) => void change(windowChange('night', w))}
         />
       </Group>
+      <Group
+        title="Resting screen"
+        hint="What the wall goes back to after three minutes without a touch, and shows at night. Each prayer's athan comes to the front either way."
+      >
+        <ChoiceRow
+          label="Show"
+          value={s.restingFace}
+          options={[
+            { value: 'family', label: 'Family' },
+            { value: 'prayer', label: 'Prayer times' },
+          ]}
+          onChange={(v) => void change({ restingFace: v as 'family' | 'prayer' })}
+        />
+      </Group>
       <Group title="Idle">
         <ChoiceRow
           label="Return to Home after"

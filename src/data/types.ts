@@ -340,6 +340,8 @@ export interface Settings {
   sleep: TimeWindow;
   /** Return to Home after this many idle minutes (0 = never). */
   idleHomeMinutes: number;
+  /** The wall's face after a few minutes without a touch, and at night (app/face.ts). */
+  restingFace: 'family' | 'prayer';
   // Parental lock
   lock: {
     /** SHA-256 of salt + PIN; absent = lock off. */

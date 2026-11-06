@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { placeTime } from '../../src/phone/prayer/logic';
 import { chooseLayout, type LayoutSignals } from '../../src/app/layout';
 import { formatPairCode } from '../../src/phone/pairCode';
 
@@ -43,5 +44,18 @@ describe('pairing code input', () => {
     expect(formatPairCode('ab cd-ef gh')).toBe('ABCD-EFGH');
     expect(formatPairCode('ABCD-EFGHJK')).toBe('ABCD-EFGH');
     expect(formatPairCode('')).toBe('');
+  });
+});
+
+describe('prayer times on a phone', () => {
+  const at = new Date('2026-10-29T21:06:00Z'); // 4:06 PM in Chicago
+  const place = { name: 'Chicago', latitude: 41.88, longitude: -87.63, timezone: 'America/Chicago' };
+  it("shows the place's clock, in the household's time format", () => {
+    expect(placeTime(at, place, '12h')).toBe('4:06 PM');
+    expect(placeTime(at, place, '24h')).toBe('16:06');
+    expect(placeTime(at, { ...place, timezone: 'Asia/Karachi' }, '12h')).toBe('2:06 AM');
+  });
+  it("shows the phone's own clock for a time zone it does not know", () => {
+    expect(placeTime(at, { ...place, timezone: 'Mars/Olympus' }, '24h')).toBe('16:06');
   });
 });

@@ -90,6 +90,13 @@ export const data = Object.fromEntries(NAMES.map((n) => [n, signal<unknown[]>([]
 
 export const settings = signal<Settings>(DEFAULT_SETTINGS);
 
+/**
+ * The prayer clock's settings document (`settings/prayer`) as stored, {}
+ * while there is none. `prayer/settingsStore.ts` parses it: it is outside
+ * input to the clock (another version of the app, a hand edit).
+ */
+export const prayerSettingsDoc = signal<Record<string, unknown>>({});
+
 /** Household id of the signed-in tablet, null until signed in. */
 export const householdId = signal<string | null>(null);
 
@@ -155,6 +162,7 @@ function hid(): string {
 export const colRef = (name: CollectionName) => collection(db, 'households', hid(), name);
 export const docRef = (name: CollectionName, id: string) => doc(db, 'households', hid(), name, id);
 export const settingsRef = () => doc(db, 'households', hid(), 'settings', 'main');
+export const prayerSettingsRef = () => doc(db, 'households', hid(), 'settings', 'prayer');
 
 /**
  * Opens one subscription. Its snapshot handler starts with `current()`,
@@ -218,7 +226,7 @@ let stopDayWatch: (() => void) | null = null;
 export function openHousehold(id: string): void {
   closeHousehold();
   householdId.value = id;
-  const pending = new Set<string>([...NAMES, 'settings']);
+  const pending = new Set<string>([...NAMES, 'settings', 'prayer']);
   const arrived = (name: string) => {
     setFailed(name, null);
     pending.delete(name);
@@ -266,6 +274,19 @@ export function openHousehold(id: string): void {
       onError,
     ),
   );
+  listen('prayer', (current, onError) =>
+    onSnapshot(
+      prayerSettingsRef(),
+      { includeMetadataChanges: isPhone },
+      (snap) => {
+        if (!current()) return;
+        const next = snap.exists() ? snap.data() : {};
+        if (JSON.stringify(next) !== JSON.stringify(prayerSettingsDoc.peek())) prayerSettingsDoc.value = next;
+        if (!(isPhone && snap.metadata.fromCache)) arrived('prayer');
+      },
+      onError,
+    ),
+  );
   // The task states' window moves with today, so a wall that runs for weeks does not hold a growing history.
   let day = today.peek();
   stopDayWatch = effect(() => {
@@ -288,6 +309,7 @@ export function closeHousehold(): void {
   signalBatch(() => {
     for (const name of NAMES) data[name].value = [];
     settings.value = DEFAULT_SETTINGS;
+    prayerSettingsDoc.value = {};
     settingsLoaded.value = false;
     ready.value = false;
     householdId.value = null;
@@ -382,6 +404,15 @@ export function saveEdited<K extends CollectionName>(
 
 export function remove(name: CollectionName, id: string): Promise<void> {
   return sent(deleteDoc(docRef(name, id)));
+}
+
+/**
+ * Merge `changes` (a nested partial: only the fields that changed) into the
+ * prayer clock's settings document, so another device's change to the
+ * other fields is kept.
+ */
+export function savePrayerSettings(changes: Record<string, unknown>): Promise<void> {
+  return sent(setDoc(prayerSettingsRef(), changes, { merge: true }));
 }
 
 /**

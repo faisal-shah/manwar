@@ -1,0 +1,48 @@
+/**
+ * Virtual clock. Normally wall time; `?now=2026-10-29T12:50:30` (local) and
+ * `?speed=60` start it elsewhere for testing, and settings previews travel
+ * to just before an athan.
+ */
+let anchorReal = Date.now();
+let anchorVirtual = anchorReal;
+let speed = 1;
+
+const params = new URLSearchParams(globalThis.location?.search ?? '');
+const startAt = params.get('now');
+if (startAt) {
+  const t = new Date(startAt).getTime();
+  if (Number.isFinite(t)) anchorVirtual = t;
+}
+const sp = Number(params.get('speed'));
+if (Number.isFinite(sp) && sp > 0) speed = sp;
+
+let previewing = false;
+let run = 0;
+
+/** True while a settings preview has moved the clock (URL overrides are a dev tool, not a preview). */
+export const isPreviewing = () => previewing;
+
+/** Which preview the clock is in, or 0 on wall time: what sounded in one preview has not sounded in another, or for real. */
+export const previewRun = () => (previewing ? run : 0);
+
+export function now(): Date {
+  return new Date(anchorVirtual + (Date.now() - anchorReal) * speed);
+}
+
+export const getSpeed = () => speed;
+
+/** Change the rate of virtual time from this moment on (previews fast-forward). */
+export function setSpeed(n: number): void {
+  anchorVirtual = now().getTime();
+  anchorReal = Date.now();
+  speed = n;
+}
+
+/** Jump to `t` (null returns to wall time). */
+export function travelTo(t: Date | null): void {
+  anchorReal = Date.now();
+  anchorVirtual = t ? t.getTime() : anchorReal;
+  previewing = t !== null;
+  if (t) run++;
+  else speed = 1;
+}

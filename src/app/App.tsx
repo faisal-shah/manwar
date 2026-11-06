@@ -1,6 +1,6 @@
 import { signal } from '@preact/signals';
 import type { FunctionComponent } from 'preact';
-import { CloudOff, Moon, Plus, Settings as SettingsIcon, TriangleAlert } from 'lucide-preact';
+import { CloudOff, Moon, Plus, Settings as SettingsIcon, TriangleAlert, VolumeX } from 'lucide-preact';
 import { sync } from '../calendar/engine';
 import { demoMode } from '../config';
 import { sleeping, wake } from '../core/display';
@@ -18,7 +18,10 @@ import { calendarStatus, currentWeather, householdStatus } from './status';
 import { TABS, Overlays, RailBadges } from './tabs';
 import { SettingsSheet, SleepMenu } from '../features/settings';
 import { isPhone, switchLayout } from './layout';
+import { athanBlocked, face, prayerLayer } from './face';
+import { MosqueIcon } from '../ui/MosqueIcon';
 import { PhoneApp } from '../phone/PhoneApp';
+import { createPortal } from 'preact/compat';
 
 export function App() {
   if (isPhone) return <PhoneApp />;
@@ -89,6 +92,12 @@ function Shell() {
           </button>
         ))}
         <div class="rail-spacer" />
+        {prayerLayer.value && (
+          <button type="button" onClick={() => (face.value = 'prayer')}>
+            <MosqueIcon size="2.6rem" strokeWidth={1.8} />
+            Prayer
+          </button>
+        )}
         <button type="button" onClick={() => (sleepMenuOpen.value = true)}>
           <Moon size="2.6rem" strokeWidth={1.8} />
           Sleep
@@ -115,8 +124,15 @@ function Shell() {
       <ToastHost />
       <DialogHost />
       {(sleeping.value || wakeShield.value) && <SleepScreen asleep={sleeping.value} />}
+      <PrayerFace />
     </div>
   );
+}
+
+/** The prayer face over the shell (app/face.ts), once its module has loaded: on the page itself, beside the app, which it makes inert while it shows. */
+function PrayerFace() {
+  const Layer = prayerLayer.value;
+  return Layer ? createPortal(<Layer />, document.body) : null;
 }
 
 /** True for a moment after a tap woke the wall: the sleep screen stays (fading) to take the rest of a double tap. */
@@ -161,6 +177,12 @@ function TopBar({ title, Controls }: { title: string | null; Controls?: Function
       )}
       <HouseholdStatus />
       <SyncStatus now={real} />
+      {athanBlocked.value && (
+        <span class="sync-status bad" role="status">
+          <VolumeX size="2rem" strokeWidth={2.2} />
+          <span>Tap anywhere to allow the athan sound</span>
+        </span>
+      )}
       <div class="controls">{Controls && <Controls />}</div>
     </header>
   );

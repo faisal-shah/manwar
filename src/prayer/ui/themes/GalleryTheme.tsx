@@ -1,0 +1,112 @@
+import type { CalligraphyArt, Photo } from '../../core/media';
+import { dayNumber, startOfDay } from '../../core/prayer';
+import { PERIOD_NAMES, type ClockState, type PeriodKey } from '../../core/schedule';
+import { GALLERY_CATEGORIES } from '../../core/settings';
+import { calligraphyArt, photos, settings } from '../../store';
+import { Clock, CountdownPill, Crossfade, GreetingMark, MakruhBadge, Phrase, PhotoView, T, dateLine } from '../parts';
+
+/** A photograph (bundled or uploaded), or a calligraphy piece from the artwork set. */
+export type Piece = { kind: 'photo'; id: string; photo: Photo } | { kind: 'art'; id: string; art: CalligraphyArt };
+
+/** Today's order: a seeded shuffle, so each day walks the collection differently. */
+function todaysOrder<T>(items: T[], day: number): T[] {
+  // mulberry32
+  let seed = day >>> 0;
+  const rand = () => {
+    seed = (seed + 0x6d2b79f5) >>> 0;
+    let t = seed;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const out = [...items];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
+export function currentPiece(now: Date): Piece | null {
+  const g = settings.value.gallery;
+  const pool: Piece[] = [
+    ...photos.value.filter((p) => g.categories[p.category]).map((photo) => ({ kind: 'photo' as const, id: photo.id, photo })),
+    ...(g.categories.calligraphy
+      ? calligraphyArt.value.filter((a) => a.kind === 'gallery').map((art) => ({ kind: 'art' as const, id: art.id, art }))
+      : []),
+  ];
+  if (!pool.length) return null;
+  const day = dayNumber(now);
+  const order = todaysOrder(pool, day);
+  const slot = Math.floor((now.getTime() - startOfDay(now).getTime()) / (g.minutes * 60_000));
+  return order[slot % order.length];
+}
+
+function ArtPiece({ art }: { art: CalligraphyArt }) {
+  return (
+    <div class="gl-photo gl-art">
+      <div class="gl-art-pattern" />
+      <div class="gl-art-piece">
+        <Phrase id={art.id} text={art.arabic ?? ''} scale={1} />
+      </div>
+    </div>
+  );
+}
+
+function caption(p: Piece): { cat: string; title: string; sub: string } {
+  if (p.kind === 'photo') return { cat: GALLERY_CATEGORIES[p.photo.category], title: p.photo.title, sub: p.photo.subtitle };
+  const a = p.art;
+  if (a.kind !== 'gallery') {
+    const name = a.id in PERIOD_NAMES ? PERIOD_NAMES[a.id as PeriodKey] : a.id.replace(/-/g, ' ');
+    return { cat: GALLERY_CATEGORIES.calligraphy, title: name[0].toUpperCase() + name.slice(1), sub: a.arabic ?? '' };
+  }
+  const clean = a.english?.replace(/[[\]]/g, '');
+  const english = clean && clean.length <= 150 ? clean : '';
+  return {
+    cat: GALLERY_CATEGORIES.calligraphy,
+    title: a.transliteration ?? a.ref ?? '',
+    sub: [english && (/["“]/.test(english) ? english : `“${english}”`), a.ref].filter(Boolean).join(' · '),
+  };
+}
+
+/** `piece` pins what is shown (the showcase); otherwise the rotation decides. */
+export function GalleryTheme({ st, piece: pinned }: { st: ClockState; piece?: Piece }) {
+  const piece = pinned ?? currentPiece(st.now);
+  const photo = piece?.kind === 'photo' ? piece.photo : null;
+  const cap = piece && caption(piece);
+  return (
+    <div class={`gl ${photo?.fit ?? ''} ${piece?.kind === 'art' ? 'art' : ''}`}>
+      <Crossfade k={piece?.id ?? 'none'} ms={2500}>
+        {piece && (piece.kind === 'photo' ? <PhotoView photo={piece.photo} layout="gallery" /> : <ArtPiece art={piece.art} />)}
+      </Crossfade>
+      <div class="gl-scrim" />
+
+      <GreetingMark st={st} class="corner" />
+      <div class="gl-top">
+        <div class="gl-clock">
+          <Clock d={st.now} />
+        </div>
+        <div class="gl-date">{dateLine(st.now, st.hijri)}</div>
+        <CountdownPill st={st} />
+        <MakruhBadge st={st} />
+      </div>
+
+      {piece && cap && (
+        <div class="gl-caption" key={piece.id}>
+          <div class="gl-cat">{cap.cat}</div>
+          <div class="gl-title">{cap.title}</div>
+          <div class="gl-sub">{cap.sub}</div>
+        </div>
+      )}
+
+      <div class="gl-strip">
+        {st.slots.map((slot) => (
+          <div class={`gl-p ${slot.id === st.current.id ? 'current' : ''}`}>
+            <span class="gl-p-name">{PERIOD_NAMES[slot.name]}</span>
+            <T d={slot.athan} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}

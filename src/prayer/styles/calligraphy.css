@@ -1,0 +1,395 @@
+/* --- Calligraphy theme ------------------------------------------------------ */
+
+.prayer-face .ct {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  color: #fff;
+}
+
+.prayer-face .ct.tone-dark {
+  color: var(--navy);
+}
+
+/* Fallback skies while photos load (or if none are bundled for a slot). */
+.prayer-face .ct.p-fajr {
+  background: linear-gradient(180deg, #1d2d5c 0%, #5b5d8f 55%, #e59c6c 100%);
+}
+.prayer-face .ct.p-sunrise {
+  background: linear-gradient(180deg, #8fb3d9 0%, #f3d3a6 70%, #f7b77a 100%);
+}
+.prayer-face .ct.p-dhuhr {
+  background: linear-gradient(180deg, #bcd8f0 0%, #f2ece0 70%);
+}
+.prayer-face .ct.p-asr {
+  background: linear-gradient(180deg, #d9b98a 0%, #f0cf97 60%, #c98b4e 100%);
+}
+.prayer-face .ct.p-maghrib {
+  background: linear-gradient(180deg, #3b2a5e 0%, #c25b54 60%, #f4a259 100%);
+}
+.prayer-face .ct.p-isha {
+  background: linear-gradient(180deg, #050b1d 0%, #13234a 70%, #2b3f6e 100%);
+}
+.prayer-face .ct.p-night {
+  background: linear-gradient(180deg, #02040a 0%, #0a1430 100%);
+}
+
+.prayer-face .ct-photo {
+  position: absolute;
+  inset: 0;
+}
+
+.prayer-face .ct-photo .ph-cover {
+  transform-origin: 30% 65%;
+  animation: pf-kenburns 70s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
+@keyframes pf-kenburns {
+  from {
+    transform: scale(1.02);
+  }
+  to {
+    transform: scale(1.1) translate(-1%, -0.5%);
+  }
+}
+
+/* Legibility: a soft veil behind the right-hand column and the dial. */
+.prayer-face .ct-scrim {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(60rem 42rem at 0% 100%, rgba(3, 8, 20, 0.55), transparent 70%),
+    linear-gradient(270deg, rgba(4, 10, 24, 0.58) 0%, rgba(4, 10, 24, 0.3) 30%, rgba(4, 10, 24, 0) 56%);
+}
+
+.prayer-face .tone-dark .ct-scrim {
+  background:
+    radial-gradient(60rem 42rem at 0% 100%, rgba(3, 8, 20, 0.35), transparent 70%),
+    linear-gradient(270deg, rgba(255, 251, 244, 0.62) 0%, rgba(255, 251, 244, 0.34) 32%, rgba(255, 251, 244, 0) 58%);
+}
+
+/* Warm sunlight bloom and slow rays from the top-right corner. */
+.prayer-face .ct-flare {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  background: radial-gradient(70rem 50rem at 100% 0%, rgba(255, 238, 200, 0.5), rgba(255, 238, 200, 0.12) 45%, transparent 70%);
+}
+
+.prayer-face .ct-flare::after {
+  content: '';
+  position: absolute;
+  right: -60rem;
+  top: -60rem;
+  width: 120rem;
+  height: 120rem;
+  background: url('/prayer/art/rays.webp') center / contain no-repeat;
+  opacity: 0.55;
+  animation: pf-rays 240s linear infinite;
+}
+
+@keyframes pf-rays {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* --- Right column ----------------------------------------------------------- */
+
+.prayer-face .ct-right {
+  position: absolute;
+  right: 4rem;
+  top: 2.6rem;
+  width: 66rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.prayer-face .ct-clock {
+  font-size: 15.5rem;
+  line-height: 0.9;
+  text-shadow: 0 0.3rem 2rem rgba(0, 0, 0, 0.35);
+}
+
+.prayer-face .tone-dark .ct-clock {
+  text-shadow: 0 0.2rem 1.6rem rgba(255, 255, 255, 0.6);
+}
+
+.prayer-face .ct-date {
+  margin-top: 1.4rem;
+  font: 500 2.3rem var(--sans);
+  letter-spacing: 0.05em;
+  text-shadow: 0 0.1rem 0.8rem rgba(0, 0, 0, 0.35);
+}
+
+.prayer-face .tone-dark .ct-date {
+  text-shadow: none;
+}
+
+.prayer-face .cd-pill {
+  margin-top: 1.3rem;
+  display: flex;
+  align-items: stretch;
+  height: 5.8rem;
+  border-radius: 99rem;
+  overflow: hidden;
+  box-shadow:
+    0 0.8rem 2.4rem rgba(5, 12, 30, 0.28),
+    0 0 0 0.15rem rgba(255, 255, 255, 0.5);
+}
+
+.prayer-face .cd-label {
+  display: flex;
+  align-items: center;
+  padding: 0 3rem 0 3.4rem;
+  background: linear-gradient(180deg, #1a2c55, #0d1a35);
+  color: #fff;
+  font: 500 2.5rem var(--sans);
+  letter-spacing: 0.05em;
+}
+
+.prayer-face .cd-value {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.8rem;
+  min-width: 17rem;
+  padding: 0 2.8rem 0 2.4rem;
+  background: linear-gradient(180deg, #ffffff, #f2f0ea);
+  color: var(--navy);
+  font: 400 3.8rem/5.8rem var(--serif-display);
+}
+
+.prayer-face .cd-unit {
+  font: 600 1.25rem var(--sans);
+  letter-spacing: 0.12em;
+  color: #6b7590;
+}
+
+.prayer-face .makruh {
+  margin-top: 1.2rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.8rem 2.2rem;
+  border-radius: 99rem;
+  background: rgba(110, 28, 18, 0.62);
+  backdrop-filter: blur(6px);
+  color: #ffeee6;
+  font: 500 1.95rem var(--sans);
+  letter-spacing: 0.01em;
+}
+
+.prayer-face .makruh-dot {
+  width: 0.9rem;
+  height: 0.9rem;
+  border-radius: 50%;
+  background: #ff9a7a;
+  box-shadow: 0 0 0.8rem #ff9a7a;
+}
+
+.prayer-face .ct-word {
+  margin-top: 0.5rem;
+  font-size: 23rem;
+  height: 34rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.prayer-face .ct-headline {
+  margin-top: -2.5rem;
+  display: flex;
+  align-items: baseline;
+  gap: 1.4rem;
+  font-family: var(--serif-caps);
+  text-shadow: 0 0.2rem 1.4rem rgba(0, 0, 0, 0.4);
+}
+
+.prayer-face .tone-dark .ct-headline {
+  text-shadow: 0 0.1rem 1rem rgba(255, 255, 255, 0.5);
+}
+
+.prayer-face .ct-headline .pf-small {
+  font-size: 3.8rem;
+  letter-spacing: 0.04em;
+}
+
+.prayer-face .ct-headline .big {
+  font-size: 6.4rem;
+  letter-spacing: 0.03em;
+}
+
+.prayer-face .ct-taglines {
+  margin-top: 1.6rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.1rem;
+}
+
+.prayer-face .ct-tag {
+  padding: 0.9rem 3rem 0.8rem;
+  border-radius: 99rem;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(250, 246, 238, 0.78));
+  box-shadow: 0 0.6rem 2rem rgba(10, 20, 40, 0.18);
+  backdrop-filter: blur(6px);
+  color: var(--navy);
+  font: 400 2.4rem var(--serif-caps);
+  letter-spacing: 0.07em;
+}
+
+/* The place in the photo, like a calendar page. */
+.prayer-face .ct-caption {
+  position: absolute;
+  right: 4rem;
+  bottom: 2.4rem;
+  font: italic 500 2rem var(--serif-text);
+  letter-spacing: 0.02em;
+  opacity: 0.78;
+  text-shadow: 0 0.1rem 0.8rem rgba(0, 0, 0, 0.45);
+  animation: pf-xf-in 2.5s ease 1s both;
+}
+
+.prayer-face .tone-dark .ct-caption {
+  text-shadow: 0 0.1rem 0.6rem rgba(255, 255, 255, 0.6);
+}
+
+/* --- Bottom-left prayer dial -------------------------------------------------- */
+
+.prayer-face .dial {
+  position: absolute;
+  left: 4rem;
+  bottom: -16rem;
+  width: 49rem;
+  height: 49rem;
+  border-radius: 50%;
+  padding: 1rem;
+  background: linear-gradient(160deg, #f8edd2, #d6b984 45%, #f3e3bd 70%, #b8925a);
+  box-shadow:
+    0 2rem 5rem rgba(0, 0, 0, 0.45),
+    inset 0 0 0 0.2rem rgba(255, 255, 255, 0.4);
+}
+
+.prayer-face .dial-face {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 30%, #1f3463 0%, #12224a 45%, #0b1633 100%);
+  box-shadow:
+    inset 0 0 0 0.25rem rgba(227, 181, 94, 0.35),
+    inset 0 1.5rem 3rem rgba(0, 0, 0, 0.4);
+  color: #fff;
+  text-align: center;
+  padding-top: 3.2rem;
+  box-sizing: border-box;
+}
+
+.prayer-face .dial-name {
+  font: 500 3rem/1.1 var(--sans);
+  letter-spacing: 0.04em;
+}
+
+.prayer-face .dial-label {
+  font: 500 1.65rem/1.3 var(--sans);
+  letter-spacing: 0.06em;
+  color: var(--gold);
+}
+
+.prayer-face .dial-label.light {
+  color: #fff;
+}
+
+.prayer-face .dial-pill {
+  display: inline-block;
+  margin-top: 0.6rem;
+  padding: 0.4rem 2.4rem 0.2rem;
+  border-radius: 1.4rem;
+  background: linear-gradient(180deg, var(--bronze-1), var(--bronze-2));
+  box-shadow:
+    inset 0 0.15rem 0 rgba(255, 255, 255, 0.25),
+    0 0.4rem 1rem rgba(0, 0, 0, 0.3);
+  font: 500 4rem var(--sans);
+}
+
+.prayer-face .dial-rule {
+  height: 0.2rem;
+  margin: 1.5rem 5rem 1.3rem;
+  background: linear-gradient(90deg, transparent, rgba(227, 181, 94, 0.8), transparent);
+}
+
+.prayer-face .dial-cols {
+  display: flex;
+  justify-content: center;
+  gap: 5rem;
+  margin-top: 0.4rem;
+  font: 500 4.5rem/1.1 var(--sans);
+}
+
+/* Round sunrise/sunset medallion beside the dial. */
+.prayer-face .sun-medal {
+  position: absolute;
+  left: 50rem;
+  bottom: 12rem;
+  width: 17rem;
+  height: 17rem;
+  border-radius: 50%;
+  box-sizing: border-box;
+  padding-top: 2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: radial-gradient(circle at 50% 30%, #1f3463, #0b1633);
+  box-shadow:
+    0 1.2rem 3rem rgba(0, 0, 0, 0.4),
+    inset 0 0 0 0.2rem rgba(227, 181, 94, 0.45);
+  color: #fff;
+  font: 400 3rem/1.15 var(--serif-display);
+}
+
+.prayer-face .sun-medal .dial-label {
+  font-size: 1.4rem;
+}
+
+.prayer-face .sun-rule {
+  width: 9rem;
+  height: 0.15rem;
+  margin: 0.5rem 0 0.4rem;
+  background: rgba(227, 181, 94, 0.6);
+}
+
+.prayer-face .gold-t {
+  color: var(--gold);
+}
+
+.prayer-face .wx-medal {
+  position: absolute;
+  left: 55rem;
+  bottom: 1.6rem;
+  width: 11rem;
+  height: 11rem;
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 1rem 2.4rem rgba(0, 0, 0, 0.3);
+  color: var(--navy);
+}
+
+.prayer-face .wx-medal svg {
+  width: 4.4rem;
+  height: 4.4rem;
+  color: #c98a2b;
+}
+
+.prayer-face .wx-temp {
+  font: 600 2.1rem var(--sans);
+}

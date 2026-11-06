@@ -18,6 +18,8 @@ export default defineConfig({
     ...devices['Desktop Chrome'],
     viewport: { width: 1600, height: 1000 },
     timezoneId: 'America/Chicago',
+    // As an installed app (or Fully Kiosk with "Autoplay audio"): the athan plays without a tap.
+    launchOptions: { args: ['--autoplay-policy=no-user-gesture-required'] },
   },
   webServer: external
     ? undefined

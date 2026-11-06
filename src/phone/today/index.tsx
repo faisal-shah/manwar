@@ -1,7 +1,7 @@
 import { CalendarDays, ChevronRight, House, ListChecks, MessageSquareText, Plus, Timer, UtensilsCrossed } from 'lucide-preact';
 import { countdownsFor, eventsOn } from '../../calendar/engine';
 import type { CalEvent } from '../../calendar/types';
-import { data, profiles } from '../../data/store';
+import { data, profiles, settings } from '../../data/store';
 import { UP_FOR_GRABS } from '../../data/types';
 import { nowMs, today } from '../../lib/clock';
 import { addDays, formatLongDate } from '../../lib/date';
@@ -29,6 +29,10 @@ import { openPlan } from '../meals';
 import { moreView } from '../more';
 import { goPhone, type PhonePage } from '../nav';
 import { addFirstPerson } from '../people';
+import { openPrayerTimes, prayerNow } from '../prayer';
+import { nextLine } from '../prayer/logic';
+import { settings as prayerSettings } from '../../prayer/settingsStore';
+import { MosqueIcon } from '../../ui/MosqueIcon';
 import { showTasksOf } from '../tasks/state';
 import { capped, isNow, nextUp, type DayAgenda } from './logic';
 import '../../features/calendar/calendar.css';
@@ -40,11 +44,26 @@ function TodayBody() {
     <div class="ph-stack pd">
       <p class="pd-date">{formatLongDate(today.value)}</p>
       <OnTheWall />
+      <PrayerLine />
       <NextUpCard />
       <ProgressCard />
       <DinnerCard />
       <CountdownsCard />
     </div>
+  );
+}
+
+/** The next prayer by the household's prayer clock, once it has a place; a tap opens More > Prayer times. */
+function PrayerLine() {
+  const place = prayerSettings.value.place;
+  const day = prayerNow.value;
+  if (!place || !day) return null;
+  return (
+    <button type="button" class="ph-card pd-prayer" onClick={openPrayerTimes}>
+      <MosqueIcon size="2.2rem" strokeWidth={1.8} />
+      <span class="pd-line-text">Next: {nextLine(day.next, place, settings.value.timeFormat)}</span>
+      <ChevronRight size="2rem" />
+    </button>
   );
 }
 

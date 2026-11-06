@@ -1,12 +1,14 @@
 # Manwar: maintainer notes
 
-Family wall-calendar web app for an Android tablet (landscape, Fully Kiosk
-Browser), modeled on the Skylight Calendar 2 with Plus, with a phone
+Family wall-calendar web app for an Android tablet (landscape; Chrome's
+installed app or Fully Kiosk Browser), modeled on the Skylight Calendar 2
+with Plus, with a prayer-time clock as the wall's second face and a phone
 companion for parents on the same URL. Research and product decisions:
 `research/README.md` (start there; the numbered reports hold the detail and
 the images). Scope: Home, Calendar, Lists, Tasks, Rewards, Meals, Recipes,
-Sleep, Settings; the phone has Today, Tasks, Lists, Calendar and More. Not
-built: Photos, Disney, Magic Import, Sidekick, push notifications.
+Sleep, Settings, the prayer face; the phone has Today, Tasks, Lists,
+Calendar and More. Not built: Photos, Disney, Magic Import, Sidekick, push
+notifications.
 
 ## Deployment configuration
 
@@ -244,11 +246,19 @@ flowchart LR
   window) is pure in `core/sleep.ts`, shared with the phone's guess. A new
   timer run ends Sleep now (`holdSleepForTimer`, `endForcedSleep`), so a
   timer started from a phone shows on the wall; the run already there when
-  the wall opens does not, as it may be older than the Sleep now.
+  the wall opens does not, as it may be older than the Sleep now. The
+  prayer clock's athan sequence (`prayerSequence`, app/face.ts) outranks
+  all of it, Sleep now included: `sleeping` is false while it runs, so the
+  backlight is up for it, and the wall sleeps again when it ends untouched
+  (a tap during it keeps the wall awake 3 minutes, as any touch does).
+- **Sounds** (`core/sound.ts`): synthesized pops and chimes, and notes read
+  aloud (`speak`), go through `whenFree`: while an athan sounds
+  (`soundsHeld`, set by prayer/stage.ts) each kind waits, and the last of
+  each plays once it ends.
 - **Activity** (`core/activity.ts`): the one source of "someone is using the
   wall" (pointer, key and input events; the on-screen keyboard sends no
-  pointer events). Idle return, relock, sleep, the update check and a
-  phone's last-seen stamp read it.
+  pointer events). Idle return, relock, sleep, the update check, the
+  prayer face's resting rule and a phone's last-seen stamp read it.
 - **Shell**: `app/tabs.tsx` lists the tabs; each feature exports a `TabDef`
   (`app/tab.ts`) from `src/features/<tab>/index.tsx` with `Body`, optional
   top-bar `Controls`, `onAdd` (the + button) and `title`.
@@ -508,7 +518,8 @@ sequenceDiagram
   through the server, so an offline phone says it could not reach the
   wall; a timer replaced elsewhere is a new view) and Wall screen
   (`phone/wallscreen/`: Sleep now,
-  Wake up, what was last asked and by whom). What the wall's screen is
+  Wake up, what was last asked and by whom), Prayer times
+  (`phone/prayer/`: below, under Prayer face) and People. What the wall's screen is
   doing is a guess (`wallAsleepGuess`, by the wall's own rule in
   `core/sleep.ts` from the last command, the timer and the sleep window; a
   touch on the wall is not shared), said as "likely"; the note view offers
@@ -530,6 +541,151 @@ sequenceDiagram
   `followDisplayCommands` applies each nonce once, only within 10 minutes
   of being sent). A phone's request that fails says so with
   `wallRequestError` (`data/errors.ts`).
+
+## Prayer face
+
+The wall's second face is the prayer-time clock (`src/prayer/`, from the
+standalone Adhan Clock): full-screen themes (calligraphy, classic, kids,
+gallery, night), the athan sequence with its recordings, previews and the
+photo library. It runs in the same page as the family face, so the athan
+sounds whatever the wall shows; a phone never runs it.
+
+```mermaid
+flowchart LR
+  subgraph Wall page
+    Family["Family face (#app)"]
+    Prayer["Prayer face (portal)"]
+    Stage["prayer/stage.ts rules"]
+    Audio["prayer/audio.ts athan"]
+  end
+  Doc[(settings/prayer)] --> Prayer
+  Doc --> Audio
+  Phone["Phone: More > Prayer times"] --> Doc
+  Stage -->|face, prayerSequence| Face["app/face.ts"]
+  Face --> Family
+  Face --> Prayer
+  Audio -->|athanSounding| Stage
+  Stage -->|soundsHeld| Sounds["core/sound.ts"]
+```
+
+- **Loading**: `app/face.ts` is all the shell knows (the chosen `face`,
+  `prayerSequence`, `shownFace`, `prayerBusy`, the `prayerLayer` slot,
+  `athanBlocked`). The wall's start (`app/start.ts`) imports
+  `prayer/start.ts` once the household is ready: media indexes, weather,
+  the athan controller, the stage rules, and the layer. The prayer face
+  renders in a portal on `document.body`; while it shows, `#app` is
+  `inert` and `html[data-face='prayer']` pins the root font size to the
+  standard scale (the wall's text size would push its layouts out of their
+  canvas). Playwright's role queries ignore inert: scope a spec's queries
+  to `.prayer-face`.
+- **The rules** (`prayer/stage.ts`): the real clock's athan sequence
+  (countdown, athan, dua, iqamah countdown; not a settings preview) shows
+  over whichever face was chosen and hands it back when it ends or is
+  closed; a new note, a timer starting or a timer ending brings the family
+  face (shown after the sequence, if one is on); three minutes without a
+  touch (`FACE_IDLE_MS`), and the wall falling asleep, return to the
+  resting face (`settings.restingFace`, Settings > Display), which is
+  Family while a note waits, a timer runs or the prayer clock has no place
+  yet. Resting on Prayer, the wall asleep shows the night clock instead of
+  the black sleep screen (dimmed to 8 % under Fully Kiosk), and a tap on it
+  wakes the wall (`sleeping` && the prayer face: `wake()`). A sleeping wall
+  (`scheduledSleep`, before the athan's hold) is woken only by a phase that
+  sounds (`sounds()`: the athan's recording on; never the iqamah
+  countdown), so an athan turned off does not light the room. The
+  rail's Prayer button and the prayer face's calendar button
+  (`.face-switch`, hidden during the sequence) switch by hand. Leaving the
+  prayer face puts its settings, picker, viewer and preview away; while it
+  shows, the family face's own overlays on the page are inert too
+  (`coverFamily`) and a field there loses focus. The wall's sounds wait
+  for the whole sequence (`soundsHeld` = `athanSounding` or
+  `prayerSequence`). A tap (a click: on a touchscreen pointerdown does not
+  let a page start sound) unlocks a blocked athan. The update reload waits
+  while `prayerBusy`. `?face=prayer|family` opens on a face (tests,
+  screenshots).
+- **Settings**: the household's `settings/prayer` document
+  (`prayerSettingsDoc` in the store, one more listener `ready` waits for),
+  parsed by `sanitizeSettings` (`prayer/core/settings.ts`: the stored
+  document is outside input) in `prayer/settingsStore.ts`, which the
+  phone uses too. `updateSettings(patch)` writes only what the patch
+  changes, field by field (`settingsChanges`: maps recurse, except the
+  place, which is written whole so two devices choosing places cannot mix
+  them; lists are values), so the wall and a phone changing different
+  settings both keep theirs. No PIN: prayer settings are open on the wall. The
+  backlight belongs to the wall's display schedule (the prayer clock has
+  no brightness settings of its own).
+- **Device-local**: dismissals (`manwar.prayer.dismissed.v1`, so a reload
+  cannot bring back an athan someone stopped), the weather reading, and
+  uploads (IndexedDB `manwar-prayer`: photos and recordings). A tablet
+  names its uploaded recordings in the settings document (`recordings`,
+  `prayer/recordings.ts` `listedRecordings`) so a phone can choose one; a
+  tablet without that file plays the default athan (`recordingFor`), and
+  nothing writes the choice away (another tablet or the phone may have
+  it). Deleting an upload on its tablet resets the athans that used it.
+- **Media** (`public/prayer/`, about 30 MB): not in the precache
+  (`globIgnores` in vite.config.ts), so phones never download it. The
+  service worker caches each file as the wall uses it (CacheFirst, in a
+  cache named by the media's content, `PRAYER_MEDIA_CACHE`; the indexes
+  NetworkFirst), and `warmMedia` (`prayer/store.ts`) drops the caches of
+  earlier media and fetches the rest in the background a minute after the
+  page opens, once the household has a place and a service worker controls
+  the page. The prayer code and its fonts (about 750 KB) are in the
+  precache, phones included: an update can be applied while the wall is
+  offline, and the athan must not wait for the network. `MEDIA`
+  (`prayer/core/media.ts`) is the prefix in code; the stylesheets' few
+  `url()`s name `/prayer/` themselves.
+- **Styles**: the prayer face was drawn on the browser's defaults, so
+  Manwar's page-wide resets are reverted inside it (`box-sizing`, the
+  button and field resets; the root sets its own font size, line height
+  and color). Every prayer rule is scoped under `.prayer-face`; its
+  keyframes are `pf-` prefixed and the class names Manwar also uses
+  (`btn chip ph picker row seg settings small toggle`) are `pf-` prefixed
+  in the prayer code (`on`, `current` and `big` are kept: Manwar's rules
+  for them sit under its own containers). Keep both when adding prayer
+  styles.
+- **Phone** (`phone/prayer/`): More > Prayer times edits the place
+  (search by name, or the phone's location), the calculation (method,
+  Asr madhab, high-latitude rule, adjustments), iqamah and Jumu'ah, each
+  athan's recording, volume and the sequence's parts, Ramadan and the
+  Hijri adjustment; themes, photos and the night clock are set on the
+  wall. Times show on the place's clock (`placeTime`), wherever the phone
+  is (an unknown zone falls back to the phone's clock). Today shows the
+  next prayer (`prayerNow`, recomputed each minute) and opens Prayer times
+  on a tap. The phone runs only the light prayer core (`core/settings`,
+  `core/schedule`, `core/prayer`, `core/calendar`, `core/geo`,
+  `core/media`'s index loader, `recordings.ts`, the settings store), never
+  the prayer face, its store or its audio.
+- **The clock inside**: `prayer/core/schedule.ts` is a pure function from
+  (now, three days of prayer times, settings, athan lengths, dismissed
+  ids) to `ClockState` (current and next prayer, countdown, period,
+  takeover phase, theme), unit-tested (`tests/unit/prayer-*.test.ts`).
+  Takeover phases are time windows, not timers: `pre` [athan-60 s, athan),
+  `athan` [athan, athan+recording), `dua` 75 s, `iqamah` [iqamah-60 s,
+  iqamah); a reload mid-athan rejoins the recording at its offset. A
+  dismissed id ends a phase early (the phases after it still come) or a
+  calligraphy window. `prayer/core/clock.ts` is its own virtual clock
+  (`?now=`, `?speed=`, previews through `startPreview`/`endPreview`, which
+  move the clock and the dismissals in one batch; a preview ends itself
+  after 20 minutes).
+- **Content and assets** are generated, never hand-edited:
+  `uv run scripts/prayer/content/build.py` (Quran and hadith of the day,
+  `src/prayer/content/*.json`), `scripts/prayer/audio/process.py`
+  (recordings), `scripts/prayer/calligraphy/process.py` (calligraphy SVG
+  masks), `scripts/prayer/gallery/process.py` (the photo library, its
+  captions, suggested backgrounds and text tones, from
+  `src/prayer/core/photo-layout.json`), `scripts/prayer/art/rays.py`.
+  Each folder's `CREDITS.md` comes from its manifest. Run prettier on
+  `src` and `tests` only (the manifests are the scripts' own JSON layout).
+- **Gotchas**: Uthmani Quran text needs Amiri Quran (`isUthmani()` →
+  `.quranic`, with a taller line height); daily items are filtered by
+  English length for tight layouts (`dailyItem`); taglines from Saheeh
+  International carry translator brackets (`splitTagline` strips them);
+  `Crossfade` keeps the outgoing layer for `ms`, `fadeOut` when the new
+  content is empty; large one-line text (clocks) needs `line-height` on
+  its container too. Chrome blocks autoplay until a tap unless the app is
+  installed (or Fully's "Autoplay audio" is on): `audioBlocked` shows a
+  badge on the prayer face and a notice in the wall's top bar, and any tap
+  lets the athan play. e2e specs launch Chromium with
+  `--autoplay-policy=no-user-gesture-required` (playwright.config.ts).
 
 ## Layout system
 
@@ -588,7 +744,13 @@ red l c h)) { color: <the ink>; }`: a WebView without relative colors
   and `tmux new -d -s manwar-dev 'npx vite --port 5173 --host 0.0.0.0'`, then
   open `http://localhost:5173/?demo`. Restart the emulators to reset the demo
   data; clear localStorage key `manwar.demoCalendar.v1` to reset demo events.
-- `?now=2026-11-04T11:44` pins the clock's start (screenshots, tests).
+- `?now=2026-11-04T11:44` pins the clock's start (screenshots, tests); the
+  prayer clock reads it too, and `?speed=60` runs only the prayer clock
+  faster. `?face=prayer` opens the wall on the prayer face. The demo seed
+  sets no prayer place, so the athan never interrupts a spec that did not
+  ask for it; `tests/e2e/prayer-helpers.ts` writes one (Chicago) through
+  the emulator's REST API (`openWall`) and reads the settings back
+  (`prayerDoc`).
 - `?seed=none` (with `?demo=<new name>`) seeds a demo household the way a
   real one starts: no people, only the Grocery List. A household is seeded
   once in its life: the seed sets `settings.seededAt`, and a household
@@ -734,6 +896,11 @@ generated from it: `node scripts/icons/render.mjs` after any brand change.
   - Editing one occurrence of a repeating meal goes through
     `plan.editOccurrence`; moving it to another day shifts a weekly
     rule's weekdays with it.
+- `prayer/`: the prayer face (above, under Prayer face): `core/` pure
+  logic, `ui/` the face (`Face.tsx`), its themes, takeover, viewer and
+  settings panel, `store.ts` and `audio.ts` the wall's clock and sound,
+  `stage.ts` the rules between the faces, `settingsStore.ts` and
+  `recordings.ts` the parts a phone uses.
 - `features/settings`: `profiles.ts` has the profile writes (save,
   move, delete with what it archives) and `ProfileFields.tsx` the
   editor (`useProfileEditor`, `ProfileFields`), shared by Settings >

@@ -1,0 +1,419 @@
+/* --- Kids theme ---------------------------------------------------------------- */
+
+.prayer-face .kd {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  color: #111;
+  background: linear-gradient(180deg, #fffbe6 0%, #fff4c4 100%);
+}
+
+/* Sun */
+.prayer-face .kd-sun {
+  position: absolute;
+  right: -7rem;
+  top: -9rem;
+  width: 36rem;
+  height: 36rem;
+}
+
+.prayer-face .kd-sun-disc {
+  position: absolute;
+  inset: 8rem;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 40%, #ffe066, #f6c90e 70%);
+  box-shadow: 0 0 6rem rgba(246, 201, 14, 0.45);
+}
+
+.prayer-face .kd-rays {
+  position: absolute;
+  inset: -4rem;
+  width: calc(100% + 8rem);
+  height: calc(100% + 8rem);
+  stroke: #f2c40f;
+  stroke-width: 4;
+  stroke-linecap: round;
+  animation: pf-rays 90s linear infinite;
+}
+
+/* Birds gliding across the sky */
+.prayer-face .kd-birds {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.prayer-face .kd-bird {
+  position: absolute;
+  width: 3.6rem;
+  height: 1.6rem;
+  fill: none;
+  stroke: #3d6170;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  animation:
+    pf-glide 60s linear infinite,
+    pf-flap 0.9s ease-in-out infinite alternate;
+}
+
+.prayer-face .kd-bird.b0 {
+  top: 21rem;
+  animation-delay: -10s, 0s;
+}
+
+.prayer-face .kd-bird.b1 {
+  top: 24rem;
+  width: 2.8rem;
+  animation-delay:
+    -12s,
+    -0.4s;
+}
+
+.prayer-face .kd-bird.b2 {
+  top: 19rem;
+  width: 2.4rem;
+  animation-delay:
+    -40s,
+    -0.2s;
+  animation-duration: 75s, 0.8s;
+}
+
+@keyframes pf-glide {
+  from {
+    left: -5%;
+  }
+  to {
+    left: 105%;
+  }
+}
+
+@keyframes pf-flap {
+  to {
+    transform: scaleY(0.45);
+  }
+}
+
+/* Clouds */
+.prayer-face .kd-cloud {
+  position: absolute;
+  animation: pf-drift 14s ease-in-out infinite alternate;
+}
+
+.prayer-face .kd-cloud-shape {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.prayer-face .kd-cloud path {
+  fill: #e9f8fe;
+  stroke: #7fd3ee;
+  stroke-width: 3;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.prayer-face .kd-cloud-text {
+  position: relative;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 3rem 2rem 0;
+  box-sizing: border-box;
+}
+
+@keyframes pf-drift {
+  from {
+    transform: translateX(-1.2rem);
+  }
+  to {
+    transform: translateX(1.2rem);
+  }
+}
+
+.prayer-face .kd-cloud.c-a {
+  left: 3rem;
+  top: 3rem;
+  width: 30rem;
+  height: 16rem;
+}
+
+.prayer-face .kd-cloud.c-b {
+  left: 6rem;
+  top: 26rem;
+  width: 28rem;
+  height: 15rem;
+  animation-duration: 17s;
+  animation-delay: -6s;
+}
+
+.prayer-face .kd-cloud.c-c {
+  left: 42rem;
+  top: 4rem;
+  width: 18rem;
+  height: 8rem;
+  animation-duration: 20s;
+}
+
+.prayer-face .kd-cloud.c-d {
+  right: 33rem;
+  top: 4rem;
+  width: 21rem;
+  height: 11rem;
+  animation-duration: 19s;
+  animation-delay: -4s;
+}
+
+.prayer-face .kd-cloud.c-e {
+  right: 3rem;
+  top: 24rem;
+  width: 31rem;
+  height: 17rem;
+  animation-duration: 16s;
+  animation-delay: -9s;
+}
+
+.prayer-face .kd-cl-row {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  font: 600 2.9rem/1.1 var(--sans);
+}
+
+.prayer-face .kd-cl-row span:last-child {
+  font: 500 1.6rem var(--sans);
+  color: #4a6b78;
+}
+
+.prayer-face .kd-next {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  line-height: 1.15;
+}
+
+.prayer-face .kd-next span {
+  font: 600 2rem var(--sans);
+  color: #3d6170;
+}
+
+.prayer-face .kd-next b {
+  font: 700 3.6rem var(--sans);
+  color: #0d6e8a;
+}
+
+/* Clock */
+.prayer-face .kd-clock {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 5rem;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 2rem;
+  font-family: 'Playfair Display', serif;
+  font-weight: 900;
+  line-height: 0.85;
+  color: #121212;
+}
+
+.prayer-face .kd-hm {
+  font-size: 30rem;
+  letter-spacing: -0.01em;
+}
+
+.prayer-face .kd-ampm {
+  display: flex;
+  flex-direction: column;
+  font-size: 6.4rem;
+  line-height: 1;
+  margin-top: 6rem;
+}
+
+.prayer-face .kd-date {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 42.5rem;
+  text-align: center;
+  font: 500 2.6rem var(--sans);
+  letter-spacing: 0.04em;
+}
+
+/* Prayer cards */
+.prayer-face .kd-cards {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 52.5rem;
+  display: flex;
+  justify-content: center;
+  gap: 3.6rem;
+}
+
+.prayer-face .kd-card {
+  position: relative;
+  width: 19.6rem;
+  padding: 2rem 0 1.8rem;
+  border-radius: 2.4rem;
+  background: linear-gradient(180deg, #2bc4e3 0%, #12a6c9 100%);
+  box-shadow:
+    0 0.8rem 0 #0c87a6,
+    0 1.6rem 2.4rem rgba(18, 120, 150, 0.3);
+  text-align: center;
+  color: #fff;
+}
+
+.prayer-face .kd-card.current {
+  background: linear-gradient(180deg, #ffe36e 0%, #ffcc29 100%);
+  box-shadow:
+    0 0.8rem 0 #e2a90c,
+    0 1.6rem 2.4rem rgba(200, 140, 10, 0.35);
+  color: #1a2340;
+  animation: pf-bounce 2.4s ease-in-out infinite;
+}
+
+@keyframes pf-bounce {
+  50% {
+    transform: translateY(-1rem);
+  }
+}
+
+.prayer-face .kd-card-name {
+  font: 700 2.6rem var(--sans);
+  letter-spacing: 0.04em;
+  color: #0b3d52;
+}
+
+.prayer-face .current .kd-card-name {
+  color: #1a2340;
+}
+
+.prayer-face .kd-card-time {
+  margin-top: 0.8rem;
+  font: 600 4.3rem/1.05 var(--sans);
+}
+
+.prayer-face .kd-card-label {
+  font: 500 1.7rem var(--sans);
+  opacity: 0.85;
+}
+
+.prayer-face .kd-star {
+  width: 3.4rem;
+  height: 3.4rem;
+  fill: #ff8a00;
+  stroke: #fff;
+  stroke-width: 1.2;
+  stroke-linejoin: round;
+}
+
+.prayer-face .kd-card .kd-star {
+  position: absolute;
+  top: -1.6rem;
+  right: -1.4rem;
+  width: 4.4rem;
+  height: 4.4rem;
+  animation: pf-rays 12s linear infinite;
+}
+
+/* Ground */
+.prayer-face .kd-ground {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 17rem;
+}
+
+.prayer-face .kd-flower {
+  position: absolute;
+  bottom: 9.2rem;
+  overflow: visible;
+  transform-origin: 50% 100%;
+  animation: pf-sway 5s ease-in-out infinite alternate;
+}
+
+.prayer-face .kd-flower:nth-of-type(2n) {
+  animation-duration: 6.5s;
+  animation-delay: -2s;
+}
+
+@keyframes pf-sway {
+  from {
+    transform: rotate(-4deg);
+  }
+  to {
+    transform: rotate(4deg);
+  }
+}
+
+.prayer-face .kd-weather {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  padding-top: 0.6rem;
+}
+
+.prayer-face .kd-weather svg {
+  width: 4rem;
+  height: 4rem;
+  color: #e09a2c;
+}
+
+.prayer-face .kd-weather b {
+  font: 700 2.6rem var(--sans);
+  color: #0d6e8a;
+}
+
+.prayer-face .kd-grass {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.prayer-face .kd-mosque {
+  position: absolute;
+  right: 6rem;
+  bottom: 6.5rem;
+  width: 17rem;
+  height: 15.5rem;
+}
+
+.prayer-face .kd-reminder {
+  position: absolute;
+  left: 6rem;
+  right: 28rem;
+  bottom: 3.4rem;
+  display: flex;
+  align-items: center;
+  gap: 1.4rem;
+  font: 600 3rem var(--sans);
+  color: #fff;
+  text-shadow:
+    0 0.2rem 0 #237a36,
+    0 0.4rem 1rem rgba(0, 0, 0, 0.2);
+  animation: pf-rise 0.9s var(--ease-out) both;
+}
+
+.prayer-face .kd-reminder .kd-star {
+  flex: none;
+  fill: #ffd23f;
+  stroke: #237a36;
+}
+
+.prayer-face .kd-greeting {
+  padding-top: 0.6rem;
+  font: 700 1.9rem var(--sans);
+  color: #0d6e8a;
+  white-space: nowrap;
+}

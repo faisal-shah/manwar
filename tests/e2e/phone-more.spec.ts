@@ -417,21 +417,30 @@ test('a double tap on a More row opens it without pressing what lands under the 
 });
 
 /**
- * A double tap on More's `row` at a spot that, once the row's view is open, is on `target` in it: the view is
- * opened once to find that spot, and the spot is inside both.
+ * A double tap on More's `row` at a spot that, once the row's view is open, is on a control in it (the first
+ * one under the row): the view is opened once to find that spot, and the spot is inside both.
  */
-async function doubleTapOnto(p: Page, row: string, target: ReturnType<Page['locator']>) {
+async function doubleTapOnto(p: Page, row: string) {
   const menuRow = p.locator('.ph-menu button', { hasText: row });
   const r = (await menuRow.boundingBox())!;
   await menuRow.click();
-  const t = (await target.boundingBox())!;
+  await p.waitForTimeout(300);
+  const t = await p.evaluate(
+    ({ top, bottom }) => {
+      const hit = [...document.querySelectorAll<HTMLElement>('.ph-body button, .ph-body select, .ph-body input')]
+        .map((el) => el.getBoundingClientRect())
+        .find((b) => b.width > 0 && Math.min(bottom, b.bottom) - Math.max(top, b.top) > 4);
+      return hit ? { x: hit.x, y: hit.y, width: hit.width, height: hit.height } : null;
+    },
+    { top: r.y, bottom: r.y + r.height },
+  );
+  expect(t, `${row}: a control in its view lies under the row`).not.toBeNull();
   await p.locator('.ph-back').click();
   await expect(p.locator('.ph-head h1')).toHaveText('More');
-  const top = Math.max(r.y, t.y);
-  const bottom = Math.min(r.y + r.height, t.y + t.height);
-  expect(bottom - top, `${row}: the row and what opens under it overlap`).toBeGreaterThan(4);
+  const top = Math.max(r.y, t!.y);
+  const bottom = Math.min(r.y + r.height, t!.y + t!.height);
   await p.waitForTimeout(500);
-  const x = t.x + t.width / 2;
+  const x = t!.x + t!.width / 2;
   const y = (top + bottom) / 2;
   await p.mouse.click(x, y);
   await p.waitForTimeout(120);
@@ -446,11 +455,11 @@ test('a double tap on People or Stars and rewards presses nothing in the view it
   const w = await wall(browser, hh);
   const p = await pairPhone(browser, w.page, hh);
   await p.page.locator('.ph-nav').getByRole('button', { name: 'More' }).click();
-  await doubleTapOnto(p.page, 'People', p.page.getByRole('button', { name: 'Add a person' }));
+  await doubleTapOnto(p.page, 'People');
   // No editor opened over People.
   await expect(p.page.getByRole('dialog')).toHaveCount(0);
   await p.page.locator('.ph-back').click();
-  await doubleTapOnto(p.page, 'Stars and rewards', p.page.locator('.psv-person').first());
+  await doubleTapOnto(p.page, 'Stars and rewards');
   // No person's stars opened over the view.
   await expect(p.page.getByRole('dialog')).toHaveCount(0);
   expect([...w.errors, ...p.errors]).toEqual([]);

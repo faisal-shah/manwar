@@ -1,0 +1,170 @@
+/* --- Gallery theme -------------------------------------------------------------- */
+
+.prayer-face .gl {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: #0a0d14;
+  color: #fff;
+}
+
+.prayer-face .gl-photo {
+  position: absolute;
+  inset: 0;
+}
+
+.prayer-face .gl .ph-cover {
+  animation: pf-kenburns 90s ease-in-out infinite alternate;
+}
+
+.prayer-face .gl-scrim {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(85rem 52rem at 100% 0%, rgba(3, 6, 14, 0.74) 0%, rgba(3, 6, 14, 0.4) 45%, transparent 75%),
+    linear-gradient(0deg, rgba(3, 6, 14, 0.78) 0%, rgba(3, 6, 14, 0.35) 18%, transparent 34%);
+}
+
+.prayer-face .gl-top {
+  position: absolute;
+  right: 4.4rem;
+  top: 3rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  text-shadow: 0 0.2rem 1.6rem rgba(0, 0, 0, 0.5);
+}
+
+.prayer-face .gl-clock {
+  font-size: 11rem;
+  line-height: 0.9;
+}
+
+.prayer-face .gl-date {
+  margin: 1.2rem 0 0.2rem;
+  font: 500 2rem var(--sans);
+  letter-spacing: 0.06em;
+}
+
+.prayer-face .gl-top .cd-pill {
+  height: 5rem;
+}
+
+.prayer-face .gl-top .cd-label {
+  font-size: 2.1rem;
+}
+
+.prayer-face .gl-top .cd-value {
+  font-size: 3.2rem;
+  line-height: 5rem;
+  min-width: 14rem;
+}
+
+.prayer-face .gl-caption {
+  position: absolute;
+  left: 5rem;
+  bottom: 13.4rem;
+  max-width: 76rem;
+  padding-left: 2.2rem;
+  border-left: 0.3rem solid var(--gold);
+  text-shadow: 0 0.2rem 1.2rem rgba(0, 0, 0, 0.6);
+  animation: pf-rise 1.6s var(--ease-out) 0.8s both;
+}
+
+.prayer-face .gl-cat {
+  font: 600 1.45rem var(--sans);
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--gold-soft);
+}
+
+.prayer-face .gl-title {
+  margin-top: 0.6rem;
+  font: 400 4.6rem/1.1 var(--serif-caps);
+  letter-spacing: 0.02em;
+}
+
+.prayer-face .gl-sub {
+  margin-top: 0.5rem;
+  font: italic 500 2.5rem var(--serif-text);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* With a museum object in the middle, the caption takes the left column. */
+.prayer-face .gl.contain .gl-caption {
+  max-width: 26rem;
+}
+
+.prayer-face .gl.contain .gl-title {
+  font-size: 3.8rem;
+}
+
+/* Prayer times along the foot of the photo. */
+.prayer-face .gl-strip {
+  position: absolute;
+  left: 5rem;
+  right: 5rem;
+  bottom: 3.4rem;
+  display: flex;
+  justify-content: space-between;
+  padding: 1.6rem 3.4rem;
+  border-radius: 2.4rem;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(10, 14, 26, 0.42);
+  backdrop-filter: blur(14px) saturate(1.2);
+}
+
+.prayer-face .gl-p {
+  display: flex;
+  align-items: baseline;
+  gap: 1.4rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 0.25rem solid transparent;
+  font: 400 3.4rem var(--serif-display);
+}
+
+.prayer-face .gl-p.current {
+  border-bottom-color: var(--gold);
+  color: var(--gold-soft);
+}
+
+.prayer-face .gl-p-name {
+  font: 600 1.5rem var(--sans);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+
+/* Calligraphy pieces: gold artwork on a deep navy ground with a faint lattice. */
+.prayer-face .gl-art {
+  background: radial-gradient(110rem 75rem at 50% 42%, #18264a 0%, #0b1328 55%, #050912 100%);
+}
+
+.prayer-face .gl-art-pattern {
+  position: absolute;
+  inset: 0;
+  background: url('../assets/star-lattice.svg') 0 0 / 14rem 14rem;
+  opacity: 0.07;
+  -webkit-mask-image: radial-gradient(closest-side, transparent 35%, #000 100%);
+  mask-image: radial-gradient(closest-side, transparent 35%, #000 100%);
+}
+
+.prayer-face .gl-art-piece {
+  position: absolute;
+  left: 50%;
+  top: 44%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  justify-content: center;
+  font-size: 52rem;
+  --art-max-w: 112rem;
+}
+
+.prayer-face .gl.art .gl-caption {
+  max-width: 110rem;
+}
+
+.prayer-face .gl.art .gl-sub {
+  font-size: 2.2rem;
+}

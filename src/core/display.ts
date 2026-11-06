@@ -5,6 +5,7 @@ import { minutesOfDay } from '../lib/date';
 import { onActivity } from './activity';
 import { setBrightness, wakeScreen } from './kiosk';
 import { asleepAt, inWindow, sleepNowEnd, WAKE_MS } from './sleep';
+import { prayerSequence, shownFace } from '../app/face';
 
 /**
  * Display states: day (light), night (dark theme, dimmed) and sleep (black,
@@ -39,13 +40,24 @@ export const sleepHeldUntil = signal(0);
 const themeParam = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('theme') : null;
 export const themeOverride = signal<'light' | 'dark' | null>(themeParam === 'dark' || themeParam === 'light' ? themeParam : null);
 
-export const sleeping = computed(() =>
+/** Asleep by the sleep rule (core/sleep.ts), before the athan's hold. */
+export const scheduledSleep = computed(() =>
   asleepAt(
     now.value.getTime(),
     { wokenUntil: wokenUntil.value, forcedUntil: sleepForcedUntil.value, heldUntil: sleepHeldUntil.value },
     settings.value.sleep,
   ),
 );
+
+/**
+ * Asleep now. The prayer clock's athan sequence outranks the rule, Sleep now
+ * included: the wall is awake for the athan, and goes back to sleep when it
+ * ends (prayer/stage.ts decides which sequences wake a sleeping wall).
+ */
+export const sleeping = computed(() => !prayerSequence.value && scheduledSleep.value);
+
+/** The backlight behind the prayer face's night clock, the wall's night screen when it rests there (Fully Kiosk). */
+const NIGHT_CLOCK_BRIGHTNESS = 8;
 
 export const theme = computed<'light' | 'dark'>(() => {
   if (themeOverride.value) return themeOverride.value;
@@ -95,7 +107,8 @@ export function startDisplay(): void {
     // The windows come with the household's settings. Until they load, the backlight stays as the last
     // page left it, so a reload at night (an update, the kiosk browser restarting) does not light the room.
     if (!settingsLoaded.value) return;
-    setBrightness(sleeping.value ? 0 : theme.value === 'dark' ? 30 : 100);
+    const asleep = sleeping.value ? (shownFace.value === 'prayer' ? NIGHT_CLOCK_BRIGHTNESS : 0) : null;
+    setBrightness(asleep ?? (theme.value === 'dark' ? 30 : 100));
   });
 }
 

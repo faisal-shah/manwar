@@ -4,6 +4,7 @@ import { data, fieldChanges, newId, patch, put } from '../../data/store';
 import type { Message } from '../../data/types';
 import { currentTime } from '../../lib/clock';
 import { openMessages } from './logic';
+import { whenFree } from '../../core/sound';
 
 export const composerOpen = signal(false);
 
@@ -33,10 +34,13 @@ export function restoreMessage(id: string): void {
 
 export const canSpeak = () => typeof window !== 'undefined' && 'speechSynthesis' in window;
 
+/** Read `text` aloud (after an athan sounding now: core/sound.ts). */
 export function speak(text: string): void {
   if (!canSpeak()) return;
-  speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(text);
-  u.rate = 0.95;
-  speechSynthesis.speak(u);
+  whenFree('speak', () => {
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.rate = 0.95;
+    speechSynthesis.speak(u);
+  });
 }

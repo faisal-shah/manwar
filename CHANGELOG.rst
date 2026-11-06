@@ -2,6 +2,42 @@
 Changelog
 =========
 
+0.3.0 (2026-11-05)
+==================
+
+The prayer-time clock joins the wall as its second face, so the athan
+sounds whatever the wall is showing.
+
+Added
+-----
+
+- The prayer face: the Adhan Clock's themes (calligraphy, classic, kids,
+  gallery, night), athan sequence, recordings, previews, photo library and
+  settings, inside the wall. The rail's Prayer button and the prayer
+  face's calendar button switch between the faces.
+- Each athan sequence comes to the front over the family face, wakes a
+  sleeping wall (Sleep now included; not for an athan whose sound is off)
+  and hands the screen back when it ends; the wall's chimes and notes read
+  aloud wait for it.
+- A note or timer from a phone brings the family face. Settings → Display
+  → Resting screen: the face the wall goes back to after three minutes
+  without a touch, and at night (resting on the prayer face, its night
+  clock replaces the black sleep screen).
+- Phone: More → Prayer times edits the place, calculation, iqamah and
+  Jumu'ah, and each athan's recording and volume (including recordings
+  uploaded on the wall); Today shows the next prayer.
+
+Changed
+-------
+
+- Prayer settings are the household's (`settings/prayer`), shared by the
+  wall and the phones, written field by field; the wall's display schedule
+  owns the backlight. Settings from the standalone Adhan Clock do not carry
+  over: set the place again (from the wall or a phone), and upload any own
+  recordings and photos again on the tablet.
+- The tablet caches the prayer media (about 30 MB) for offline use; phones
+  never download it.
+
 0.2.3 (2026-11-05)
 ==================
 

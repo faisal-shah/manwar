@@ -9,6 +9,7 @@ import { keepFieldAboveKeyboard, keepScaleWithKeyboard } from '../core/viewport'
 import { startWeather } from '../core/weather';
 import { seedIfEmpty } from '../data/seed';
 import { ready, unsentWrites } from '../data/store';
+import { prayerBusy } from './face';
 import { session } from '../data/session';
 import { holdSleepForTimer } from '../features/timer/state';
 import { startPhoneTheme } from '../phone/theme';
@@ -44,6 +45,9 @@ export function startApp(): void {
     startIdleReturn();
     holdSleepForTimer();
     followDisplayCommands();
+    // The prayer face runs on the wall only: a phone never loads the clock or its rules (their code and fonts
+    // are in the precache, so a wall updated while offline still has them; the media is not).
+    import('../prayer/start').then((m) => m.startPrayer()).catch((e: unknown) => console.warn('prayer clock did not load', e));
   });
   startUpdates();
 }
@@ -56,15 +60,19 @@ const CHECK_MS = 30 * 60_000;
  * once one is waiting it is applied (page reload) as soon as nothing would be
  * interrupted: right away before sign-in, otherwise after two idle minutes
  * with no sheet, dialog, popover or running timer on screen (a note on the
- * wall is no reason to wait: it shows again, not announced again), and no change
- * made here still on its way to the server (a phone keeps those in memory
- * only, so a reload would lose them).
+ * wall is no reason to wait: it shows again, not announced again), nothing on
+ * the prayer face a reload would cut short (the athan sequence, its settings,
+ * a preview), and no change made here still on its way to the server (a phone
+ * keeps those in memory only, so a reload would lose them).
  */
 function startUpdates(): void {
   let waiting = false;
   const safe = () =>
     session.value.state !== 'signedIn' ||
-    (idleFor() > IDLE_MS && !document.querySelector('[role="dialog"]:not(.message-layer)') && unsentWrites.peek() === 0);
+    (idleFor() > IDLE_MS &&
+      !document.querySelector('[role="dialog"]:not(.message-layer)') &&
+      unsentWrites.peek() === 0 &&
+      !prayerBusy.peek());
   const tryApply = () => {
     if (waiting && safe()) void update(true);
   };

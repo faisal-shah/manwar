@@ -7,8 +7,9 @@ light comes in.
 
 A family wall calendar for a tablet, in the spirit of the Skylight Calendar 2
 with Plus: the household's Google calendars color-coded by person, chores and
-routines with stars and rewards, lists, a weekly meal plan and recipes. Parents'
-phones pair with the wall and get a companion app on the same address.
+routines with stars and rewards, lists, a weekly meal plan and recipes. The
+tablet's second face is a prayer-time clock with the athan. Parents' phones
+pair with the wall and get a companion app on the same address.
 
 Live: the Firebase Hosting address of the project in `.firebaserc` (its auth
 domain, in `src/config.ts`).
@@ -27,11 +28,29 @@ The product research behind it, with screenshots, is in
 | **Rewards**  | Rewards each person can redeem with stars; full star history with undo                                                                                  |
 | **Meals**    | A week of breakfast, lunch, dinner and snacks; planned meals show on the calendar                                                                       |
 | **Recipes**  | Recipes with ingredients and steps; add ingredients to the grocery list                                                                                 |
+| **Prayer**   | The prayer-time clock: full-screen themes, the athan with a countdown and the dua after it, the iqamah countdown, a night clock                         |
 
 **Sleep** blanks the screen on a schedule or on demand; a tap wakes it, and
 it stays awake while someone is using it.
 **Settings** covers people, calendars, display (night mode, text size, hidden
 tabs), weather, the parental PIN and meal categories.
+
+### Two faces: family and prayer
+
+The tablet shows either the family calendar or the prayer clock; the
+**Prayer** button on the left switches to the prayer clock, and the calendar
+button under its gear switches back. Whichever is showing, each prayer's
+athan comes to the front with its one-minute countdown, plays, and then hands
+the screen back; it wakes a sleeping wall too (an athan whose sound is turned
+off shows only while the wall is awake). A note or timer sent from a phone
+brings the family face
+(after the athan, if one is playing), and the wall's own chimes wait for the
+athan to end. After three minutes without a touch, and at night, the tablet
+goes back to its resting screen (Settings → Display → Resting screen: Family
+or Prayer times; resting on Prayer times, the night screen is the prayer
+clock's dim night clock). The prayer clock's gear opens its own settings
+(location, calculation, iqamah, Jumu'ah, athans, themes, photos); they are
+the household's, so a parent's phone can change them too.
 
 ```mermaid
 flowchart LR
@@ -73,9 +92,11 @@ A parent's phone opens the same address and gets a phone app for the jobs a
 parent does away from the wall: today at a glance, checking off a chore for a
 child, giving or taking stars and redeeming rewards, lists, the calendar
 (with adding events and assigning new ones), a note that pops up on the wall,
-the wall's timer, putting the wall to sleep or waking it, the meal plan, and
-the family's people (added, edited, reordered and deleted as in the wall's
-Settings → Profiles).
+the wall's timer, putting the wall to sleep or waking it, the meal plan, the
+family's people (added, edited, reordered and deleted as in the wall's
+Settings → Profiles), and the prayer times (More → Prayer times: the place,
+how the times are calculated, iqamah and Jumu'ah, and each athan's
+recording and volume; Today shows the next prayer).
 
 Phones are paired from the wall only: **Settings → Phones → Add a phone**
 asks for the PIN and shows a code for ten minutes; scan it with the phone's
@@ -86,21 +107,28 @@ data in memory only, so a lost or removed one keeps none of it.
 
 ## Setting up the tablet
 
-1. Install **Fully Kiosk Browser** on the Android tablet and set its start URL
-   to the live address above.
-2. In Fully: Web Content Settings → **Enable Popups** on (needed once, for the
-   Google consent window); Web Content Settings → **Autoplay audio** on (chimes);
-   Advanced Web Settings → **Enable JavaScript Interface** on (lets the app dim
-   and blank the screen at night).
-3. Open the app, tap **Connect Google account** and sign in with the Google
+1. Open the live address above in Chrome on the Android tablet and choose
+   **Install app** (Chrome's menu). The installed app plays the athan without
+   a tap and keeps the screen on while it is open; keep it in front (a
+   tablet asleep or showing another app plays nothing).
+   **Fully Kiosk Browser** is the alternative that also starts the app when
+   the tablet boots and dims the backlight at night: set its start URL to
+   the live address, and in its settings turn on Web Content Settings →
+   **Enable Popups** (needed once, for the Google consent window), Web Content
+   Settings → **Autoplay audio** (the athan and chimes), and Advanced Web
+   Settings → **Enable JavaScript Interface** (dimming and blanking the
+   screen).
+2. Open the app, tap **Connect Google account** and sign in with the Google
    account whose calendars the wall should show (a shared family account
    works well). Google warns that the app is unverified: choose
    **Advanced → Go to Manwar**, then allow calendar access (leave both
    calendar permissions ticked; the wall refuses a connection without them).
    Each Google account gets its own household: its own people, tasks, lists
    and meals.
-4. In Settings, add the family's profiles, pick the weather location and set a
+3. In Settings, add the family's profiles, pick the weather location and set a
    parental PIN.
+4. Tap **Prayer** and choose where the family lives (or set it from a paired
+   phone, More → Prayer times); the prayer clock's gear has the rest.
 5. Pair the parents' phones: Settings → Phones → Add a phone.
 
 If the wall loses its Google connection (access revoked, or the calendar
