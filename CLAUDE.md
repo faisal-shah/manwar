@@ -48,7 +48,10 @@ the default project in `.firebaserc`.
   may connect or get Calendar tokens, so strangers cannot run up the bill.
   Change it with `gcloud secrets versions add ALLOWED_ACCOUNTS --data-file=- --project <project>`
   and redeploy the Functions (re-run the workflow). No account names belong
-  in the repo.
+  in the repo. The rules do not read the allowlist: an account taken off it
+  loses Calendar tokens and pairing, but its wall and phones keep their
+  Firestore sign-ins until their Auth users are disabled (the wall's uid is
+  its `hid`, its phones' start `<hid>.phone.`).
 - A monthly budget alert ($10) watches the project's billing.
 
 ## Architecture
@@ -839,27 +842,36 @@ generated from it: `node scripts/icons/render.mjs` after any brand change.
   tests, close by tapping away from the control that opened it.
 - The Google connection goes by redirect, not Google Identity Services'
   popup: the popup must hand its code back to the page that opened it,
-  which never happened in an installed app (it opens outside the app) nor
-  in the tablet's Chrome tab ("The Google window was closed before
+  which fails in an installed app (it opens outside the app) and in an
+  Android tablet's Chrome tab ("The Google window was closed before
   finishing", and no code reached `connectGoogle`). The page goes to
-  Google's consent page and comes back
-  with the code to the redirect URI already registered, Firebase's
-  `/__/auth/handler` (`data/googleRedirect.ts`). Manwar never uses that
-  handler; the service worker answers a navigation there with the app
-  itself when its `state` starts `manwar-` (`navigateFallbackDenylist` in
-  vite.config.ts lets that one through), so the app needs an active
-  service worker before it leaves (`redirectToGoogle` waits up to 20
-  seconds for a first visit's to install, showing Connecting); a browser
-  without service workers uses the popup (`popupConnect`, `redirect_uri`
-  'postmessage'). The
-  request's `state` is kept in localStorage (`manwar.googleRedirect.v1`);
-  a return that does not answer it, or comes after 15 minutes, is refused;
-  `finishRedirect` in `session.ts` exchanges the code once auth has
-  restored and puts the address back to `/`. `connectGoogle` exchanges
-  each code with the redirect it was requested with, 'postmessage' or the
-  handler on the project's own host only (`exchangeRedirect`). Google returns a refresh token on the first consent
-  only; `connectGoogle` keeps the stored one when a later connection
-  returns none.
+  Google's consent page and comes back with the code to the redirect URI
+  already registered, Firebase's `/__/auth/handler`
+  (`data/googleRedirect.ts`). Manwar never uses that handler; the service
+  worker answers a navigation there with the app itself when its `state`
+  starts `manwar-` (`navigateFallbackDenylist` in vite.config.ts lets that
+  one through), so the app needs an active service worker before it leaves
+  (`redirectToGoogle` waits up to 20 seconds for a first visit's to
+  install, showing Connecting), and a browser without service workers
+  cannot connect. The request (its `state` and PKCE verifier) is kept in
+  localStorage (`manwar.googleRedirect.v1`); a return that does not answer
+  it, or comes after 15 minutes, is refused and leaves it in place (another
+  tab's). `finishRedirect` in `session.ts` puts the address back to `/`,
+  waits for Auth to restore, and then decides by `auth.currentUser`: a
+  first sign-in reports on the sign-in screen, a reconnect keeps the wall
+  on screen and says how it went in a toast (`reconnectNote`). Calendar
+  token requests wait for the exchange (`exchanging`), and the update
+  reload waits while `googleBusy`. A page restored from the back/forward
+  cache in Connecting (Back from Google's page) returns to the sign-in
+  screen. `connectGoogle` takes only the handler on the project's own host
+  (`exchangeRedirect`) and requires the verifier (`isCodeVerifier`), so a
+  code from the address bar or a log is worth nothing alone. Consent is
+  asked on every connection (`prompt=consent`), so each returns a refresh
+  token and connecting again always repairs a lost one; `connectGoogle`
+  still keeps the stored one when a connection returns none.
+  `googleAccessToken` clears a refresh token Google refused only while the
+  document is unchanged (`lastUpdateTime`), so a connection stored meanwhile
+  survives.
 - Sessions (`data/session.ts`): the household id is the ID token's `hid`
   claim. Reading claims refreshes an expired token, which fails offline, so
   the last household is remembered per user (`manwar.claims.v1`) and

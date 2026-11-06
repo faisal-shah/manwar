@@ -3,6 +3,7 @@ import {
   REQUIRED_SCOPES,
   exchangeRedirect,
   householdIdFor,
+  isCodeVerifier,
   isAllowedAccount,
   missingScopes,
   normalizeEmail,
@@ -42,13 +43,21 @@ describe('policy', () => {
     expect(isAllowedAccount('x@gmail.com', [])).toBe(false);
   });
   it('exchanges a code with the popup redirect, or the site root on this project only', () => {
-    expect(exchangeRedirect(undefined, 'manwar-x')).toBe('postmessage');
-    expect(exchangeRedirect('postmessage', 'manwar-x')).toBe('postmessage');
+    expect(exchangeRedirect(undefined, 'manwar-x')).toBeNull();
+    expect(exchangeRedirect('postmessage', 'manwar-x')).toBeNull();
     const handler = 'https://manwar-x.firebaseapp.com/__/auth/handler';
     expect(exchangeRedirect(handler, 'manwar-x')).toBe(handler);
     expect(exchangeRedirect('https://evil.example/__/auth/handler', 'manwar-x')).toBeNull();
     expect(exchangeRedirect('https://manwar-x.firebaseapp.com/', 'manwar-x')).toBeNull();
     expect(exchangeRedirect('https://other.firebaseapp.com/__/auth/handler', 'manwar-x')).toBeNull();
     expect(exchangeRedirect(42, 'manwar-x')).toBeNull();
+  });
+  it('accepts only an RFC 7636 code verifier', () => {
+    expect(isCodeVerifier('dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk')).toBe(true);
+    expect(isCodeVerifier('a'.repeat(128))).toBe(true);
+    expect(isCodeVerifier('a'.repeat(42))).toBe(false);
+    expect(isCodeVerifier('a'.repeat(129))).toBe(false);
+    expect(isCodeVerifier(`${'a'.repeat(42)}/`)).toBe(false);
+    expect(isCodeVerifier(undefined)).toBe(false);
   });
 });

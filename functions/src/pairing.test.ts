@@ -49,6 +49,11 @@ describe('devices', () => {
     expect(deviceName('x'.repeat(41))).toBeNull();
     expect(deviceName('x'.repeat(40))).toBe('x'.repeat(40));
     expect(deviceName(undefined)).toBeNull();
+    // Nothing that turns the text around it, or moves the cursor: joiners in emoji stay.
+    expect(deviceName('Bad\u202Eenohp')).toBe('Bad enohp');
+    expect(deviceName('a\u2066b\u2069\u0007c')).toBe('a b c');
+    expect(deviceName('\u200F\u202E')).toBeNull();
+    expect(deviceName('👨\u200D👩\u200D👧 tablet')).toBe('👨\u200D👩\u200D👧 tablet');
   });
 
   it('checks device ids and builds one sign-in per device', () => {

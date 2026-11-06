@@ -5,18 +5,16 @@ import { HOUSEHOLD_KEY } from './householdKey';
 import { httpsCallable } from 'firebase/functions';
 import { canonicalHost, demoMode, googleClientId, googleScopes } from '../config';
 import { onActivity } from '../core/activity';
-import { errorMessage, isSignInRefused, needsReconnect } from './errors';
+import { errorMessage, isSignInRefused, NETWORK_MESSAGE, needsReconnect } from './errors';
 import { auth, db, functions } from './firebase';
 import { closeHousehold, householdId, openHousehold } from './store';
-import { googleAuthUrl, readReturn, redirectUri, RETURN_PARAMS, STATE_PREFIX, type PendingRedirect } from './googleRedirect';
+import { codeChallenge, googleAuthUrl, newRequest, parsePending, readReturn, redirectUri } from './googleRedirect';
 
 /**
- * Who the tablet is signed in as. A household signs in once with Google's
- * popup code flow (Google Identity Services, redirect_uri 'postmessage', so
- * only the page origin has to be registered on the OAuth client); the
- * connectGoogle Function exchanges the code, keeps the refresh token
- * server-side and returns a Firebase custom token carrying the household id
- * (`hid` claim).
+ * Who the tablet is signed in as. A household signs in once with Google
+ * (by redirect, startGoogleConnect); the connectGoogle Function exchanges
+ * the code, keeps the refresh token server-side and returns a Firebase
+ * custom token carrying the household id (`hid` claim).
  *
  * 'waiting': signed in on this tablet, but the sign-in cannot be checked
  * until the network (or Google's sign-in service) answers, and no household
@@ -47,179 +45,129 @@ interface ConnectResult {
   account: string;
 }
 
-interface CodeResponse {
-  code?: string;
-  error?: string;
-  error_description?: string;
-}
-
-interface GisOauth2 {
-  initCodeClient(config: {
-    client_id: string;
-    scope: string;
-    ux_mode: 'popup';
-    select_account?: boolean;
-    callback: (r: CodeResponse) => void;
-    error_callback?: (e: { type: string }) => void;
-  }): { requestCode(): void };
-}
-
-declare global {
-  interface Window {
-    google?: { accounts?: { oauth2?: GisOauth2 } };
-  }
-}
-
-let gis: Promise<void> | null = null;
-
-/** Load Google Identity Services ahead of the tap, so the popup opens inside the user gesture. */
-function loadGis(): Promise<void> {
-  gis ??= new Promise((resolve, reject) => {
-    const s = document.createElement('script');
-    s.src = 'https://accounts.google.com/gsi/client';
-    s.async = true;
-    s.onload = () => resolve();
-    s.onerror = () => {
-      gis = null;
-      reject(new Error('Could not load Google sign-in. Check the connection and try again.'));
-    };
-    document.head.appendChild(s);
-  });
-  return gis;
-}
-
 const fail = (error: string) => (session.value = { state: 'error', error });
 
-interface ConnectOptions {
-  /** After the account is connected (a reconnect while signed in). */
-  onDone?: () => void;
-  /** Report errors here instead of on the sign-in screen (a reconnect while signed in). */
-  onError?: (message: string) => void;
-}
+/**
+ * A connection to Google is under way on this page: it waits to leave for
+ * Google's page, or finishes a return from it. The update reload waits
+ * (app/start.ts), as it would lose the sign-in.
+ */
+export const googleBusy = signal(false);
+
+/** What a reconnect while signed in came to (connected, or why not), for the wall to say in a toast once. */
+export const reconnectNote = signal<string | null>(null);
 
 const REDIRECT_KEY = 'manwar.googleRedirect.v1';
 /** How long a first visit's service worker may take to install before the redirect gives up waiting. */
 const SW_READY_MS = 20_000;
 
 /**
- * Open Google's account chooser and consent. By redirect
- * (data/googleRedirect.ts): the page goes to Google and comes back with
- * the code, which nothing can lose on the way (Google's popup must hand
- * its code back to the page that opened it, which fails on an installed
- * app and on Android tablets). A reconnect reloads the wall, and its
- * result shows on the page it comes back to. Only a browser without
- * service workers, which could not answer the return, uses the popup.
- * Must run in a tap handler.
+ * Connect the household's Google account: the page goes to Google's
+ * account chooser and consent and comes back with the code
+ * (data/googleRedirect.ts), which the connectGoogle Function exchanges.
+ * Errors before leaving go to `report` (the sign-in screen by default); a
+ * reconnect's result shows on the page it comes back to (`reconnectNote`).
  */
-export function startGoogleConnect(opts: ConnectOptions = {}): void {
-  if ('serviceWorker' in navigator) return void redirectToGoogle(opts.onError ?? fail);
-  popupConnect(opts);
-}
-
-function popupConnect(opts: ConnectOptions): void {
-  const report = opts.onError ?? fail;
-  const oauth2 = window.google?.accounts?.oauth2;
-  if (!oauth2) {
-    report('Google sign-in is still loading. Try again in a moment.');
-    void loadGis().catch((e: Error) => report(e.message));
-    return;
-  }
-  oauth2
-    .initCodeClient({
-      client_id: googleClientId,
-      scope: googleScopes.join(' '),
-      ux_mode: 'popup',
-      callback: (r) => {
-        if (r.code) void exchange(r.code, opts);
-        else report(`Google sign-in did not finish (${r.error_description ?? r.error ?? 'no code'}).`);
-      },
-      error_callback: (e) =>
-        report(
-          e.type === 'popup_closed'
-            ? 'The Google window was closed before finishing.'
-            : 'The browser blocked the Google sign-in window.',
-        ),
-    })
-    .requestCode();
+export function startGoogleConnect(report: (message: string) => void = fail): void {
+  void redirectToGoogle(report);
 }
 
 async function redirectToGoogle(report: (message: string) => void): Promise<void> {
-  // The return is answered by the service worker (googleRedirect.ts): without an active one, Firebase's
-  // handler page would answer it instead. A first visit's is still installing for a few seconds.
+  // The return is answered by the service worker: without one, Firebase's handler page would answer it.
+  if (!('serviceWorker' in navigator)) return report('This browser cannot finish a Google sign-in. Open Manwar in Chrome.');
+  if (!navigator.onLine) return report(NETWORK_MESSAGE);
   const signingIn = session.value.state !== 'signedIn';
+  googleBusy.value = true;
   if (signingIn) session.value = { state: 'connecting' };
+  const stop = (message: string) => {
+    googleBusy.value = false;
+    report(message);
+  };
+  // A first visit's service worker is still installing for a few seconds.
   const active = await Promise.race([
     navigator.serviceWorker.ready.then((r) => !!r.active),
     new Promise<false>((resolve) => setTimeout(() => resolve(false), SW_READY_MS)),
   ]);
-  if (!active) {
-    report('The app is still installing itself. Try again in a moment.');
-    return;
-  }
-  const pending: PendingRedirect = { state: `${STATE_PREFIX}${crypto.randomUUID()}`, at: Date.now() };
+  if (!active) return stop('The app is still installing itself. Try again in a moment.');
+  const request = newRequest(Date.now());
   try {
-    localStorage.setItem(REDIRECT_KEY, JSON.stringify(pending));
+    localStorage.setItem(REDIRECT_KEY, JSON.stringify(request));
   } catch {
-    report('This browser keeps no storage, so Google sign-in cannot come back to it.');
-    return;
+    return stop('This browser keeps no storage, so Google sign-in cannot come back to it.');
   }
-  location.assign(googleAuthUrl(googleClientId, googleScopes, canonicalHost, pending.state));
+  location.assign(
+    googleAuthUrl(googleClientId, googleScopes, canonicalHost, request.state, await codeChallenge(request.verifier)),
+  );
 }
 
 /** Finish a sign-in that came back from Google (redirectToGoogle), once this page knows who is signed in. */
 async function finishRedirect(): Promise<void> {
-  let pending: PendingRedirect | null = null;
+  let stored: string | null = null;
   try {
-    pending = JSON.parse(localStorage.getItem(REDIRECT_KEY) ?? 'null') as PendingRedirect | null;
+    stored = localStorage.getItem(REDIRECT_KEY);
   } catch {
     /* nothing pending */
   }
-  const back = readReturn(location.search, pending, Date.now());
+  const back = readReturn(location.search, parsePending(stored), Date.now());
   if (!back) return;
+  if (back.kind !== 'refused') {
+    try {
+      localStorage.removeItem(REDIRECT_KEY);
+    } catch {
+      /* gone with the storage */
+    }
+  }
+  // The code is used once: the address no longer carries it, and is the app's own again (not the handler's).
+  history.replaceState(history.state, '', '/');
+  googleBusy.value = true;
   try {
-    localStorage.removeItem(REDIRECT_KEY);
-  } catch {
-    /* gone with the storage */
+    await auth.authStateReady();
+    // Signed in already: a reconnect, which keeps the wall on screen and says how it went in a toast.
+    const reconnecting = !!auth.currentUser;
+    const report = reconnecting ? (text: string) => (reconnectNote.value = text) : fail;
+    if (back.kind === 'code') await exchange(back.code, back.verifier, reconnecting, report);
+    else report(back.error);
+  } finally {
+    googleBusy.value = false;
   }
-  // The code is used once: the address no longer carries it (and is the app's own again, not the handler's).
-  const url = new URL(location.href);
-  url.pathname = '/';
-  for (const k of RETURN_PARAMS) url.searchParams.delete(k);
-  history.replaceState(history.state, '', url.href);
-  await auth.authStateReady();
-  if ('error' in back) {
-    if (session.value.state === 'signedIn') googleProblem.value = back.error;
-    else fail(back.error);
-    return;
-  }
-  await exchange(back.code, {}, redirectUri(canonicalHost));
 }
 
 const call = <Req, Res>(name: string) => httpsCallable<Req, Res>(functions, name);
 
+/** The code exchange on its way: token requests wait for it, as it brings the new connection's token. */
+let exchanging: Promise<void> | null = null;
+
 /**
- * Trade the popup's code for a Firebase sign-in. A reconnect while signed in
- * keeps the wall on screen: the same account keeps its household (the auth
- * user does not change, so no auth event fires), another account switches
- * to its own household through the auth listener.
+ * Trade the code for a Firebase sign-in. A reconnect keeps the wall on
+ * screen: the same account keeps its household (the auth user does not
+ * change, so no auth event fires), another account switches to its own
+ * household through the auth listener.
  */
-async function exchange(code: string, opts: ConnectOptions, redirect?: string): Promise<void> {
-  const reconnecting = session.value.state === 'signedIn';
+function exchange(code: string, verifier: string, reconnecting: boolean, report: (message: string) => void): Promise<void> {
   if (!reconnecting) session.value = { state: 'connecting' };
-  try {
-    const res = await call<{ code: string; redirectUri?: string }, ConnectResult>('connectGoogle')({
-      code,
-      redirectUri: redirect,
-    });
-    newConnection();
-    cacheToken(res.data.accessToken, res.data.expiresAt);
-    googleProblem.value = null;
-    await signInWithCustomToken(auth, res.data.customToken);
-    if (reconnecting && session.value.state === 'signedIn') session.value = { ...session.value, account: res.data.account };
-    opts.onDone?.();
-  } catch (e) {
-    (opts.onError ?? fail)(errorMessage(e));
-  }
+  const run = (async () => {
+    try {
+      const res = await call<{ code: string; codeVerifier: string; redirectUri: string }, ConnectResult>('connectGoogle')({
+        code,
+        codeVerifier: verifier,
+        redirectUri: redirectUri(canonicalHost),
+      });
+      newConnection();
+      cacheToken(res.data.accessToken, res.data.expiresAt);
+      googleProblem.value = null;
+      await signInWithCustomToken(auth, res.data.customToken);
+      if (reconnecting) {
+        if (session.value.state === 'signedIn') session.value = { ...session.value, account: res.data.account };
+        reconnectNote.value = 'Google Calendar is connected again.';
+      }
+    } catch (e) {
+      report(errorMessage(e));
+    }
+  })().finally(() => {
+    if (exchanging === run) exchanging = null;
+  });
+  exchanging = run;
+  return run;
 }
 
 let token: { value: string; expiresAt: number } | null = null;
@@ -247,6 +195,7 @@ function newConnection(): void {
  * googleProblem.
  */
 export function googleAccessToken(): Promise<string> {
+  if (exchanging) return exchanging.then(googleAccessToken);
   if (token && token.expiresAt - 60_000 > Date.now()) return Promise.resolve(token.value);
   if (!auth.currentUser) return Promise.reject(new Error('Not signed in.'));
   if (tokenRequest) return tokenRequest;
@@ -517,8 +466,13 @@ function demoToken(): string {
 }
 
 export function initSession(): void {
-  if (!demoMode) void loadGis().catch(() => {});
   if (!demoMode) void finishRedirect();
+  // Back from Google's page without finishing (the page restored from the back/forward cache): connect again.
+  window.addEventListener('pageshow', (e) => {
+    if (!e.persisted || !googleBusy.peek()) return;
+    googleBusy.value = false;
+    if (session.value.state === 'connecting') session.value = { state: 'signedOut' };
+  });
   let seq = 0;
   /** The user signed in on this page, if any (a sign-out event names none). */
   let current: User | null = null;

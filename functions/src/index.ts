@@ -6,7 +6,7 @@ import { HttpsError, onCall, type CallableOptions } from 'firebase-functions/v2/
 import { OAuth2Client } from 'google-auth-library';
 import { randomBytes } from 'node:crypto';
 import { PAIRING_TTL_MS, codeFromBytes, deviceName, deviceUid, isDeviceId, normalizeCode, rateLimiter } from './pairing.js';
-import { exchangeRedirect, householdIdFor, isAllowedAccount, missingScopes, parseAccountList } from './policy.js';
+import { exchangeRedirect, householdIdFor, isAllowedAccount, isCodeVerifier, missingScopes, parseAccountList } from './policy.js';
 
 initializeApp();
 const db = getFirestore();
@@ -44,30 +44,30 @@ const opts: CallableOptions = {
 /** Where the household's Google refresh token lives. Firestore rules deny all client access. */
 const tokenDoc = (hid: string) => db.doc(`households/${hid}/private/google`);
 
-/**
- * The OAuth client a code is exchanged with: redirect_uri 'postmessage' for
- * Google Identity Services' popup, the site's root for the installed app's
- * redirect (exchangeRedirect), as the code was requested.
- */
-const oauth = (redirect = 'postmessage') => new OAuth2Client(CLIENT_ID.value(), CLIENT_SECRET.value(), redirect);
+/** The OAuth client: for the sign-in's code exchange, with the redirect URI the code was requested with. */
+const oauth = (redirect?: string) => new OAuth2Client(CLIENT_ID.value(), CLIENT_SECRET.value(), redirect);
 
 /**
- * Exchange the OAuth code from the tablet's sign-in popup for tokens, keep the
- * refresh token server-side, and sign the tablet in to that Google account's
- * household (created on its first connection). Only allowlisted accounts may
- * connect; the Firestore rules keep households apart.
+ * Exchange the OAuth code the wall's sign-in brought back from Google (by
+ * redirect, with PKCE: the code is worth nothing without the verifier only
+ * the requesting page holds) for tokens, keep the refresh token
+ * server-side, and sign the wall in to that Google account's household
+ * (created on its first connection). Only allowlisted accounts may connect;
+ * the Firestore rules keep households apart.
  */
-export const connectGoogle = onCall<{ code?: unknown; redirectUri?: unknown }>(opts, async (req) => {
+export const connectGoogle = onCall<{ code?: unknown; codeVerifier?: unknown; redirectUri?: unknown }>(opts, async (req) => {
   const code = req.data?.code;
   if (typeof code !== 'string' || code.length < 10 || code.length > 2048)
     throw new HttpsError('invalid-argument', 'Missing authorization code.');
+  const codeVerifier = req.data?.codeVerifier;
+  if (!isCodeVerifier(codeVerifier)) throw new HttpsError('invalid-argument', 'That sign-in is incomplete. Connect again.');
   const redirect = exchangeRedirect(req.data?.redirectUri, process.env.GCLOUD_PROJECT ?? '');
   if (!redirect) throw new HttpsError('invalid-argument', 'That sign-in did not come back to this site.');
 
   const client = oauth(redirect);
   let tokens;
   try {
-    ({ tokens } = await client.getToken(code));
+    ({ tokens } = await client.getToken({ code, codeVerifier }));
   } catch {
     throw new HttpsError('permission-denied', 'Google rejected the sign-in. Try connecting again.');
   }
@@ -146,7 +146,14 @@ export const googleAccessToken = onCall(opts, async (req) => {
     return { accessToken: token, expiresAt: client.credentials.expiry_date ?? Date.now() + 3_000_000 };
   } catch (e) {
     if (String(e).includes('invalid_grant')) {
-      await tokenDoc(hid).update({ refreshToken: null, revokedAt: Date.now() });
+      // Only the token Google refused: a connection made meanwhile stored a new one, which stays.
+      const cleared = await tokenDoc(hid)
+        .update({ refreshToken: null, revokedAt: Date.now() }, { lastUpdateTime: snap.updateTime! })
+        .then(
+          () => true,
+          () => false,
+        );
+      if (!cleared) throw new HttpsError('unavailable', 'The Google connection just changed. Try again.');
       throw new HttpsError('failed-precondition', 'Google access was revoked. Connect the Google account again.');
     }
     throw new HttpsError('unavailable', 'Could not reach Google. Try again shortly.');
@@ -222,19 +229,20 @@ export const cancelPairing = onCall<{ code?: unknown }>(opts, async (req) => {
 /*
  * redeemPairing needs no sign-in, so anyone can call it: each instance
  * refuses calls past a rate no family pairing comes near, before any
- * database read, and there is one instance. The emulator, where the tests
- * pair hundreds of phones, has no limit.
+ * database read (calls that cannot be a pairing spend nothing), and there
+ * is one instance. The emulator, where the tests pair hundreds of phones,
+ * has no limit.
  */
 const redeemLimit = emulator ? () => true : rateLimiter(30, 15);
 
 /** Pair a phone: trade a code from the wall, once, for the phone's own sign-in. Needs no sign-in. */
 export const redeemPairing = onCall<{ code?: unknown; name?: unknown }>({ ...opts, maxInstances: 1 }, async (req) => {
-  if (!redeemLimit(Date.now()))
-    throw new HttpsError('resource-exhausted', 'Too many pairing attempts just now. Wait a minute and try again.');
   const code = normalizeCode(req.data?.code);
   if (!code) throw new HttpsError('invalid-argument', 'That is not a pairing code: it has 8 letters and digits.');
   const name = deviceName(req.data?.name);
   if (!name) throw new HttpsError('invalid-argument', 'Give this phone a name (up to 40 characters).');
+  if (!redeemLimit(Date.now()))
+    throw new HttpsError('resource-exhausted', 'Too many pairing attempts just now. Wait a minute and try again.');
   const ref = db.doc(`pairings/${code}`);
   type Paired = { ok: true; hid: string; account: string; deviceId: string } | { ok: false; error: string };
   const paired = await db.runTransaction(async (tx): Promise<Paired> => {

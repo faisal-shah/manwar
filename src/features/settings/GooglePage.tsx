@@ -59,24 +59,12 @@ export function GooglePage() {
           hint={status}
         >
           {problem ? (
-            // Settings can stay open after the lock relocks, so this asks too. Google's popup opens from
-            // the PIN pad's last tap, still inside the user gesture.
+            // Settings can stay open after the lock relocks, so this asks too. The wall goes to Google's
+            // page and comes back reloaded; the result shows there (reconnectNote).
             <Button
               variant="primary"
               class="set-btn"
-              onClick={() =>
-                void asParent(
-                  () =>
-                    startGoogleConnect({
-                      onDone: () => {
-                        toast('Google Calendar is connected again.');
-                        void syncNow();
-                      },
-                      onError: (m) => toast(m),
-                    }),
-                  'Enter the PIN to reconnect Google.',
-                )
-              }
+              onClick={() => void asParent(() => startGoogleConnect((m) => toast(m)), 'Enter the PIN to reconnect Google.')}
             >
               <RefreshCw size="2rem" />
               Reconnect

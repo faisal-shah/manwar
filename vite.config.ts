@@ -70,9 +70,9 @@ export default defineConfig({
           },
         ],
         navigateFallback: 'index.html',
-        // Firebase's reserved /__/ paths go to the network, except the installed app's Google sign-in
-        // coming back to Firebase's registered handler address (state=manwar-...): the app itself
-        // answers it (data/googleRedirect.ts).
+        // Firebase's reserved /__/ paths go to the network, except Manwar's Google sign-in coming back
+        // to Firebase's registered handler address (state=manwar-...): the app itself answers it
+        // (data/googleRedirect.ts).
         navigateFallbackDenylist: [/^\/__\/(?!auth\/handler\?.*\bstate=manwar-)/],
         cleanupOutdatedCaches: true,
       },

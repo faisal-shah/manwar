@@ -11,10 +11,11 @@ import { seedIfEmpty } from '../data/seed';
 import { seedMemory } from '../features/lists/memory';
 import { ready, unsentWrites } from '../data/store';
 import { prayerBusy } from './face';
-import { session } from '../data/session';
+import { googleBusy, reconnectNote, session } from '../data/session';
 import { holdSleepForTimer } from '../features/timer/state';
 import { startPhoneTheme } from '../phone/theme';
 import { startBack } from '../ui/back';
+import { toast } from '../ui/overlays';
 import { isPhone } from './layout';
 import { startIdleReturn } from './nav';
 
@@ -35,6 +36,13 @@ export function startApp(): void {
     startRelock();
     holdWakeLock();
   }
+  // A reconnect's result, on the page Google's redirect came back to.
+  effect(() => {
+    const note = reconnectNote.value;
+    if (!note) return;
+    reconnectNote.value = null;
+    toast(note);
+  });
   let started = false;
   effect(() => {
     if (session.value.state !== 'signedIn' || !ready.value || started) return;
@@ -60,7 +68,8 @@ const CHECK_MS = 30 * 60_000;
 /**
  * New deploys. The service worker checks for a new version every 30 minutes;
  * once one is waiting it is applied (page reload) as soon as nothing would be
- * interrupted: right away before sign-in, otherwise after two idle minutes
+ * interrupted: never while a Google connection is under way (googleBusy),
+ * right away before sign-in, otherwise after two idle minutes
  * with no sheet, dialog, popover or running timer on screen (a note on the
  * wall is no reason to wait: it shows again, not announced again), nothing on
  * the prayer face a reload would cut short (the athan sequence, its settings,
@@ -70,11 +79,12 @@ const CHECK_MS = 30 * 60_000;
 function startUpdates(): void {
   let waiting = false;
   const safe = () =>
-    session.value.state !== 'signedIn' ||
-    (idleFor() > IDLE_MS &&
-      !document.querySelector('[role="dialog"]:not(.message-layer)') &&
-      unsentWrites.peek() === 0 &&
-      !prayerBusy.peek());
+    !googleBusy.peek() &&
+    (session.value.state !== 'signedIn' ||
+      (idleFor() > IDLE_MS &&
+        !document.querySelector('[role="dialog"]:not(.message-layer)') &&
+        unsentWrites.peek() === 0 &&
+        !prayerBusy.peek()));
   const tryApply = () => {
     if (waiting && safe()) void update(true);
   };

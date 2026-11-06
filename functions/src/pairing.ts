@@ -35,10 +35,17 @@ export function normalizeCode(input: unknown): string | null {
   return [...s].every((c) => PAIR_ALPHABET.includes(c)) ? s : null;
 }
 
+/**
+ * Control characters and the bidi embeddings, overrides and isolates: a
+ * name with them could turn the text around it (the wall's Phones list) on
+ * its head. Joiners stay (emoji sequences, Persian).
+ */
+const UNSHOWN = /[\p{Cc}\u202A-\u202E\u2066-\u2069\u200E\u200F\u061C]/gu;
+
 /** A device's name ("Mamma's phone"): trimmed, 1 to DEVICE_NAME_MAX characters. Null when unusable. */
 export function deviceName(input: unknown): string | null {
   if (typeof input !== 'string') return null;
-  const s = input.replace(/\s+/g, ' ').trim();
+  const s = input.replace(UNSHOWN, ' ').replace(/\s+/g, ' ').trim();
   return s.length >= 1 && [...s].length <= DEVICE_NAME_MAX ? s : null;
 }
 

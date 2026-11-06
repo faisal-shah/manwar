@@ -40,13 +40,15 @@ export function missingScopes(granted: string | undefined): string[] {
 }
 
 /**
- * The redirect URI a sign-in code is exchanged with: 'postmessage' for the
- * popup a browser tab opens (the default), or Firebase's handler address
- * (the redirect URI the OAuth client has registered) for the installed
- * app's redirect, on the project's own Firebase host only. Anything else is
- * null: refused.
+ * The redirect URI a sign-in code is exchanged with: Firebase's handler
+ * address on the project's own Firebase host (the redirect URI the OAuth
+ * client has registered, where the app's sign-in comes back). Anything else
+ * is null: refused.
  */
 export function exchangeRedirect(asked: unknown, projectId: string): string | null {
-  if (asked === undefined || asked === null || asked === 'postmessage') return 'postmessage';
-  return asked === `https://${projectId}.firebaseapp.com/__/auth/handler` ? asked : null;
+  const handler = `https://${projectId}.firebaseapp.com/__/auth/handler`;
+  return asked === handler ? handler : null;
 }
+
+/** A PKCE code verifier (RFC 7636): 43 to 128 unreserved characters. */
+export const isCodeVerifier = (v: unknown): v is string => typeof v === 'string' && /^[A-Za-z0-9._~-]{43,128}$/.test(v);

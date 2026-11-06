@@ -1,91 +1,158 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * Google access tokens across a reconnect to another account. A token
- * request is a Functions call made as the signed-in household; one still on
- * its way when the tablet connects another account answers for the account
- * before, and must not replace the new account's token.
+ * Coming back from Google's consent page (session.ts finishRedirect): the
+ * page decides between a first sign-in and a reconnect by who is signed in
+ * once Auth has restored, and Calendar token requests wait for the code
+ * exchange, which brings the new connection's token. A token request still
+ * on its way when the household disconnects answers for the connection
+ * before, and caches nothing.
  */
 
-const auth = vi.hoisted(() => ({ currentUser: { uid: 'gOld' } as { uid: string } | null }));
-vi.mock('../../src/data/firebase', () => ({ auth, functions: {} }));
+const auth = vi.hoisted(() => ({
+  currentUser: null as { uid: string } | null,
+  authStateReady: async () => {},
+}));
+vi.mock('../../src/data/firebase', () => ({ auth, functions: {}, db: {} }));
 vi.mock('firebase/auth', () => ({
   onAuthStateChanged: () => () => {},
   signInWithCustomToken: vi.fn(async () => void (auth.currentUser = { uid: 'gNew' })),
-  signOut: vi.fn(async () => {}),
+  signOut: vi.fn(async () => void (auth.currentUser = null)),
 }));
-vi.mock('../../src/data/store', () => ({ openHousehold: () => {}, closeHousehold: () => {} }));
+vi.mock('../../src/data/store', () => ({ openHousehold: () => {}, closeHousehold: () => {}, householdId: { peek: () => null } }));
 
 /** The Functions calls in flight, by name, answered by the test. */
-const calls = vi.hoisted(() => [] as { name: string; resolve: (data: unknown) => void; reject: (e: unknown) => void }[]);
+const calls = vi.hoisted(
+  () => [] as { name: string; data: unknown; resolve: (data: unknown) => void; reject: (e: unknown) => void }[],
+);
 vi.mock('firebase/functions', () => ({
-  httpsCallable: (_f: unknown, name: string) => () =>
-    new Promise((resolve, reject) => calls.push({ name, resolve: (data) => resolve({ data }), reject })),
+  httpsCallable: (_f: unknown, name: string) => (data: unknown) =>
+    new Promise((resolve, reject) => calls.push({ name, data, resolve: (d) => resolve({ data: d }), reject })),
 }));
 
-/** Google's popup, answering with a code at once. */
-const code = vi.hoisted(() => ({ callback: null as null | ((r: { code: string }) => void) }));
-// A browser tab, not an installed app: the popup sign-in (session.ts startGoogleConnect).
-vi.stubGlobal('matchMedia', () => ({ matches: false }));
-vi.stubGlobal('window', {
-  google: {
-    accounts: {
-      oauth2: {
-        initCodeClient: (c: { callback: (r: { code: string }) => void }) => ({
-          requestCode: () => (code.callback = c.callback),
-        }),
-      },
-    },
-  },
+const storage = new Map<string, string>();
+vi.stubGlobal('localStorage', {
+  getItem: (k: string) => storage.get(k) ?? null,
+  setItem: (k: string, v: string) => void storage.set(k, v),
+  removeItem: (k: string) => void storage.delete(k),
 });
-vi.stubGlobal('location', { search: '' });
+vi.stubGlobal('window', { addEventListener: () => {}, removeEventListener: () => {} });
+vi.stubGlobal('document', { addEventListener: () => {}, removeEventListener: () => {} });
+vi.stubGlobal('matchMedia', () => ({ matches: false }));
+const replaced: string[] = [];
+vi.stubGlobal('history', { state: null, replaceState: (_s: unknown, _t: string, url: string) => replaced.push(url) });
+const loc = { search: '', href: 'https://home.example.com/' };
+vi.stubGlobal('location', loc);
 
-const { googleAccessToken, googleProblem, session, startGoogleConnect } = await import('../../src/data/session');
+const { disconnect, googleAccessToken, googleBusy, googleProblem, initSession, reconnectNote, session } =
+  await import('../../src/data/session');
 
 const later = Date.now() + 3_600_000;
 const settle = () => new Promise((r) => setTimeout(r, 0));
 const answer = (name: string) => {
   const i = calls.findIndex((c) => c.name === name);
+  expect(i, `a ${name} call`).toBeGreaterThanOrEqual(0);
   return calls.splice(i, 1)[0];
 };
 
-describe('Google access token across a reconnect', () => {
-  it('keeps the new account’s token when a request made before the reconnect answers after it', async () => {
+/** This page loads as Google's return for a request this device made. */
+function returnFromGoogle(query = 'state=manwar-s1&code=4%2Fc1&scope=x') {
+  storage.set('manwar.googleRedirect.v1', JSON.stringify({ state: 'manwar-s1', verifier: 'ver-1', at: Date.now() }));
+  loc.search = `?${query}`;
+  initSession();
+}
+
+beforeEach(() => {
+  calls.length = 0;
+  replaced.length = 0;
+  storage.clear();
+  reconnectNote.value = null;
+  googleProblem.value = null;
+});
+
+describe('coming back from Google', () => {
+  it('reconnects a signed-in wall in place: the token request waits for the exchange, and a toast says so', async () => {
+    auth.currentUser = { uid: 'gOld' };
     session.value = { state: 'signedIn', account: 'old' };
-    const before = googleAccessToken();
-    // Connected again as another account while that request is on its way.
-    startGoogleConnect();
-    code.callback!({ code: 'c' });
+    googleProblem.value = 'Google access was revoked.';
+    returnFromGoogle();
     await settle();
-    answer('connectGoogle').resolve({ customToken: 't', accessToken: 'new-token', expiresAt: later, account: 'new' });
+    expect(googleBusy.value).toBe(true);
+    // The calendar sync starts from the cache meanwhile; its token request waits.
+    const token = googleAccessToken();
+    const exchange = answer('connectGoogle');
+    expect(exchange.data).toEqual({
+      code: '4/c1',
+      codeVerifier: 'ver-1',
+      redirectUri: expect.stringMatching(/^https:\/\/.+\/__\/auth\/handler$/),
+    });
+    expect(session.value.state).toBe('signedIn');
+    exchange.resolve({ customToken: 't', accessToken: 'new-token', expiresAt: later, account: 'new' });
+    expect(await token).toBe('new-token');
     await settle();
-    expect(auth.currentUser?.uid).toBe('gNew');
-    answer('googleAccessToken').resolve({ accessToken: 'old-token', expiresAt: later });
-    // Whoever asked before the reconnect gets the old account's token; the wall from now on gets the new one.
-    expect(await before).toBe('old-token');
-    expect(await googleAccessToken()).toBe('new-token');
     expect(calls).toEqual([]);
+    expect(session.value).toEqual({ state: 'signedIn', account: 'new' });
+    expect(reconnectNote.value).toBe('Google Calendar is connected again.');
+    expect(googleProblem.value).toBeNull();
+    expect(googleBusy.value).toBe(false);
+    // The code is gone from the address and the request from storage.
+    expect(replaced).toEqual(['/']);
+    expect(storage.size).toBe(0);
   });
 
-  it('does not ask for a reconnect because of the account connected before', async () => {
-    session.value = { state: 'signedIn', account: 'new' };
+  it('keeps the wall on screen when a reconnect fails, and says why in the toast', async () => {
     auth.currentUser = { uid: 'gOld' };
-    // A request that needs a fresh token: make the cached one expire.
-    vi.useFakeTimers({ now: later });
+    session.value = { state: 'signedIn', account: 'old' };
+    returnFromGoogle();
+    await settle();
+    answer('connectGoogle').reject(
+      Object.assign(new Error('Manwar needs to see and edit your calendars.'), { code: 'functions/failed-precondition' }),
+    );
+    await settle();
+    expect(session.value.state).toBe('signedIn');
+    expect(reconnectNote.value).toContain('Manwar needs to see and edit your calendars.');
+    expect(googleBusy.value).toBe(false);
+  });
+
+  it('says on the sign-in screen why a first sign-in did not finish', async () => {
+    auth.currentUser = null;
+    session.value = { state: 'loading' };
+    returnFromGoogle('state=manwar-s1&error=access_denied');
+    await settle();
+    expect(calls).toEqual([]);
+    expect(session.value).toEqual({ state: 'error', error: 'Google sign-in was cancelled.' });
+    expect(reconnectNote.value).toBeNull();
+  });
+
+  it("leaves another tab's request in place when a return does not answer this one", async () => {
+    auth.currentUser = null;
+    session.value = { state: 'loading' };
+    storage.set('manwar.googleRedirect.v1', JSON.stringify({ state: 'manwar-other', verifier: 'v', at: Date.now() }));
+    loc.search = '?state=manwar-s1&code=x';
+    initSession();
+    await settle();
+    expect(calls).toEqual([]);
+    expect(session.value.state).toBe('error');
+    expect(storage.has('manwar.googleRedirect.v1')).toBe(true);
+  });
+});
+
+describe('a token request across a disconnect', () => {
+  it('answers whoever asked, and caches nothing for the connection after', async () => {
+    loc.search = '';
+    auth.currentUser = { uid: 'gOld' };
+    session.value = { state: 'signedIn', account: 'old' };
+    vi.useFakeTimers({ now: later * 2 });
     const before = googleAccessToken();
     vi.useRealTimers();
-    startGoogleConnect();
-    code.callback!({ code: 'c' });
-    await settle();
-    answer('connectGoogle').resolve({ customToken: 't', accessToken: 'new-token-2', expiresAt: later * 2, account: 'new' });
-    await settle();
-    // The old account's access was revoked, which is why the household connected again.
+    await disconnect();
     const revoked = Object.assign(new Error('Google access was revoked. Connect again. [400]'), {
       code: 'functions/failed-precondition',
     });
     answer('googleAccessToken').reject(revoked);
     await expect(before).rejects.toThrow('Google access was revoked');
+    // Not this connection's problem.
     expect(googleProblem.value).toBeNull();
-    expect(await googleAccessToken()).toBe('new-token-2');
+    await expect(googleAccessToken()).rejects.toThrow('Not signed in.');
   });
 });
