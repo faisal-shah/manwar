@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { REQUIRED_SCOPES, householdIdFor, isAllowedAccount, missingScopes, normalizeEmail, parseAccountList } from './policy.js';
+import {
+  REQUIRED_SCOPES,
+  exchangeRedirect,
+  householdIdFor,
+  isAllowedAccount,
+  missingScopes,
+  normalizeEmail,
+  parseAccountList,
+} from './policy.js';
 
 describe('policy', () => {
   it('derives a household id from the Google subject id', () => {
@@ -32,5 +40,15 @@ describe('policy', () => {
     expect(isAllowedAccount('team@example.com', list)).toBe(true);
     expect(isAllowedAccount('someone@gmail.com', list)).toBe(false);
     expect(isAllowedAccount('x@gmail.com', [])).toBe(false);
+  });
+  it('exchanges a code with the popup redirect, or the site root on this project only', () => {
+    expect(exchangeRedirect(undefined, 'manwar-x')).toBe('postmessage');
+    expect(exchangeRedirect('postmessage', 'manwar-x')).toBe('postmessage');
+    const handler = 'https://manwar-x.firebaseapp.com/__/auth/handler';
+    expect(exchangeRedirect(handler, 'manwar-x')).toBe(handler);
+    expect(exchangeRedirect('https://evil.example/__/auth/handler', 'manwar-x')).toBeNull();
+    expect(exchangeRedirect('https://manwar-x.firebaseapp.com/', 'manwar-x')).toBeNull();
+    expect(exchangeRedirect('https://other.firebaseapp.com/__/auth/handler', 'manwar-x')).toBeNull();
+    expect(exchangeRedirect(42, 'manwar-x')).toBeNull();
   });
 });

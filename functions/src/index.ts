@@ -6,7 +6,7 @@ import { HttpsError, onCall, type CallableOptions } from 'firebase-functions/v2/
 import { OAuth2Client } from 'google-auth-library';
 import { randomBytes } from 'node:crypto';
 import { PAIRING_TTL_MS, codeFromBytes, deviceName, deviceUid, isDeviceId, normalizeCode, rateLimiter } from './pairing.js';
-import { householdIdFor, isAllowedAccount, missingScopes, parseAccountList } from './policy.js';
+import { exchangeRedirect, householdIdFor, isAllowedAccount, missingScopes, parseAccountList } from './policy.js';
 
 initializeApp();
 const db = getFirestore();
@@ -44,8 +44,12 @@ const opts: CallableOptions = {
 /** Where the household's Google refresh token lives. Firestore rules deny all client access. */
 const tokenDoc = (hid: string) => db.doc(`households/${hid}/private/google`);
 
-/** Codes from the Google Identity Services popup are exchanged with redirect_uri 'postmessage'. */
-const oauth = () => new OAuth2Client(CLIENT_ID.value(), CLIENT_SECRET.value(), 'postmessage');
+/**
+ * The OAuth client a code is exchanged with: redirect_uri 'postmessage' for
+ * Google Identity Services' popup, the site's root for the installed app's
+ * redirect (exchangeRedirect), as the code was requested.
+ */
+const oauth = (redirect = 'postmessage') => new OAuth2Client(CLIENT_ID.value(), CLIENT_SECRET.value(), redirect);
 
 /**
  * Exchange the OAuth code from the tablet's sign-in popup for tokens, keep the
@@ -53,12 +57,14 @@ const oauth = () => new OAuth2Client(CLIENT_ID.value(), CLIENT_SECRET.value(), '
  * household (created on its first connection). Only allowlisted accounts may
  * connect; the Firestore rules keep households apart.
  */
-export const connectGoogle = onCall<{ code?: unknown }>(opts, async (req) => {
+export const connectGoogle = onCall<{ code?: unknown; redirectUri?: unknown }>(opts, async (req) => {
   const code = req.data?.code;
   if (typeof code !== 'string' || code.length < 10 || code.length > 2048)
     throw new HttpsError('invalid-argument', 'Missing authorization code.');
+  const redirect = exchangeRedirect(req.data?.redirectUri, process.env.GCLOUD_PROJECT ?? '');
+  if (!redirect) throw new HttpsError('invalid-argument', 'That sign-in did not come back to this site.');
 
-  const client = oauth();
+  const client = oauth(redirect);
   let tokens;
   try {
     ({ tokens } = await client.getToken(code));

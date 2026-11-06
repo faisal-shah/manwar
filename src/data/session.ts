@@ -3,11 +3,12 @@ import { onAuthStateChanged, signInWithCustomToken, signOut, type User } from 'f
 import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { HOUSEHOLD_KEY } from './householdKey';
 import { httpsCallable } from 'firebase/functions';
-import { demoMode, googleClientId, googleScopes } from '../config';
+import { canonicalHost, demoMode, googleClientId, googleScopes } from '../config';
 import { onActivity } from '../core/activity';
 import { errorMessage, isSignInRefused, needsReconnect } from './errors';
 import { auth, db, functions } from './firebase';
 import { closeHousehold, householdId, openHousehold } from './store';
+import { googleAuthUrl, readReturn, redirectUri, RETURN_PARAMS, STATE_PREFIX, type PendingRedirect } from './googleRedirect';
 
 /**
  * Who the tablet is signed in as. A household signs in once with Google's
@@ -96,8 +97,19 @@ interface ConnectOptions {
   onError?: (message: string) => void;
 }
 
-/** Open Google's account chooser and consent popup. Must run in a tap handler. */
+/** Running as an installed app (Android's "Install app"), where Google's popup cannot report back. */
+const installedApp = () => ['standalone', 'fullscreen', 'minimal-ui'].some((m) => matchMedia(`(display-mode: ${m})`).matches);
+
+const REDIRECT_KEY = 'manwar.googleRedirect.v1';
+
+/**
+ * Open Google's account chooser and consent: a popup in a browser tab, a
+ * redirect in an installed app (data/googleRedirect.ts; a reconnect then
+ * reloads the wall, and its result shows on the page it comes back to).
+ * Must run in a tap handler.
+ */
 export function startGoogleConnect(opts: ConnectOptions = {}): void {
+  if (installedApp()) return void redirectToGoogle();
   const report = opts.onError ?? fail;
   const oauth2 = window.google?.accounts?.oauth2;
   if (!oauth2) {
@@ -124,6 +136,53 @@ export function startGoogleConnect(opts: ConnectOptions = {}): void {
     .requestCode();
 }
 
+async function redirectToGoogle(): Promise<void> {
+  // The return is answered by the service worker (googleRedirect.ts): without an active one, Firebase's
+  // handler page would answer it instead.
+  const sw = await navigator.serviceWorker?.getRegistration().catch(() => undefined);
+  if (!sw?.active) {
+    fail('The app is still installing itself. Try again in a moment.');
+    return;
+  }
+  const pending: PendingRedirect = { state: `${STATE_PREFIX}${crypto.randomUUID()}`, at: Date.now() };
+  try {
+    localStorage.setItem(REDIRECT_KEY, JSON.stringify(pending));
+  } catch {
+    fail('This browser keeps no storage, so Google sign-in cannot come back to it.');
+    return;
+  }
+  location.assign(googleAuthUrl(googleClientId, googleScopes, canonicalHost, pending.state));
+}
+
+/** Finish a sign-in that came back from Google (redirectToGoogle), once this page knows who is signed in. */
+async function finishRedirect(): Promise<void> {
+  let pending: PendingRedirect | null = null;
+  try {
+    pending = JSON.parse(localStorage.getItem(REDIRECT_KEY) ?? 'null') as PendingRedirect | null;
+  } catch {
+    /* nothing pending */
+  }
+  const back = readReturn(location.search, pending, Date.now());
+  if (!back) return;
+  try {
+    localStorage.removeItem(REDIRECT_KEY);
+  } catch {
+    /* gone with the storage */
+  }
+  // The code is used once: the address no longer carries it (and is the app's own again, not the handler's).
+  const url = new URL(location.href);
+  url.pathname = '/';
+  for (const k of RETURN_PARAMS) url.searchParams.delete(k);
+  history.replaceState(history.state, '', url.href);
+  await auth.authStateReady();
+  if ('error' in back) {
+    if (session.value.state === 'signedIn') googleProblem.value = back.error;
+    else fail(back.error);
+    return;
+  }
+  await exchange(back.code, {}, redirectUri(canonicalHost));
+}
+
 const call = <Req, Res>(name: string) => httpsCallable<Req, Res>(functions, name);
 
 /**
@@ -132,11 +191,14 @@ const call = <Req, Res>(name: string) => httpsCallable<Req, Res>(functions, name
  * user does not change, so no auth event fires), another account switches
  * to its own household through the auth listener.
  */
-async function exchange(code: string, opts: ConnectOptions): Promise<void> {
+async function exchange(code: string, opts: ConnectOptions, redirect?: string): Promise<void> {
   const reconnecting = session.value.state === 'signedIn';
   if (!reconnecting) session.value = { state: 'connecting' };
   try {
-    const res = await call<{ code: string }, ConnectResult>('connectGoogle')({ code });
+    const res = await call<{ code: string; redirectUri?: string }, ConnectResult>('connectGoogle')({
+      code,
+      redirectUri: redirect,
+    });
     newConnection();
     cacheToken(res.data.accessToken, res.data.expiresAt);
     googleProblem.value = null;
@@ -444,6 +506,7 @@ function demoToken(): string {
 
 export function initSession(): void {
   if (!demoMode) void loadGis().catch(() => {});
+  if (!demoMode) void finishRedirect();
   let seq = 0;
   /** The user signed in on this page, if any (a sign-out event names none). */
   let current: User | null = null;

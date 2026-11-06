@@ -38,3 +38,15 @@ export function missingScopes(granted: string | undefined): string[] {
   const have = new Set((granted ?? '').split(/\s+/).filter(Boolean));
   return REQUIRED_SCOPES.filter((s) => !have.has(s));
 }
+
+/**
+ * The redirect URI a sign-in code is exchanged with: 'postmessage' for the
+ * popup a browser tab opens (the default), or Firebase's handler address
+ * (the redirect URI the OAuth client has registered) for the installed
+ * app's redirect, on the project's own Firebase host only. Anything else is
+ * null: refused.
+ */
+export function exchangeRedirect(asked: unknown, projectId: string): string | null {
+  if (asked === undefined || asked === null || asked === 'postmessage') return 'postmessage';
+  return asked === `https://${projectId}.firebaseapp.com/__/auth/handler` ? asked : null;
+}

@@ -2,6 +2,18 @@
 Changelog
 =========
 
+0.3.1 (2026-11-05)
+==================
+
+Fixed
+-----
+
+- Signing in from the installed app (Android's "Install app") ended with
+  "The Google window was closed before finishing": Google's popup opens
+  outside the app and cannot hand its code back. The installed app now
+  goes to Google's page and comes back by redirect; a browser tab keeps
+  the popup.
+
 0.3.0 (2026-11-05)
 ==================
 

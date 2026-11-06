@@ -25,6 +25,8 @@ vi.mock('firebase/functions', () => ({
 
 /** Google's popup, answering with a code at once. */
 const code = vi.hoisted(() => ({ callback: null as null | ((r: { code: string }) => void) }));
+// A browser tab, not an installed app: the popup sign-in (session.ts startGoogleConnect).
+vi.stubGlobal('matchMedia', () => ({ matches: false }));
 vi.stubGlobal('window', {
   google: {
     accounts: {

@@ -120,7 +120,8 @@ data in memory only, so a lost or removed one keeps none of it.
    screen).
 2. Open the app, tap **Connect Google account** and sign in with the Google
    account whose calendars the wall should show (a shared family account
-   works well). Google warns that the app is unverified: choose
+   works well; in the installed app, Google's page opens in place of the app
+   and comes back to it). Google warns that the app is unverified: choose
    **Advanced → Go to Manwar**, then allow calendar access (leave both
    calendar permissions ticked; the wall refuses a connection without them).
    Each Google account gets its own household: its own people, tasks, lists

@@ -37,8 +37,11 @@ the default project in `.firebaserc`.
   ("Web client (auto created by Google Service)"). Its client id and secret
   are readable from `identitytoolkit.googleapis.com/admin/v2/projects/<project>/defaultSupportedIdpConfigs/google.com`.
   Its registered JavaScript origins are `https://<project>.firebaseapp.com`
-  and `http://localhost` (any port), not web.app; editing them needs the
-  Cloud Console (no public API).
+  and `http://localhost` (any port), not web.app; its one authorized
+  redirect URI is Firebase's handler, `https://<project>.firebaseapp.com/__/auth/handler`,
+  which the installed app's sign-in comes back to. Editing either needs
+  the Cloud Console signed in as an owner (no public API, and the
+  console's own client API does not take a gcloud token).
 - Accounts: each connected Google account is its own household (`hid` =
   `g` + the Google subject id); the Firestore rules keep households apart.
   Only accounts in the `ALLOWED_ACCOUNTS` secret (emails, comma separated)
@@ -834,10 +837,26 @@ generated from it: `node scripts/icons/render.mjs` after any brand change.
   The sleep screen uses `useScrimClose` (the same rule) and, after a waking
   tap, stays a moment (fading) to take the rest of that double tap. In e2e
   tests, close by tapping away from the control that opened it.
-- The Google connection uses the Google Identity Services popup code flow
-  (`redirect_uri` 'postmessage'), so only the page origin must be registered.
-  Google returns a refresh token on the first consent only; `connectGoogle`
-  keeps the stored one when a later connection returns none. Under Fully Kiosk,
+- The Google connection, in a browser tab, uses the Google Identity
+  Services popup code flow (`redirect_uri` 'postmessage': only the page
+  origin must be registered). An installed app (display-mode standalone,
+  fullscreen or minimal-ui: Android's "Install app") cannot use it, as the
+  popup opens outside the app and never reports back ("closed before
+  finishing"): it goes to Google's consent page by redirect and comes back
+  with the code to the redirect URI already registered, Firebase's
+  `/__/auth/handler` (`data/googleRedirect.ts`). Manwar never uses that
+  handler; the service worker answers a navigation there with the app
+  itself when its `state` starts `manwar-` (`navigateFallbackDenylist` in
+  vite.config.ts lets that one through), so the app needs an active
+  service worker before it leaves (`redirectToGoogle` checks). The
+  request's `state` is kept in localStorage (`manwar.googleRedirect.v1`);
+  a return that does not answer it, or comes after 15 minutes, is refused;
+  `finishRedirect` in `session.ts` exchanges the code once auth has
+  restored and puts the address back to `/`. `connectGoogle` exchanges
+  each code with the redirect it was requested with, 'postmessage' or the
+  handler on the project's own host only (`exchangeRedirect`). Google returns a refresh token on the first consent
+  only; `connectGoogle` keeps the stored one when a later connection
+  returns none. Under Fully Kiosk (a browser, not an installed app),
   "Enable Popups" must be on for the consent window.
 - Sessions (`data/session.ts`): the household id is the ID token's `hid`
   claim. Reading claims refreshes an expired token, which fails offline, so
