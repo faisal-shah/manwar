@@ -8,10 +8,6 @@ import { ProgressStrip } from './ProgressStrip';
 import { createNav, navTitle, openEditor, periodOf, savedView } from './state';
 import './calendar.css';
 
-export { CalendarPane } from './CalendarPane';
-export { ProgressStrip } from './ProgressStrip';
-export { openEditor } from './state';
-
 /** The Calendar tab's own paging state; the view is remembered on this device. */
 const nav = createNav(savedView.value);
 nav.onView = (v) => (savedView.value = v);

@@ -61,7 +61,7 @@ export function NoColumns() {
   );
 }
 
-export function ProgressPill({ done, total }: { done: number; total: number }) {
+function ProgressPill({ done, total }: { done: number; total: number }) {
   return (
     <span
       class="pill progress-pill"

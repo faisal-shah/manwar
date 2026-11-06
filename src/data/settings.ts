@@ -64,7 +64,7 @@ export function mergeSettings(stored: Partial<Settings>): Settings {
 /** Elements added to a stored list (arrayUnion), typed as the list. */
 export const listAdd = <T>(...values: T[]) => arrayUnion(...values) as unknown as T[];
 /** Elements taken out of a stored list (arrayRemove), typed as the list. */
-export const listRemove = <T>(...values: T[]) => arrayRemove(...values) as unknown as T[];
+const listRemove = <T>(...values: T[]) => arrayRemove(...values) as unknown as T[];
 /** A field deleted from the stored map (deleteField), typed as the field. */
 const removed = <T>() => deleteField() as unknown as T;
 

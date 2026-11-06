@@ -84,7 +84,7 @@ export function lastDoneBefore(task: Task, due: ISODate): ISODate | undefined {
 }
 
 /** Next due date of a repeat-after-done chore for one profile. */
-export function afterDoneDue(task: Task, profileId: string): ISODate {
+function afterDoneDue(task: Task, profileId: string): ISODate {
   const last = task.lastDone?.[lastDoneKey(profileId)];
   const r = task.repeatAfterDone!;
   return last ? addUnit(last, r.every, r.unit) : task.date;

@@ -34,7 +34,7 @@ export function createNav(view: CalendarView): CalNav {
   return { view: signal(view), focus: signal(null), dir: signal(0) };
 }
 
-export function navSettings(): NavSettings {
+function navSettings(): NavSettings {
   const s = settings.value;
   return {
     weekStart: s.weekStart,

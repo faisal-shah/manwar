@@ -21,8 +21,6 @@ import { startTimer, stopTimer, timer, timerPhase } from './state';
 import './timer.css';
 import { plural } from '../../lib/text';
 
-export { timerActive } from './state';
-
 /** Top-bar Timer button (Home tab): opens the minutes keypad. */
 export function TimerButton() {
   const [open, setOpen] = useState(false);

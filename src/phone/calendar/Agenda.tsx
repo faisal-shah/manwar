@@ -18,7 +18,7 @@ import { shownOf, tapPerson } from './filter';
 import { agendaStart, calView, hiddenPeople, lookingAt, notLoaded, shownPeople } from './state';
 
 /** Days the agenda shows at first, and how many more each time the end comes near. */
-export const FIRST_DAYS = 21;
+const FIRST_DAYS = 21;
 const MORE_DAYS = 28;
 /** Start adding days this far (px) before the end of the list. */
 const NEAR_END_PX = 900;

@@ -57,7 +57,7 @@ const FOOD = '🍳🥞🥯🥐🍞🥪🌮🌯🍕🍝🍜🍲🍛🍚🥗🍗�
 const EVENTS = '🎂🎉🎈🎁🏥🦷🩺💉✈️🚌🚆🏕️🏖️🎬🎟️🏫🏢🛍️💇📞💻🧑‍🏫👪❤️';
 
 /** Routine and chore icons first: tasks, rewards and lists. */
-export const TASK_EMOJI: EmojiGroups = {
+const TASK_EMOJI: EmojiGroups = {
   Routines: '☀️🌤️🌙⭐🛏️🪥🦷🧼🚿🛁🧴💧🧻🚽👕👖🧦👟🎒📚📖✏️📝🧮🔬🎨🎹🎻🎸⚽🏀🏊🚴🧘🤲🕌📿🙏',
   Chores: '🧹🧺🧽🗑️♻️🍽️🥣🧸🛒🐶🐱🐟🌱🪴🚗🧾📦🪣🧯🔧',
   Food: FOOD,

@@ -28,7 +28,7 @@ import { itemWords, singular } from './logic';
  */
 
 /** At most this many suggestions show. */
-export const SUGGESTIONS = 8;
+const SUGGESTIONS = 8;
 
 /**
  * A grocery list's Add item text read as an item: a leading quantity is

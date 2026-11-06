@@ -15,7 +15,8 @@ import { Button } from '../../ui/controls';
 import { toast, useOpeningTapGuard } from '../../ui/overlays';
 import type { MoreItem } from '../more/items';
 import { senderName } from '../wallscreen';
-import { PRESETS, clockLeft, minutesField } from './logic';
+import { clockLeft } from '../../features/timer/logic';
+import { PRESETS, minutesField } from './logic';
 
 /** A start or stop on its way to the server: the buttons wait for its answer. */
 const asking = signal(false);

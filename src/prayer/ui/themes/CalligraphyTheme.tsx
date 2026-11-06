@@ -70,7 +70,7 @@ function DialRow({ slot, top, ramadan }: { slot: Slot; top: boolean; ramadan: bo
   );
 }
 
-export function PrayerDial({ st }: { st: ClockState }) {
+function PrayerDial({ st }: { st: ClockState }) {
   return (
     <div class="dial">
       <div class="dial-face">
@@ -82,7 +82,7 @@ export function PrayerDial({ st }: { st: ClockState }) {
   );
 }
 
-export function SunMedallion({ st }: { st: ClockState }) {
+function SunMedallion({ st }: { st: ClockState }) {
   return (
     <div class="sun-medal">
       <div class="dial-label light">SUNRISE</div>

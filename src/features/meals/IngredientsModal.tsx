@@ -9,7 +9,7 @@ import { ensureGroceryList, groceryList, itemsByList, mergeItems } from '../list
 import { classifyIngredients } from './ingredients';
 import { isolate, plural } from '../../lib/text';
 
-/** Open request for the "Add to Grocery List" modal; <IngredientsHost/> is mounted once by the shell (app/tabs Overlays). */
+/** Open request for the "Add to Grocery List" modal; <IngredientsHost/> is mounted once per layout (app/tabs Overlays, phone/PhoneApp). */
 const request = signal<Recipe | null>(null);
 
 /** Ask which of a recipe's ingredients to add to the default grocery list. */

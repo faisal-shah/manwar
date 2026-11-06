@@ -26,8 +26,6 @@ export interface Profile {
 }
 
 export type PartOfDay = 'morning' | 'afternoon' | 'evening';
-export const PARTS_OF_DAY: PartOfDay[] = ['morning', 'afternoon', 'evening'];
-
 export type RepeatUnit = 'day' | 'week' | 'month' | 'year';
 
 /** A calendar-style repeat rule shared by chores, routines, meals and events. */

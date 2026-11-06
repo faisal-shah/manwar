@@ -9,7 +9,7 @@ import { editOccurrence, mealOccurrences, nextCellOrder, undoOps, weekOf, type M
 
 /** Reactive views of the meal plan and its writes. Callers wrap writes in asParent(). */
 
-export const recipesById = computed(() => new Map(data.recipes.value.map((r) => [r.id, r])));
+const recipesById = computed(() => new Map(data.recipes.value.map((r) => [r.id, r])));
 /** The meal categories in their fixed order. */
 export const categories = computed(() => DEFAULT_MEAL_CATEGORIES.map((c) => settings.value.mealCategories[c.id]));
 export const visibleCategories = computed(() => categories.value.filter((c) => c.visible));
@@ -50,7 +50,7 @@ export function planMeal(p: PlanInput): MealEntry {
   return entry;
 }
 
-export function applyMealOps(ops: MealOp[]): void {
+function applyMealOps(ops: MealOp[]): void {
   const b = batch();
   for (const o of ops) {
     if (o.op === 'put') b.put('meals', o.entry);

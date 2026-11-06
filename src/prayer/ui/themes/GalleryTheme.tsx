@@ -27,7 +27,7 @@ function todaysOrder<T>(items: T[], day: number): T[] {
   return out;
 }
 
-export function currentPiece(now: Date): Piece | null {
+function currentPiece(now: Date): Piece | null {
   const g = settings.value.gallery;
   const pool: Piece[] = [
     ...photos.value.filter((p) => g.categories[p.category]).map((photo) => ({ kind: 'photo' as const, id: photo.id, photo })),

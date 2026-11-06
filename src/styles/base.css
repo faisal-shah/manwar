@@ -175,23 +175,7 @@ select {
     color: lch(from var(--c) calc((50 - l) * infinity) 0 0);
   }
 }
-.tint-mid {
-  background: color-mix(in srgb, var(--c) 62%, var(--tint-base));
-  color: var(--on-tint);
-}
-.tint-light {
-  background: color-mix(in srgb, var(--c) 22%, var(--tint-base));
-  color: var(--on-tint);
-}
 
 .muted {
   color: var(--text-2);
-}
-
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
 }

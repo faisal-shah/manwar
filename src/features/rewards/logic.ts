@@ -26,7 +26,7 @@ export function validateCost(cost: number): string | null {
   return null;
 }
 
-export const canRedeem = (reward: Pick<Reward, 'profiles'>, profileId: string) =>
+const canRedeem = (reward: Pick<Reward, 'profiles'>, profileId: string) =>
   reward.profiles.length === 0 || reward.profiles.includes(profileId);
 
 export interface RewardView {

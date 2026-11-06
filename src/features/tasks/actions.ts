@@ -150,7 +150,7 @@ export function complete(o: Occurrence, by: string, day: string, origin?: DOMRec
   }
 }
 
-export function uncheck(o: Occurrence): void {
+function uncheck(o: Occurrence): void {
   const stars = o.state?.stars ?? 0;
   if (!uncompleteTask(o)) return;
   toast(`${o.task.title} unchecked${stars ? `, ${plural(stars, 'star')} taken back` : ''}`);
@@ -163,7 +163,7 @@ export function skip(o: Occurrence, day: string): void {
   }, 'Enter the PIN to skip a task.');
 }
 
-export function unskip(o: Occurrence): void {
+function unskip(o: Occurrence): void {
   void unskipTask(o);
 }
 

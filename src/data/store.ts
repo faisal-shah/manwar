@@ -24,8 +24,7 @@ import { isPhone } from '../app/layout';
 import { errorMessage } from './errors';
 import { db } from './firebase';
 import { addDays } from '../lib/date';
-import { currentTime, today } from '../lib/clock';
-import { toISODate } from '../lib/date';
+import { today } from '../lib/clock';
 import { HISTORY_DAYS } from '../tasks/engine';
 import { DEFAULT_SETTINGS, mergeSettings } from './settings';
 import type {
@@ -191,7 +190,7 @@ function hid(): string {
 }
 
 export const colRef = (name: CollectionName) => collection(db, 'households', hid(), name);
-export const docRef = (name: CollectionName, id: string) => doc(db, 'households', hid(), name, id);
+const docRef = (name: CollectionName, id: string) => doc(db, 'households', hid(), name, id);
 export const settingsRef = () => doc(db, 'households', hid(), 'settings', 'main');
 export const prayerSettingsRef = () => doc(db, 'households', hid(), 'settings', 'prayer');
 
@@ -537,8 +536,3 @@ export function batch() {
   };
   return api;
 }
-
-export const byId = <T extends { id: string }>(items: T[]) => new Map(items.map((x) => [x.id, x]));
-
-/** ISO date `n` days from today, for queries and seeds. */
-export const daysFromToday = (n: number) => addDays(toISODate(new Date(currentTime())), n);

@@ -13,7 +13,8 @@ import {
 } from '../../src/features/timer/logic';
 import { listSummary, summaryLine } from '../../src/phone/lists/logic';
 import { mealsOn, planCategory, weekByDay } from '../../src/phone/meals/logic';
-import { clockLeft, minutesField } from '../../src/phone/timer/logic';
+import { clockLeft } from '../../src/features/timer/logic';
+import { minutesField } from '../../src/phone/timer/logic';
 import { describeCommand, wallAsleepGuess, whenSent } from '../../src/phone/wallscreen/logic';
 
 /** Local instants (tests run in America/Chicago). */

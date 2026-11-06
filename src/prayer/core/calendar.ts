@@ -1,6 +1,6 @@
 import { formatTime, type TimeFormat } from '../../lib/date';
 
-export const HIJRI_MONTHS = [
+const HIJRI_MONTHS = [
   'Muharram',
   'Safar',
   'Rabi al-Awwal',

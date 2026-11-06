@@ -15,7 +15,7 @@ import { mealOccurrences } from '../../features/meals/plan';
 import { categoryById, recipeOf, mealEmoji } from '../../features/meals/state';
 import { pending } from '../../features/messages/state';
 import { timeAgo } from '../../features/messages/logic';
-import { splitRemaining } from '../../features/timer/logic';
+import { clockLeft } from '../../features/timer/logic';
 import { timer, timerPhase } from '../../features/timer/state';
 import { editTask } from '../../features/tasks/actions';
 import { UFG_COLOR } from '../../features/tasks/TaskCard';
@@ -106,8 +106,7 @@ function OnTheWall() {
 
 function timerText(startAt: number, endAt: number, phase: 'lead' | 'running' | 'done'): string {
   if (phase === 'done') return "The wall timer is done. Time's up!";
-  const { mins, secs } = splitRemaining(endAt - Math.max(nowMs.value, startAt));
-  return `Wall timer: ${mins}:${String(secs).padStart(2, '0')} left`;
+  return `Wall timer: ${clockLeft(endAt - Math.max(nowMs.value, startAt))} left`;
 }
 
 const MAX_EVENTS = 4;

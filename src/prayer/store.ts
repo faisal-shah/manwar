@@ -57,7 +57,7 @@ setInterval(() => {
 }, 200);
 
 export const bundledAudio = signal<BundledAudio[]>([]);
-export const gallery = signal<GalleryItem[]>([]);
+const gallery = signal<GalleryItem[]>([]);
 export const calligraphyArt = signal<CalligraphyArt[]>([]);
 export const uploads = signal<Upload[]>([]);
 const DISMISSED_KEY = 'manwar.prayer.dismissed.v1';
@@ -89,7 +89,7 @@ function saveDismissed(ids: ReadonlySet<string>): void {
   }
 }
 
-export const dismissed = signal<ReadonlySet<string>>(loadDismissed());
+const dismissed = signal<ReadonlySet<string>>(loadDismissed());
 export const settingsOpen = signal(false);
 /** Forces a theme while a settings preview is running. */
 export const previewTheme = signal<ThemeKey | null>(null);
@@ -108,7 +108,7 @@ export const picking = signal<BgSlot | null>(null);
 export const audioBlocked = signal(false);
 
 /** True once the first attempt to load the media indexes and uploads has finished, whatever its outcome. */
-export const mediaLoaded = signal(false);
+const mediaLoaded = signal(false);
 
 /** Loads the media indexes and uploads; anything that failed is tried again a minute later. */
 export async function loadMedia(): Promise<void> {
@@ -285,7 +285,7 @@ function objectUrl(urls: Map<string, string>, id: string, blob: Blob): string {
   return url;
 }
 
-export const uploadUrl = (u: Upload): string => objectUrl(uploadUrls, u.id, u.blob);
+const uploadUrl = (u: Upload): string => objectUrl(uploadUrls, u.id, u.blob);
 
 function revokeUrls(id: string): void {
   for (const urls of [uploadUrls, thumbUrls]) {

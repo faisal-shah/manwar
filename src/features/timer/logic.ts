@@ -54,6 +54,14 @@ export function splitRemaining(ms: number): { mins: number; secs: number } {
   return { mins: Math.floor(s / 60), secs: s % 60 };
 }
 
+/** "4:05" (minutes and seconds left), "1:02:05" past an hour. */
+export function clockLeft(ms: number): string {
+  const { mins, secs } = splitRemaining(ms);
+  const s = String(secs).padStart(2, '0');
+  if (mins < 60) return `${mins}:${s}`;
+  return `${Math.floor(mins / 60)}:${String(mins % 60).padStart(2, '0')}:${s}`;
+}
+
 /** "15 min", "1 hr", "2 hr 5 min". */
 export function formatDuration(minutes: number): string {
   const h = Math.floor(minutes / 60);

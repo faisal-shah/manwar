@@ -133,7 +133,7 @@ export function NavRow({
   );
 }
 
-export function TimeInput({
+function TimeInput({
   value,
   label,
   disabled,

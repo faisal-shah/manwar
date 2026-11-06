@@ -31,7 +31,7 @@ function loadForced(): number {
  * a reload in the night (an update, the kiosk browser restarting) does not
  * turn the screen back on.
  */
-export const sleepForcedUntil = signal(typeof localStorage !== 'undefined' ? loadForced() : 0);
+const sleepForcedUntil = signal(typeof localStorage !== 'undefined' ? loadForced() : 0);
 /**
  * Awake until this instant, on the monotonic clock (performance.now()): a
  * tap on the sleep screen, then each touch while awake, keeps it on for
@@ -42,7 +42,7 @@ const wokenUntil = signal(0);
 export const sleepHeldUntil = signal(0);
 /** Manual theme override for this session, null = follow the schedule. `?theme=dark` sets it (screenshots, tests). */
 const themeParam = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('theme') : null;
-export const themeOverride = signal<'light' | 'dark' | null>(themeParam === 'dark' || themeParam === 'light' ? themeParam : null);
+const themeOverride = signal<'light' | 'dark' | null>(themeParam === 'dark' || themeParam === 'light' ? themeParam : null);
 
 /** Asleep by the sleep rule (core/sleep.ts), before the athan's hold. */
 export const scheduledSleep = computed(() => {
@@ -66,7 +66,7 @@ export const sleeping = computed(() => !prayerSequence.value && scheduledSleep.v
 /** The backlight behind the prayer face's night clock, the wall's night screen when it rests there (under Fully Kiosk, which can set it). */
 const NIGHT_CLOCK_BRIGHTNESS = 8;
 
-export const theme = computed<'light' | 'dark'>(() => {
+const theme = computed<'light' | 'dark'>(() => {
   if (themeOverride.value) return themeOverride.value;
   return inWindow(settings.value.night, minutesOfDay(now.value)) || sleeping.value ? 'dark' : 'light';
 });
@@ -126,7 +126,7 @@ export function startDisplay(): void {
  * not go dark hours later when it starts.
  */
 const COMMAND_KEY = 'manwar.displayCommand.v1';
-export const COMMAND_FRESH_MS = 10 * 60_000;
+const COMMAND_FRESH_MS = 10 * 60_000;
 
 /**
  * Ask the wall(s) to sleep now or wake up, through the server (a

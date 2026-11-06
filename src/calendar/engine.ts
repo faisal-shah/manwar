@@ -30,7 +30,7 @@ import {
  * Firestore.
  */
 
-export const source: CalendarSource = demoMode ? fakeSource : googleSource;
+const source: CalendarSource = demoMode ? fakeSource : googleSource;
 
 export const calendars = signal<CalendarInfo[]>([]);
 export const events = signal<CalEvent[]>([]);
@@ -477,7 +477,7 @@ export function profilesOf(ev: CalEvent): string[] | null {
   return isHolidayCalendar(ev.calendarId) && !meta?.profiles.includes(NOBODY) ? [EVERYONE] : null;
 }
 
-export const UNASSIGNED_COLOR = '#C9CED6';
+const UNASSIGNED_COLOR = '#C9CED6';
 
 /** Colors to draw an event with: one per profile (striped when several). */
 export function eventColors(ev: CalEvent): string[] {

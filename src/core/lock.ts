@@ -17,8 +17,17 @@ import { pinPause } from './pin';
  */
 
 export const lockEnabled = computed(() => !(isPhone && pairedDevice()) && !!settings.value.lock.pinHash);
+/**
+ * When the unlock ends, on the monotonic clock (performance.now()), as idle
+ * time is: a tablet clock set back an hour must not keep the wall unlocked
+ * for that hour.
+ */
 const unlockedUntil = signal(0);
-export const unlocked = computed(() => !lockEnabled.value || nowMs.value < unlockedUntil.value);
+export const unlocked = computed(() => {
+  if (!lockEnabled.value) return true;
+  void nowMs.value; // checked again each second
+  return performance.now() < unlockedUntil.value;
+});
 
 /** The PIN pad host reads this; requireParent() fills it. */
 export const pinRequest = signal<{ resolve: (ok: boolean) => void; reason?: string } | null>(null);
@@ -29,7 +38,7 @@ async function hash(salt: string, pin: string): Promise<string> {
 }
 
 function extend() {
-  unlockedUntil.value = currentTime() + settings.value.lock.relockMinutes * 60_000;
+  unlockedUntil.value = performance.now() + settings.value.lock.relockMinutes * 60_000;
 }
 
 /*
@@ -123,6 +132,6 @@ export function lockNow(): void {
 /** Any touch or key press while unlocked keeps it unlocked. */
 export function startRelock(): void {
   onActivity(() => {
-    if (lockEnabled.peek() && currentTime() < unlockedUntil.peek()) extend();
+    if (lockEnabled.peek() && performance.now() < unlockedUntil.peek()) extend();
   });
 }

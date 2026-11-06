@@ -19,7 +19,7 @@ import { TimerButton } from '../timer';
 import './home.css';
 
 /** Home's calendar view, separate from the Calendar tab's (kept in memory). */
-export const homeCalendarView = signal<CalendarView>('week');
+const homeCalendarView = signal<CalendarView>('week');
 
 type IconType = ComponentType<{ size?: number | string; strokeWidth?: number }>;
 

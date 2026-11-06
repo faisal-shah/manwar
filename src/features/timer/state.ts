@@ -43,9 +43,6 @@ export const timer = computed<RunningTimer | null>(() => {
 /** The latest run this device shows, stopped or not (what a phone guesses the wall's screen from). */
 export const lastRun = computed(() => latestRun(shown.value));
 
-/** True from Start until someone stops or dismisses the timer. */
-export const timerActive = computed(() => timer.value !== null);
-
 export const timerPhase = computed<'lead' | 'running' | 'done' | null>(() => {
   const t = timer.value;
   if (!t) return null;

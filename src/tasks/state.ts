@@ -283,5 +283,3 @@ export function undoLedgerEntry(entry: LedgerEntry): Promise<boolean> | null {
 /** Ledger entries for one profile, newest first. */
 export const ledgerFor = (profileId: string) =>
   data.ledger.value.filter((e) => e.profileId === profileId).sort((a, b) => b.at - a.at);
-
-export const nameOf = (profileId: string) => profileById.value.get(profileId)?.name ?? 'Someone';

@@ -28,7 +28,7 @@ export interface DayItems {
 }
 
 /** Planned meals on a day, for categories shown on the calendar (Filter > Meals). Repeats and per-day exceptions come from the Meals slice. */
-export function mealsOn(day: ISODate): MealItem[] {
+function mealsOn(day: ISODate): MealItem[] {
   if (!settings.value.filter.meals) return [];
   return calendarMeals(day, day).map((m) => ({ key: `${m.entry.id}@${day}`, meal: m.entry, category: m.category, day }));
 }

@@ -24,7 +24,7 @@ export interface ListView {
   open: number;
 }
 
-export const byOrder = (a: ListItem, b: ListItem) => a.order - b.order || a.createdAt - b.createdAt;
+const byOrder = (a: ListItem, b: ListItem) => a.order - b.order || a.createdAt - b.createdAt;
 
 /** The section an item displays in; items pointing at a deleted section fall back to none. */
 export function sectionOf(list: List, item: ListItem): string | null {

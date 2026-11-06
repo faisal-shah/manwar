@@ -794,9 +794,8 @@ flowchart LR
 
 The UI is drawn on a 1600x1000 design canvas: `html { font-size: min(0.625vw, calc(var(--app-h) * 0.01)) }` (`--app-h` is `100vh`),
 so `1rem` = 10 design px. Use rem for every size. Tokens are CSS variables in
-`styles/base.css`; profile colors go in `--c` and are tinted with the
-`.tint-solid`/`.tint-mid`/`.tint-light` helpers (or `color-mix` against
-`--tint-base`) so dark mode works. Display text uses the serif
+`styles/base.css`; profile colors go in `--c` and are tinted with
+`.tint-solid` or `color-mix` against `--tint-base`, so dark mode works. Display text uses the serif
 (`--font-display`, Newsreader), UI text the sans (Figtree).
 
 - **On-screen keyboard** (`core/viewport.ts`): the viewport meta asks for
@@ -999,7 +998,8 @@ generated from it: `node scripts/icons/render.mjs` after any brand change.
 
 ## Feature modules
 
-- `features/calendar`: `index.tsx` (tab, `openEditor`, `ProgressStrip`),
+- `features/calendar`: `index.tsx` (tab), `state.ts` (`openEditor`),
+  `ProgressStrip.tsx`,
   `model.ts` (per-day items; meals come from `features/meals/state.ts`
   `calendarMeals`), `views/` (Schedule, Day, Week, Month), `CalendarPane.tsx`
   (Home). Class prefixes `cal-`, `ev-`, `evd-`.
@@ -1075,8 +1075,9 @@ generated from it: `node scripts/icons/render.mjs` after any brand change.
   - Recipe saves write only the fields changed in the editor
     (`recipeChanges` in `recipes/text.ts`, from `recipeFields`/`recipeDraft`,
     the editor's own fields), so another parent's edit to the rest is kept.
-  - `IngredientsHost` is mounted once in `app/tabs.tsx` `Overlays`, so
-    `openIngredients` works from any tab (the planned-meal toast).
+  - `IngredientsHost` is mounted once per layout (`app/tabs.tsx`
+    `Overlays`, `phone/PhoneApp.tsx`), so `openIngredients` works from any
+    tab (the planned-meal toast).
   - Editing one occurrence of a repeating meal goes through
     `plan.editOccurrence`; moving it to another day shifts a weekly
     rule's weekdays with it.

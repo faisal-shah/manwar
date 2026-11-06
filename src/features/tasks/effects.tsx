@@ -35,7 +35,7 @@ function spawn(cls: string, x: number, y: number, vars: Record<string, string>, 
 const center = (r: DOMRect) => ({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
 
 /** The balance pill for a profile (column header, Home card, Rewards). */
-export const starTarget = (profileId: string) =>
+const starTarget = (profileId: string) =>
   [...document.querySelectorAll<HTMLElement>(`[data-stars-for="${CSS.escape(profileId)}"]`)].find(
     (el) => el.offsetParent !== null,
   );
@@ -96,7 +96,7 @@ export function confettiAt(rect: DOMRect, color: string): void {
 
 const RAIN = ['😎', '🥳', '🎉', '🌟', '🤩', '🦄', '🌈', '🏆', '🙌'];
 
-export const celebration = signal<{ name: string; emoji: string; color: string; key: number } | null>(null);
+const celebration = signal<{ name: string; emoji: string; color: string; key: number } | null>(null);
 
 /** How long the rain lasts. */
 const RAIN_MS = 3400;

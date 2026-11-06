@@ -66,7 +66,7 @@ function playable(url: string): Promise<string> {
 }
 
 /** Warms the blobs of every sound the settings use, and lets go of those no longer chosen (unless one is on an element). */
-export function preloadSounds(): void {
+function preloadSounds(): void {
   const s = settings.value;
   const kinds = [...PRAYERS.filter((p) => s.sounds[p].enabled), ...(s.tahajjud.enabled ? (['tahajjud'] as const) : [])];
   const urls = new Set(kinds.flatMap((k) => recordingFor(k)?.url ?? []));

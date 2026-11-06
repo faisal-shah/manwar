@@ -16,7 +16,7 @@ const TEXT_TYPES = new Set([undefined, 'text', 'search']);
 type FieldProps = { type?: string; dir?: string };
 
 /** The vnode with dir="auto" when it is a text field without a direction of its own. */
-export function autoDirection(vnode: VNode): void {
+function autoDirection(vnode: VNode): void {
   // Every vnode passes here, text nodes (whose props are the text) included: look at fields only.
   if (vnode.type !== 'input' && vnode.type !== 'textarea') return;
   const props = vnode.props as FieldProps;

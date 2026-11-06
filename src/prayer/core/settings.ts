@@ -1,7 +1,7 @@
 export const PRAYERS = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'] as const;
 export type PrayerKey = (typeof PRAYERS)[number];
 
-export const DAY_THEMES = ['calligraphy', 'classic', 'kids', 'gallery'] as const;
+const DAY_THEMES = ['calligraphy', 'classic', 'kids', 'gallery'] as const;
 export type DayTheme = (typeof DAY_THEMES)[number];
 export type ThemeKey = DayTheme | 'night';
 
@@ -163,7 +163,7 @@ const ENUMS: Record<string, readonly string[]> = {
  * The allowed range of each number setting, by path (`*` stands for any
  * prayer); the settings controls use the same bounds.
  */
-export const RANGES = {
+const RANGES = {
   'adjust.*': [-30, 30],
   'iqamah.*': [0, 90],
   calligraphyMinutes: [0, 120],

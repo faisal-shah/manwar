@@ -16,7 +16,7 @@ import { moreView } from './view';
 export { moreView };
 
 /** The More tab's rows, in order. */
-export const MORE_ITEMS: MoreItem[] = [
+const MORE_ITEMS: MoreItem[] = [
   starsItem,
   peopleItem,
   timerItem,

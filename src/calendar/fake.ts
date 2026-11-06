@@ -55,7 +55,7 @@ function reach(calendarId?: string): void {
 /** Google's own id for its US holidays calendar, so the demo's holidays follow the same rule (isHolidayCalendar). */
 const HOLIDAYS = 'en.usa#holiday@group.v.calendar.google.com';
 
-export const DEMO_CALENDARS: CalendarInfo[] = [
+const DEMO_CALENDARS: CalendarInfo[] = [
   { id: 'family@demo', name: 'Family', color: '#2D7F86', accessRole: 'owner', primary: true },
   { id: 'mamma@demo', name: "Mamma's calendar", color: '#C7A9D4', accessRole: 'reader', primary: false },
   { id: HOLIDAYS, name: 'Holidays in United States', color: '#408157', accessRole: 'reader', primary: false },
@@ -157,10 +157,6 @@ function save(ms: Master[]) {
   } catch {
     /* storage unavailable: demo data lives for this page only */
   }
-}
-
-export function resetDemoCalendar(): void {
-  save(seed());
 }
 
 const instanceId = (masterId: string, day: ISODate) => `${masterId}_${day.replace(/-/g, '')}`;

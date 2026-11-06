@@ -10,10 +10,11 @@ import { formatPairCode } from '../../phone/pairCode';
 import { Button } from '../../ui/controls';
 import { confirm, toast } from '../../ui/overlays';
 import { timeAgo } from '../messages/logic';
+import { clockLeft } from '../timer/logic';
 import { Group, PageTitle, Row } from './parts';
 
 /** The address a pairing code opens on the phone (the QR code): this wall's, with the code, and the demo household's name in demo mode. */
-export function pairingUrl(code: string, here: Location = location): string {
+function pairingUrl(code: string, here: Location = location): string {
   const url = new URL('/', here.origin);
   if (demoMode) {
     const demo = new URLSearchParams(here.search).get('demo');
@@ -148,11 +149,7 @@ function PairingCode({
         <p class="pair-code" aria-label={`Code ${code.split('').join(' ')}`}>
           {formatPairCode(code)}
         </p>
-        <p class="muted">
-          {expired
-            ? 'This code has expired.'
-            : `Works once, for ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')} more.`}
-        </p>
+        <p class="muted">{expired ? 'This code has expired.' : `Works once, for ${clockLeft(left * 1000)} more.`}</p>
         <div class="row">
           {expired && (
             <Button variant="primary" onClick={onNew}>

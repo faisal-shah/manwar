@@ -8,7 +8,7 @@ import { describeRepeat } from '../../lib/repeat';
 import { RepeatEditor } from '../../ui/pickers';
 
 /** First character of a name as one grapheme ("🍳 Brunch" gives the whole emoji, not half of it). */
-export const initialOf = (name: string): string =>
+const initialOf = (name: string): string =>
   ([...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(name.trim())][0]?.segment ?? '').toUpperCase();
 
 /** Letter disc in the category color (B, L, D, S). */

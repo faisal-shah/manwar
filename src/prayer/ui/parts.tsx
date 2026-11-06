@@ -37,7 +37,7 @@ export function dateLine(now: Date, hijri: HijriDate): string {
   return `${hijriLine(hijri)} | ${gregorianLine(now)}`;
 }
 
-export function countdownLabel(c: Countdown): string {
+function countdownLabel(c: Countdown): string {
   const name = PERIOD_NAMES[c.slot.name].toUpperCase();
   switch (c.kind) {
     case 'iqamah':

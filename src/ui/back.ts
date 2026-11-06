@@ -5,8 +5,8 @@ import { useLayoutEffect, useRef } from 'preact/hooks';
  * one browser history entry; Back pops the top one and closes what holds it,
  * instead of leaving the app. Something closed another way (its X, Save)
  * gives its entry back with a history traversal, and the popstate that
- * causes is not taken for a Back. The wall (Fully Kiosk) has no back gesture
- * and pushes nothing.
+ * causes is not taken for a Back. The wall layout pushes nothing: a wall
+ * has no one walking back through screens.
  *
  * Entries sit in level order, whatever order they were taken in: the shell's
  * (a tab other than Today), then a tab's inner view (an open list, a More
