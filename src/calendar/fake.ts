@@ -52,10 +52,13 @@ function reach(calendarId?: string): void {
     throw new TypeError('Failed to fetch');
 }
 
+/** Google's own id for its US holidays calendar, so the demo's holidays follow the same rule (isHolidayCalendar). */
+const HOLIDAYS = 'en.usa#holiday@group.v.calendar.google.com';
+
 export const DEMO_CALENDARS: CalendarInfo[] = [
   { id: 'family@demo', name: 'Family', color: '#2D7F86', accessRole: 'owner', primary: true },
   { id: 'mamma@demo', name: "Mamma's calendar", color: '#C7A9D4', accessRole: 'reader', primary: false },
-  { id: 'holidays@demo', name: 'Holidays in United States', color: '#408157', accessRole: 'reader', primary: false },
+  { id: HOLIDAYS, name: 'Holidays in United States', color: '#408157', accessRole: 'reader', primary: false },
 ];
 
 const WEEKDAYS: Weekday[] = [1, 2, 3, 4, 5];
@@ -130,9 +133,9 @@ function seed(): Master[] {
     allDay('grandma', 'Grandma visiting', addDays(today, 8), 4),
     allDay('birthday', "Hashim's birthday", addDays(today, 12), 1),
     allDay('trip', 'Camping trip', addDays(today, 19), 3),
-    allDay('holiday-1', 'Veterans Day', '2026-11-11', 1, { calendarId: 'holidays@demo' }),
-    allDay('holiday-2', 'Thanksgiving Day', '2026-11-26', 1, { calendarId: 'holidays@demo' }),
-    allDay('holiday-3', 'Christmas Day', '2026-12-25', 1, { calendarId: 'holidays@demo' }),
+    allDay('holiday-1', 'Veterans Day', '2026-11-11', 1, { calendarId: HOLIDAYS }),
+    allDay('holiday-2', 'Thanksgiving Day', '2026-11-26', 1, { calendarId: HOLIDAYS }),
+    allDay('holiday-3', 'Christmas Day', '2026-12-25', 1, { calendarId: HOLIDAYS }),
   ];
 }
 

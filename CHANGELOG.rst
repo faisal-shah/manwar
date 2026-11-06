@@ -2,6 +2,19 @@
 Changelog
 =========
 
+0.2.3 (2026-11-05)
+==================
+
+Fixed
+-----
+
+- Events on Google's holiday calendars no longer wait in To assign: they
+  are the whole family's unless someone assigns them otherwise.
+- The phone's pairing screen does not offer the wall layout on a phone's
+  screen.
+- To assign on the phone says "Every time it repeats" for an assignment
+  that covers a whole series.
+
 0.2.2 (2026-11-05)
 ==================
 

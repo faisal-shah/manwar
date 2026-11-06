@@ -290,6 +290,25 @@ test('To assign: a tap assigns, both badges go down, and the wall’s assignment
   expect([...w.errors, ...p.errors]).toEqual([]);
 });
 
+test("a holiday calendar's events never wait in To assign, on the phone or the wall", async ({ browser }) => {
+  const household = `phcal-${RUN}-holidays`;
+  // Never seeded: no event has an assignment, so everything but the holidays waits.
+  const w = await wall(browser, household, '&seed=none');
+  await expect(w.page.locator('.rail .badge')).toBeVisible({ timeout: 30_000 });
+  const p = await phoneCal(browser, household, { now: `${NOW}&seed=none` });
+  const page = p.page;
+  await page.locator('.phc-waiting').click();
+  await expect(page.locator('.ph-head h1')).toHaveText('To assign');
+  await expect(page.locator('.phc-tri').first()).toBeVisible();
+  await expect(page.locator('.phc-tri', { hasText: 'Library' })).toHaveCount(1);
+  for (const holiday of ['Veterans Day', 'Thanksgiving Day', 'Christmas Day'])
+    await expect(page.locator('.phc-tri', { hasText: holiday })).toHaveCount(0);
+  await w.page.locator('.triage-btn').click();
+  await expect(w.page.locator('.triage-row').first()).toBeVisible();
+  await expect(w.page.locator('.triage-row', { hasText: 'Veterans Day' })).toHaveCount(0);
+  expect([...w.errors, ...p.errors]).toEqual([]);
+});
+
 test('one lesson of a series that has people waits alone and is assigned alone', async ({ browser }) => {
   const household = `phcal-${RUN}-alone`;
   const w = await seededWall(browser, household);
@@ -345,7 +364,7 @@ test('a repeating event waiting to be assigned gets every tap for the whole seri
   const page = p.page;
   await page.locator('.phc-waiting').click();
   const row = page.locator('[data-triage="family@demo::swim"]');
-  await expect(row).toContainText('Repeats: every time');
+  await expect(row).toContainText('Every time it repeats');
   await row.getByRole('button', { name: 'Hashim!', exact: true }).click();
   await expect(row).toContainText('For Hashim!');
   // The series has someone now; the next tap still changes the series, not one lesson.

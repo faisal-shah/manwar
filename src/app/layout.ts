@@ -55,9 +55,12 @@ export function chooseLayout({ param, chosen, openedAs, fully, shortSide }: Layo
   if (isLayout(chosen)) return chosen;
   if (openedAs === 'paired') return 'phone';
   if (fully) return 'wall';
-  if (shortSide < PHONE_SHORT_SIDE) return 'phone';
+  if (alwaysPhone(shortSide)) return 'phone';
   return phoneSized(shortSide) && openedAs !== 'wall' ? 'phone' : 'wall';
 }
+
+/** A screen whose short side is under 480 CSS px is a phone's, whatever the device signed in as (no wall tablet is that small). */
+export const alwaysPhone = (shortSide: number) => shortSide < PHONE_SHORT_SIDE;
 
 /** A screen whose short side is under 600 CSS px could be a phone's. */
 export const phoneSized = (shortSide: number) => shortSide < PHONE_MAX_SHORT_SIDE;

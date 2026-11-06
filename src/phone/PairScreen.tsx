@@ -2,7 +2,7 @@ import { useRef, useState } from 'preact/hooks';
 import { pairParam, pairPhone, session } from '../data/session';
 import { loadError } from '../data/store';
 import { currentTime, nowMs } from '../lib/clock';
-import { switchLayout } from '../app/layout';
+import { alwaysPhone, screenShortSide, switchLayout } from '../app/layout';
 import { Button } from '../ui/controls';
 import { Wordmark } from '../ui/Logo';
 import { formatPairCode } from './pairCode';
@@ -92,10 +92,12 @@ export function PairScreen() {
           <Button variant="primary" type="submit" disabled={busy || code.replace('-', '').length !== 8 || !name.trim()}>
             {busy ? 'Pairing…' : 'Pair'}
           </Button>
-          {/* A wall tablet that opened as a phone, signed out (a signed-in device switches in This phone). */}
-          <button type="button" class="ph-link" onClick={() => switchLayout('wall')}>
-            This is the wall: use the wall layout
-          </button>
+          {/* A wall tablet that opened as a phone, signed out (a signed-in device switches in This phone); never a phone's screen. */}
+          {!alwaysPhone(screenShortSide()) && (
+            <button type="button" class="ph-link" onClick={() => switchLayout('wall')}>
+              This is the wall: use the wall layout
+            </button>
+          )}
         </form>
       )}
     </div>

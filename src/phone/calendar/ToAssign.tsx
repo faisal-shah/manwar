@@ -115,7 +115,7 @@ function AssignRow({ row }: { row: VisitRow }) {
         {ev.seriesId && (
           <span class="phc-tri-repeat muted">
             <Repeat size="1.5rem" />
-            {scope === 'series' ? 'Repeats: every time' : 'This time only'}
+            {scope === 'series' ? 'Every time it repeats' : 'This time only'}
           </span>
         )}
       </button>

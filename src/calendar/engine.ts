@@ -3,7 +3,7 @@ import { isPhone } from '../app/layout';
 import { demoMode } from '../config';
 import { listAdd } from '../data/settings';
 import { data, householdId, patch, profileById, put, remove as removeDoc, settings, upsert } from '../data/store';
-import { EVERYONE, type EventMeta, type ISODate } from '../data/types';
+import { EVERYONE, NOBODY, type EventMeta, type ISODate } from '../data/types';
 import { addDays, addMonths, dateAt, diffDays, toISODate } from '../lib/date';
 import { currentTime, today } from '../lib/clock';
 import { fakeSource } from './fake';
@@ -11,6 +11,7 @@ import { googleSource } from './google';
 import {
   RateLimited,
   eventKey,
+  isHolidayCalendar,
   type CalEvent,
   type CalendarInfo,
   type CalendarSource,
@@ -391,13 +392,17 @@ export function metaFor(ev: CalEvent): EventMeta | undefined {
   };
 }
 
-/** Assigned profile ids ([EVERYONE] for the family), or null when unassigned. */
+/**
+ * Assigned profile ids ([EVERYONE] for the family), or null when unassigned.
+ * A holiday is the family's until assigned otherwise, or marked no one's
+ * (NOBODY: the one person it was given to was deleted).
+ */
 export function profilesOf(ev: CalEvent): string[] | null {
   const meta = metaFor(ev);
-  if (!meta) return null;
   const known = profileById.value;
-  const ids = meta.profiles.filter((p) => p === EVERYONE || known.has(p));
-  return ids.length ? ids : null;
+  const ids = meta?.profiles.filter((p) => p === EVERYONE || known.has(p)) ?? [];
+  if (ids.length) return ids;
+  return isHolidayCalendar(ev.calendarId) && !meta?.profiles.includes(NOBODY) ? [EVERYONE] : null;
 }
 
 export const UNASSIGNED_COLOR = '#C9CED6';

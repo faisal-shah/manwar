@@ -48,7 +48,9 @@ Events live in the Google account the wall is signed in with. On the wall,
 each event is assigned to one or more people (or Everyone); the assignment is
 stored by the app and never shows in Google Calendar. Events
 that arrive from elsewhere start unassigned: they show in grey and wait in
-**Calendar → To assign** until a parent picks who they are for.
+**Calendar → To assign** until a parent picks who they are for. Events on
+Google's holiday calendars (Holidays in United States, Islamic holidays and
+the like) are the whole family's from the start and never wait there.
 
 ### Who can sign in
 

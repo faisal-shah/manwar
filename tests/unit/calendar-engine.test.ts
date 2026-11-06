@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CalEvent, CalendarInfo, CalendarSource } from '../../src/calendar/types';
-import { NOBODY, type EventMeta, type Profile } from '../../src/data/types';
+import { EVERYONE, NOBODY, type EventMeta, type Profile } from '../../src/data/types';
+import { isHolidayCalendar } from '../../src/calendar/types';
 
 /**
  * Calendar engine against an in-memory store and a scripted calendar
@@ -242,6 +243,32 @@ describe('adding an event', () => {
 });
 
 describe('triage queue', () => {
+  it("leaves out a holiday calendar's events: the family's until someone assigns them otherwise", () => {
+    const hol = 'en.usa#holiday@group.v.calendar.google.com';
+    const doc = (profiles: string[], extra: Partial<EventMeta> = {}) => ({
+      id: engine.metaKey(hol, 'vet'),
+      profiles,
+      updatedAt: 0,
+      ...extra,
+    });
+    const vet = ev('vet', day(3, '00:00'), day(4, '00:00'), { calendarId: hol, key: `${hol}::vet`, allDay: true });
+    const party = ev('party', day(2), day(2, '11:00'));
+    engine.events.value = [party, vet];
+    expect(engine.profilesOf(vet)).toEqual([EVERYONE]);
+    expect(engine.profilesOf(party)).toBeNull();
+    expect(engine.unassigned.value.map((e) => e.id)).toEqual(['party']);
+    // Given to one person, it is theirs; a countdown alone (no people) keeps it the family's.
+    store.data.eventMeta.value = [doc(['asiyah'])];
+    expect(engine.profilesOf(vet)).toEqual(['asiyah']);
+    store.data.eventMeta.value = [doc([], { countdown: true })];
+    expect(engine.profilesOf(vet)).toEqual([EVERYONE]);
+    // Its one person deleted (the delete marks it NOBODY): it waits to be assigned again.
+    store.data.eventMeta.value = [doc([NOBODY])];
+    expect(engine.unassigned.value.map((e) => e.id)).toEqual(['party', 'vet']);
+    expect(isHolidayCalendar('en.islamic#holiday@group.v.calendar.google.com')).toBe(true);
+    expect(isHolidayCalendar('family@group.calendar.google.com')).toBe(false);
+  });
+
   it('keeps a series whose next occurrence alone was assigned', () => {
     const [a, b, c] = [swim(1), swim(8), swim(15)];
     engine.events.value = [a, b, c];

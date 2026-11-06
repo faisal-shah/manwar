@@ -118,6 +118,13 @@ export interface CalendarSource {
 
 export const eventKey = (calendarId: string, id: string) => `${calendarId}::${id}`;
 
+/**
+ * One of Google's holiday calendars ("Holidays in United States", "Islamic
+ * holidays", ...: ids like `en.usa#holiday@group.v.calendar.google.com`).
+ * Its events are the whole family's until someone assigns them otherwise.
+ */
+export const isHolidayCalendar = (calendarId: string): boolean => calendarId.endsWith('#holiday@group.v.calendar.google.com');
+
 /** A new event id in Google's alphabet (base32hex: 0-9, a-v), 26 characters (130 random bits). */
 export function newEventId(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(26));

@@ -247,6 +247,11 @@ test('a phone once signed in as the wall opens as a phone next time, and its loa
   await expect(page.locator('.ph-loading')).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole('button', { name: 'This is the wall: use the wall layout' })).toHaveCount(0);
   await page.unroute(firestore);
+  // Signed out, a phone's pairing screen does not offer the wall layout either: no wall tablet is that small.
+  const fresh = await (await newContext(browser, { ...devices['Pixel 7'], timezoneId: 'America/Chicago' })).newPage();
+  await fresh.goto(`/?demo=${household}&pair=&${NOW}`);
+  await expect(fresh.getByRole('heading', { name: 'Pair this phone' })).toBeVisible({ timeout: 30_000 });
+  await expect(fresh.getByRole('button', { name: 'This is the wall: use the wall layout' })).toHaveCount(0);
   expect(w.errors).toEqual([]);
 });
 

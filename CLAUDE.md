@@ -133,7 +133,13 @@ flowchart LR
   one); `passesFilter` applies the household's filter with it.
   Events with no meta are **unassigned** and listed in `unassigned` (the
   triage queue, badge on the Calendar rail item). `[EVERYONE]` means the
-  whole family. Countdowns past the window (setting Always) come from
+  whole family. A Google holiday calendar's events
+  (`isHolidayCalendar`, `calendar/types.ts`: ids ending
+  `#holiday@group.v.calendar.google.com`) are the family's without meta,
+  so they never wait in triage (`profilesOf`); one assigned to people is
+  theirs, and one whose only person was deleted (NOBODY) waits like any
+  other. The demo's holidays calendar has Google's US holidays id, so the
+  demo follows the same rule. Countdowns past the window (setting Always) come from
   `CalendarSource.nextOccurrence`, asked hourly and only of calendars that
   answered the fetch; when it finds nothing left (deleted, declined, over)
   the meta gets `countdown: false`, so no tablet asks again. New events get their id from
@@ -283,8 +289,9 @@ sequenceDiagram
   the household as the wall (claims without a device: a small tablet, or
   one with a larger display size), otherwise a wall. Only a choice is
   stored; what a device signed in as follows its session. The pairing
-  screen's link to the wall layout shows with the form only, not while a
-  signed-in phone loads. Switching stores
+  screen's link to the wall layout shows with the form only (not while a
+  signed-in phone loads), and never on a screen under 480 CSS px
+  (`alwaysPhone`). Switching stores
   and reloads, so the wall's services (display schedule, wake lock, idle
   return, seeding, remote commands) never start on a phone
   (`app/start.ts`). More > This phone asks before it switches to the wall

@@ -348,7 +348,6 @@ async function seedDemo(): Promise<void> {
   for (const id of ['maghrib', 'isha', 'dinner', 'grandma']) assign(fam, id, [EVERYONE]);
   assign(fam, 'birthday', ['hashim'], true);
   assign(fam, 'trip', [EVERYONE], true);
-  for (const id of ['holiday-1', 'holiday-2', 'holiday-3']) assign('holidays@demo', id, [EVERYONE]);
 
   b.settings({ seededAt: now, weather: { lat: 30.2672, lon: -97.7431, name: 'Austin, Texas' } });
   await b.commit();
