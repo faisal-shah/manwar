@@ -5,7 +5,7 @@ import { currentTime, nowMs } from '../lib/clock';
 import { alwaysPhone, screenShortSide, switchLayout } from '../app/layout';
 import { Button } from '../ui/controls';
 import { Wordmark } from '../ui/Logo';
-import { formatPairCode } from './pairCode';
+import { DEVICE_NAME_MAX, formatPairCode, isFullPairCode } from './pairCode';
 
 /** Loading this long without an answer is said to be a connection problem. */
 const SLOW_MS = 8000;
@@ -83,13 +83,13 @@ export function PairScreen() {
               class="input"
               value={name}
               onInput={(e) => setName(e.currentTarget.value)}
-              maxLength={40}
+              maxLength={DEVICE_NAME_MAX}
               placeholder="Mamma's phone"
               aria-label="Name for this phone"
             />
           </label>
           {error && <p class="error">{error}</p>}
-          <Button variant="primary" type="submit" disabled={busy || code.replace('-', '').length !== 8 || !name.trim()}>
+          <Button variant="primary" type="submit" disabled={busy || !isFullPairCode(code) || !name.trim()}>
             {busy ? 'Pairing…' : 'Pair'}
           </Button>
           {/* A wall tablet that opened as a phone, signed out (a signed-in device switches in This phone); never a phone's screen. */}

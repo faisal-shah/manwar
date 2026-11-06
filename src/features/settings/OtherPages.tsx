@@ -1,4 +1,4 @@
-import type { ComponentChildren, FunctionComponent } from 'preact';
+import type { ComponentChildren } from 'preact';
 import { demoMode } from '../../config';
 import { requireParent, unlocked } from '../../core/lock';
 import { settings } from '../../data/store';
@@ -9,17 +9,8 @@ import { version } from '../../../package.json';
 import { buildId } from '../../config';
 import { Wordmark } from '../../ui/Logo';
 import { NAME_EN } from '../../ui/brand';
+import { MealCategoriesEditor } from '../meals/MealCategoriesEditor';
 import { ChoiceRow, Group, PageTitle, Row, change } from './parts';
-
-/*
- * The Meals feature owns its category editor. The glob resolves to the
- * module when src/features/meals/MealCategoriesEditor.tsx exists and to
- * nothing otherwise, so this page builds with or without it.
- */
-const mealEditors = import.meta.glob<{ MealCategoriesEditor: FunctionComponent }>('../meals/MealCategoriesEditor.tsx', {
-  eager: true,
-});
-const MealCategoriesEditor = Object.values(mealEditors)[0]?.MealCategoriesEditor;
 
 /** Asks for the PIN before any tap inside a component that writes settings itself. */
 function ParentGuard({ children }: { children: ComponentChildren }) {
@@ -41,18 +32,9 @@ export function MealsPage() {
   return (
     <>
       <PageTitle>Meals</PageTitle>
-      {MealCategoriesEditor ? (
-        <ParentGuard>
-          <MealCategoriesEditor />
-        </ParentGuard>
-      ) : (
-        <Group>
-          <Row
-            label="Meal categories"
-            hint="Names, colors and which meals show on the calendar are edited here with the Meals tab."
-          />
-        </Group>
-      )}
+      <ParentGuard>
+        <MealCategoriesEditor />
+      </ParentGuard>
     </>
   );
 }

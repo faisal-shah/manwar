@@ -1,4 +1,4 @@
-import { effect, signal } from '@preact/signals';
+import { stored } from '../../lib/stored';
 import { swallowRestOfTap } from '../../ui/overlays';
 import { goPhone } from '../nav';
 
@@ -8,28 +8,11 @@ import { goPhone } from '../nav';
  * one shown falls back to the first person while it is not there (deleted,
  * or no Up for Grabs chores today), and the choice comes back with them.
  */
-const KEY = 'manwar.phoneTasksFor.v1';
-
-function load(): string | null {
-  try {
-    return localStorage.getItem(KEY);
-  } catch {
-    return null;
-  }
-}
-
-export const tasksFor = signal<string | null>(typeof window === 'undefined' ? null : load());
-
-if (typeof window !== 'undefined')
-  effect(() => {
-    const v = tasksFor.value;
-    try {
-      if (v) localStorage.setItem(KEY, v);
-      else localStorage.removeItem(KEY);
-    } catch {
-      /* no storage: the choice lasts for this session */
-    }
-  });
+export const tasksFor = stored<string | null>(
+  'manwar.phoneTasksFor.v1',
+  null,
+  (v): v is string | null => v === null || typeof v === 'string',
+);
 
 /** Open the Tasks tab on one person (or Up for Grabs), from a tap on another screen. */
 export function showTasksOf(id: string): void {
