@@ -1,5 +1,6 @@
+import type { Place } from '../../data/types';
 import { clockState, computeDays, PERIOD_NAMES, type Slot } from '../../prayer/core/schedule';
-import type { Place, Settings } from '../../prayer/core/settings';
+import type { Settings } from '../../prayer/core/settings';
 import { formatTime, type TimeFormat } from '../../lib/date';
 
 /**
@@ -8,9 +9,9 @@ import { formatTime, type TimeFormat } from '../../lib/date';
  * Friday, the adjustments, the iqamah offsets); null before the household
  * has a place for its prayer times.
  */
-export function prayerDay(now: Date, s: Settings): { slots: Slot[]; next: Slot } | null {
-  if (!s.place) return null;
-  const st = clockState(now, computeDays(now, s), s, () => null);
+export function prayerDay(now: Date, place: Place | null, s: Settings): { slots: Slot[]; next: Slot } | null {
+  if (!place) return null;
+  const st = clockState(now, computeDays(now, place, s), s, () => null);
   return { slots: st.slots, next: st.next };
 }
 
@@ -24,20 +25,18 @@ export const slotName = (slot: Slot) => PERIOD_NAMES[slot.name];
  */
 export function placeTime(d: Date, place: Place, fmt: TimeFormat): string {
   let there = d;
-  if (place.timezone) {
-    try {
-      const parts = new Intl.DateTimeFormat('en-US', {
-        timeZone: place.timezone,
-        hour: 'numeric',
-        minute: 'numeric',
-        hourCycle: 'h23',
-      }).formatToParts(d);
-      const n = (type: string) => Number(parts.find((p) => p.type === type)?.value);
-      there = new Date(d);
-      there.setHours(n('hour'), n('minute'), 0, 0);
-    } catch {
-      // RangeError: an unknown time zone.
-    }
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: place.timezone,
+      hour: 'numeric',
+      minute: 'numeric',
+      hourCycle: 'h23',
+    }).formatToParts(d);
+    const n = (type: string) => Number(parts.find((p) => p.type === type)?.value);
+    there = new Date(d);
+    there.setHours(n('hour'), n('minute'), 0, 0);
+  } catch {
+    // RangeError: an unknown time zone.
   }
   return formatTime(there, fmt);
 }

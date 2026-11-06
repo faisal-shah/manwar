@@ -32,6 +32,8 @@ function tone(freqs: number[], dur: number, gap = 0.09, type: OscillatorType = '
   if (!settings.value.sounds) return;
   try {
     ctx ??= new AudioContext();
+    // The browser suspends a context made before a tap (autoplay), and may suspend one the page left idle.
+    if (ctx.state !== 'running') void ctx.resume().catch(() => {});
     const t0 = ctx.currentTime;
     freqs.forEach((f, i) => {
       const o = ctx!.createOscillator();

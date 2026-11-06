@@ -5,13 +5,15 @@ import { greetingFor } from '../core/content';
 import { PERIOD_ARABIC, type ClockState, type Countdown, type PeriodKey } from '../core/schedule';
 import { PERIOD_NAMES } from '../core/schedule';
 import type { CalligraphyFont } from '../core/settings';
-import { describeWeather, toUnit, type WeatherKind } from '../core/weather';
+import { currentWeather } from '../../app/status';
+import { toUnit, weather, weatherKind, WEATHER_LABELS, type WeatherKind } from '../../core/weather';
+import { settings as household } from '../../data/store';
 import { MEDIA, type CalligraphyArt, type Photo, type PhotoLayout } from '../core/media';
 import photoLayout from '../core/photo-layout.json';
-import { calligraphyArt, settings, weather, WEATHER_MAX_AGE } from '../store';
+import { calligraphyArt, settings } from '../store';
 
 export function Clock({ d }: { d: Date }) {
-  const f = clockFace(d, settings.value.clock24h);
+  const f = clockFace(d, household.value.timeFormat);
   return (
     <span class="clock">
       {f.hm}
@@ -22,7 +24,7 @@ export function Clock({ d }: { d: Date }) {
 
 /** A small time like "5:21PM" with the meridiem set smaller. */
 export function T({ d }: { d: Date }) {
-  const f = clockFace(d, settings.value.clock24h);
+  const f = clockFace(d, household.value.timeFormat);
   return (
     <span class="t">
       {f.hm}
@@ -266,17 +268,14 @@ export function WeatherGlyph({ kind, night }: { kind: WeatherKind; night: boolea
   );
 }
 
+/** The household's weather reading (core/weather.ts) in its unit, while current and shown on this face. */
 export function useWeather(): { temp: string; label: string; kind: WeatherKind; night: boolean } | null {
-  const w = weather.value;
-  const s = settings.value;
-  if (!w || !s.weather.enabled || Date.now() - w.fetchedAt > WEATHER_MAX_AGE) return null;
-  const d = describeWeather(w.code);
-  return {
-    temp: `${toUnit(w.tempC, s.weather.unit)}°${s.weather.unit.toUpperCase()}`,
-    label: d.label,
-    kind: d.kind,
-    night: !w.isDay,
-  };
+  // Readings are stamped with the real clock (not a pinned ?now=).
+  const w = currentWeather(weather.value, Date.now());
+  if (!w || !settings.value.showWeather) return null;
+  const unit = household.value.tempUnit;
+  const kind = weatherKind(w.code);
+  return { temp: `${toUnit(w.tempC, unit)}°${unit.toUpperCase()}`, label: WEATHER_LABELS[kind], kind, night: !w.isDay };
 }
 
 const pct = (v: number) => `${v * 100}%`;

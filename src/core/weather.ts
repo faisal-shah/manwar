@@ -18,6 +18,11 @@ export interface Weather {
   fetchedAt: number;
 }
 
+/**
+ * The weather at the household's place (Settings > Location), the one
+ * reading the wall shows: the top bar, the calendar's days and the prayer
+ * face. Null before the first reading, and without a place.
+ */
 export const weather = signal<Weather | null>(null);
 
 /** Open-Meteo (free, no key, CORS-enabled): current conditions plus a 10-day daily forecast. */
@@ -31,36 +36,13 @@ export async function fetchWeather(lat: number, lon: number): Promise<Weather> {
   const j = await r.json();
   const c = j?.current;
   const d = j?.daily;
-  if (typeof c?.temperature_2m !== 'number' || !Array.isArray(d?.time)) throw new Error('weather: bad payload');
+  if (typeof c?.temperature_2m !== 'number' || typeof c?.weather_code !== 'number' || !Array.isArray(d?.time))
+    throw new Error('weather: bad payload');
   const daily: Record<ISODate, DayForecast> = {};
   d.time.forEach((day: string, i: number) => {
     daily[day] = { code: d.weather_code[i], maxC: d.temperature_2m_max[i], minC: d.temperature_2m_min[i] };
   });
   return { tempC: c.temperature_2m, code: c.weather_code, isDay: c.is_day === 1, daily, fetchedAt: Date.now() };
-}
-
-export interface Place {
-  name: string;
-  detail: string;
-  lat: number;
-  lon: number;
-}
-
-/** Place search for the weather location (Open-Meteo geocoding). */
-export async function searchPlaces(query: string): Promise<Place[]> {
-  const q = query.trim();
-  if (q.length < 2) return [];
-  const r = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=8&language=en`);
-  if (!r.ok) throw new Error(`geocoding: HTTP ${r.status}`);
-  const j = await r.json();
-  return (j?.results ?? [])
-    .filter((x: any) => typeof x?.latitude === 'number' && typeof x?.longitude === 'number')
-    .map((x: any) => ({
-      name: String(x.name),
-      detail: [x.admin1, x.country].filter(Boolean).join(', '),
-      lat: x.latitude,
-      lon: x.longitude,
-    }));
 }
 
 /** WMO weather interpretation codes. */
@@ -75,19 +57,30 @@ export function weatherKind(code: number): WeatherKind {
   return 'storm';
 }
 
+export const WEATHER_LABELS: Record<WeatherKind, string> = {
+  clear: 'Clear',
+  partly: 'Partly cloudy',
+  cloudy: 'Cloudy',
+  fog: 'Fog',
+  drizzle: 'Drizzle',
+  rain: 'Rain',
+  snow: 'Snow',
+  storm: 'Storm',
+};
+
 export const toUnit = (c: number, unit: 'f' | 'c') => Math.round(unit === 'f' ? c * 1.8 + 32 : c);
 
-const REFRESH_MS = 30 * 60_000;
+const REFRESH_MS = 15 * 60_000;
 let timer: ReturnType<typeof setInterval> | undefined;
 let reload: (() => void) | null = null;
 
-/** The configured location as a key, so other settings changes do not refetch. */
+/** The place's position as a key, so other settings changes (its name, the units) do not refetch. */
 const placeKey = computed(() => {
-  const loc = settings.value.weather;
-  return loc ? `${loc.lat},${loc.lon}` : null;
+  const p = settings.value.place;
+  return p ? `${p.lat},${p.lon}` : null;
 });
 
-/** Keep `weather` current for the configured location. */
+/** Keep `weather` current for the household's place (the wall only: a phone shows no weather). */
 export function startWeather(): void {
   effect(() => {
     const key = placeKey.value;
@@ -103,7 +96,7 @@ export function startWeather(): void {
           if (placeKey.peek() === key) weather.value = w;
         })
         .catch(() => {
-          /* keep the last reading (the top bar hides it once stale); retry on the next tick */
+          /* keep the last reading (it stops showing once stale: app/status.ts); retry on the next tick */
         });
     reload = load;
     void load();

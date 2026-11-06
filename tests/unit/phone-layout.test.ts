@@ -49,7 +49,7 @@ describe('pairing code input', () => {
 
 describe('prayer times on a phone', () => {
   const at = new Date('2026-10-29T21:06:00Z'); // 4:06 PM in Chicago
-  const place = { name: 'Chicago', latitude: 41.88, longitude: -87.63, timezone: 'America/Chicago' };
+  const place = { name: 'Chicago', lat: 41.88, lon: -87.63, timezone: 'America/Chicago' };
   it("shows the place's clock, in the household's time format", () => {
     expect(placeTime(at, place, '12h')).toBe('4:06 PM');
     expect(placeTime(at, place, '24h')).toBe('16:06');

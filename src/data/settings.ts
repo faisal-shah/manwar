@@ -25,7 +25,7 @@ export const DEFAULT_SETTINGS: Settings = {
   familyColor: '#A8D4D3',
   filter: { taskProgress: true, countdowns: true, weather: true, meals: true, hiddenProfiles: [] },
   mealCategories: byId(DEFAULT_MEAL_CATEGORIES),
-  weather: null,
+  place: null,
   tempUnit: 'f',
   hiddenTabs: [],
   homeHiddenPanes: [],

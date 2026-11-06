@@ -9,8 +9,8 @@ import {
   type AthanLength,
   type PeriodKey,
 } from '../../src/prayer/core/schedule';
-import { BG_SLOTS, sanitizeSettings, settingsChanges, type Settings } from '../../src/prayer/core/settings';
-import { CHICAGO } from './prayer-prayer.test';
+import { BG_SLOTS, DEFAULT_SETTINGS, type Settings } from '../../src/prayer/core/settings';
+import { CHICAGO } from './prayer-fixtures';
 
 // Chicago 2026-10-29 (Thursday): Fajr 06:02, Sunrise 07:19, Dhuhr 12:35,
 // Asr 16:06, Maghrib 17:48, Isha 19:06. Tests run with TZ=America/Chicago.
@@ -19,8 +19,9 @@ const at = (hhmmss: string, day = 29) => {
   return new Date(2026, 9, day, h, m, s);
 };
 const athan200: AthanLength = () => 200;
-const state = (now: Date, s: Settings = CHICAGO, len: AthanLength = athan200, dismissed?: Set<string>) =>
-  clockState(now, computeDays(now, s), s, len, dismissed);
+const S = DEFAULT_SETTINGS;
+const state = (now: Date, s: Settings = S, len: AthanLength = athan200, dismissed?: Set<string>) =>
+  clockState(now, computeDays(now, CHICAGO, s), s, len, dismissed);
 
 describe('clockState', () => {
   it('tracks current/next prayers and the athan countdown', () => {
@@ -54,13 +55,13 @@ describe('clockState', () => {
   it('uses a fixed screen length when the athan sound is off and honours dismissal', () => {
     const silent: AthanLength = () => null;
     const dhuhr = state(at('12:00')).slots[1].athan.getTime();
-    expect(state(new Date(dhuhr + 89_000), CHICAGO, silent).takeover?.phase).toBe('athan');
-    expect(state(new Date(dhuhr + 91_000), CHICAGO, silent).takeover?.phase).toBe('dua');
+    expect(state(new Date(dhuhr + 89_000), S, silent).takeover?.phase).toBe('athan');
+    expect(state(new Date(dhuhr + 91_000), S, silent).takeover?.phase).toBe('dua');
   });
 
   it('closes one phase at a time: the athan still comes after the countdown is closed', () => {
     const dhuhr = state(at('12:00')).slots[1].athan.getTime();
-    const at_ = (sec: number, ids: string[]) => state(new Date(dhuhr + sec * 1000), CHICAGO, athan200, new Set(ids)).takeover;
+    const at_ = (sec: number, ids: string[]) => state(new Date(dhuhr + sec * 1000), S, athan200, new Set(ids)).takeover;
     const pre = phaseId(at_(-30, [])!);
     expect(at_(-20, [pre])).toBeNull();
     expect(at_(5, [pre])?.phase).toBe('athan');
@@ -75,12 +76,12 @@ describe('clockState', () => {
     expect(state(new Date(maghrib + 4 * 60_000)).takeover?.phase).toBe('dua');
     expect(state(new Date(maghrib + 4.9 * 60_000)).takeover?.phase).toBe('iqamah');
     const long: AthanLength = () => 280;
-    expect(state(new Date(maghrib + 5.5 * 60_000), CHICAGO, long).takeover?.phase).toBe('dua');
-    expect(state(new Date(maghrib + 6 * 60_000), CHICAGO, long).takeover).toBeNull();
+    expect(state(new Date(maghrib + 5.5 * 60_000), S, long).takeover?.phase).toBe('dua');
+    expect(state(new Date(maghrib + 6 * 60_000), S, long).takeover).toBeNull();
   });
 
   it('keeps the evening going when Isha falls after midnight', () => {
-    const late: Settings = { ...CHICAGO, adjust: { ...CHICAGO.adjust, isha: 330 } }; // Isha 00:36
+    const late: Settings = { ...S, adjust: { ...S.adjust, isha: 330 } }; // Isha 00:36
     const st = state(at('00:10', 30), late);
     expect(st.period.key).toBe('maghrib');
     expect(st.current.prayer).toBe('maghrib');
@@ -91,11 +92,11 @@ describe('clockState', () => {
     const st = state(at('12:50'));
     expect(st.theme).toBe('calligraphy');
     expect(st.themeUntil!.getTime() - st.current.athan.getTime()).toBe(45 * 60_000);
-    const ended = state(at('12:50'), CHICAGO, athan200, new Set([calligraphyWindowId(st.current)]));
+    const ended = state(at('12:50'), S, athan200, new Set([calligraphyWindowId(st.current)]));
     expect(ended.theme).toBe('classic');
     expect(ended.themeUntil).toBeNull();
     // Only that prayer's window: Asr's still shows.
-    expect(state(at('16:20'), CHICAGO, athan200, new Set([calligraphyWindowId(st.current)])).theme).toBe('calligraphy');
+    expect(state(at('16:20'), S, athan200, new Set([calligraphyWindowId(st.current)])).theme).toBe('calligraphy');
     const night = state(at('23:00'));
     expect(night.theme).toBe('night');
     expect(night.themeUntil!.getTime()).toBe(night.next.athan.getTime());
@@ -109,7 +110,7 @@ describe('clockState', () => {
     expect(state(at('03:00')).theme).toBe('night');
     expect(state(at('06:10')).theme).toBe('calligraphy');
     expect(state(at('07:00')).theme).toBe('classic');
-    expect(state(at('20:10'), { ...CHICAGO, night: { ...CHICAGO.night, enabled: false } }).theme).toBe('classic');
+    expect(state(at('20:10'), { ...S, night: { ...S.night, enabled: false } }).theme).toBe('classic');
   });
 
   it('names periods including sunrise, duha and tahajjud', () => {
@@ -149,40 +150,29 @@ describe('clockState', () => {
   });
 
   it('switches countdowns to iftar and suhoor during Ramadan', () => {
-    const ram: Settings = { ...CHICAGO, ramadan: 'on' };
+    const ram: Settings = { ...S, ramadan: 'on' };
     expect(state(at('17:00'), ram).countdown.kind).toBe('iftar');
     expect(state(at('03:00'), ram).countdown.kind).toBe('suhoor');
     expect(state(at('03:00')).countdown.kind).toBe('athan');
   });
 
   it('adds a tahajjud athan only when enabled', () => {
-    const on: Settings = { ...CHICAGO, tahajjud: { ...CHICAGO.tahajjud, enabled: true } };
+    const on: Settings = { ...S, tahajjud: { ...S.tahajjud, enabled: true } };
     const lastThird = state(at('23:00')).tahajjud;
     expect(state(new Date(lastThird.getTime() + 10_000), on).takeover?.kind).toBe('tahajjud');
     expect(state(new Date(lastThird.getTime() + 10_000)).takeover).toBeNull();
   });
-});
 
-describe('settings changes (what a save writes to the household document)', () => {
-  const was = sanitizeSettings({});
-  it('names only the values that changed, nested maps by their changed fields', () => {
-    expect(settingsChanges(was, was)).toBeNull();
-    const next = { ...was, sounds: { ...was.sounds, asr: { ...was.sounds.asr, volume: 0.4 } }, dayTheme: 'kids' as const };
-    expect(settingsChanges(was, next)).toEqual({ sounds: { asr: { volume: 0.4 } }, dayTheme: 'kids' });
-  });
-  it('writes a list or a place whole, and a cleared place as null', () => {
-    const place = { name: 'Austin', latitude: 30.27, longitude: -97.74, timezone: 'America/Chicago' };
-    const placed = { ...was, place };
-    expect(settingsChanges(was, placed)).toEqual({ place });
-    expect(settingsChanges(placed, { ...placed, place: null })).toEqual({ place: null });
-    // Another city's coordinates must not land beside this one's time zone: the place goes whole.
-    const moved = { name: 'Dallas', latitude: 32.78, longitude: -96.8, timezone: 'America/Chicago' };
-    expect(settingsChanges(placed, { ...placed, place: moved })).toEqual({ place: moved });
-    expect(settingsChanges(placed, { ...placed, place: { ...place, name: 'Austin, Texas' } })).toEqual({
-      place: { ...place, name: 'Austin, Texas' },
-    });
-    expect(settingsChanges(was, { ...was, jumuah: { ...was.jumuah, times: ['13:15', '14:00'] } })).toEqual({
-      jumuah: { times: ['13:15', '14:00'] },
-    });
+  it('says when the next phase of the sequence starts, not counting a dismissed one', () => {
+    const asr = state(at('14:00')).next.athan.getTime();
+    expect(state(at('14:00')).nextTakeover?.getTime()).toBe(asr - 60_000);
+    // Inside a phase, the next one starts where it ends (the athan's 200 s, then the dua).
+    const dhuhr = state(at('12:00')).slots[1].athan.getTime();
+    expect(state(new Date(dhuhr + 10_000)).nextTakeover?.getTime()).toBe(dhuhr + 200_000);
+    // After Isha's sequence, tomorrow's Fajr countdown.
+    const late = state(at('23:30'));
+    expect(late.nextTakeover?.getTime()).toBe(late.next.athan.getTime() - 60_000);
+    const pre = phaseId({ id: state(at('14:00')).next.id, phase: 'pre' });
+    expect(state(at('14:00'), S, athan200, new Set([pre])).nextTakeover?.getTime()).toBe(asr);
   });
 });

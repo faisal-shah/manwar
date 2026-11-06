@@ -1,48 +1,42 @@
+import { signal } from '@preact/signals';
+import { currentTime } from '../../lib/clock';
+
 /**
- * Virtual clock. Normally wall time; `?now=2026-10-29T12:50:30` (local) and
- * `?speed=60` start it elsewhere for testing, and settings previews travel
- * to just before an athan.
+ * The prayer clock's time: the app's clock (lib/clock.ts, which `?now=`
+ * pins for tests and screenshots), run faster by `?speed=60` (the prayer
+ * clock only), or moved by a settings preview to just before an athan.
  */
-let anchorReal = Date.now();
+let anchorReal = currentTime();
 let anchorVirtual = anchorReal;
-let speed = 1;
 
-const params = new URLSearchParams(globalThis.location?.search ?? '');
-const startAt = params.get('now');
-if (startAt) {
-  const t = new Date(startAt).getTime();
-  if (Number.isFinite(t)) anchorVirtual = t;
-}
-const sp = Number(params.get('speed'));
-if (Number.isFinite(sp) && sp > 0) speed = sp;
+const asked = Number(new URLSearchParams(globalThis.location?.search ?? '').get('speed'));
 
-let previewing = false;
+/** How fast the clock runs: 1, `?speed=`, or a preview's fast-forward. */
+export const speed = signal(Number.isFinite(asked) && asked > 0 ? asked : 1);
+
+/** True while a settings preview has moved the clock (`?now=` and `?speed=` are dev tools, not previews). */
+export const previewing = signal(false);
 let run = 0;
 
-/** True while a settings preview has moved the clock (URL overrides are a dev tool, not a preview). */
-export const isPreviewing = () => previewing;
-
-/** Which preview the clock is in, or 0 on wall time: what sounded in one preview has not sounded in another, or for real. */
-export const previewRun = () => (previewing ? run : 0);
+/** Which preview the clock is in, or 0 on the real clock: what sounded in one preview has not sounded in another, or for real. */
+export const previewRun = () => (previewing.value ? run : 0);
 
 export function now(): Date {
-  return new Date(anchorVirtual + (Date.now() - anchorReal) * speed);
+  return new Date(anchorVirtual + (currentTime() - anchorReal) * speed.peek());
 }
 
-export const getSpeed = () => speed;
-
-/** Change the rate of virtual time from this moment on (previews fast-forward). */
+/** Change the rate of the clock from this moment on (previews fast-forward). */
 export function setSpeed(n: number): void {
   anchorVirtual = now().getTime();
-  anchorReal = Date.now();
-  speed = n;
+  anchorReal = currentTime();
+  speed.value = n;
 }
 
-/** Jump to `t` (null returns to wall time). */
+/** Jump to `t` (a preview), or back to the real clock at its own rate with null. */
 export function travelTo(t: Date | null): void {
-  anchorReal = Date.now();
+  anchorReal = currentTime();
   anchorVirtual = t ? t.getTime() : anchorReal;
-  previewing = t !== null;
   if (t) run++;
-  else speed = 1;
+  else speed.value = 1;
+  previewing.value = t !== null;
 }

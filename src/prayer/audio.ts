@@ -1,6 +1,7 @@
 import { effect, signal } from '@preact/signals';
-import { wakeScreen } from '../core/kiosk';
+import { addDays, toISODate } from '../lib/date';
 import { previewRun } from './core/clock';
+import { PRAYERS } from './core/settings';
 import { audioBlocked, clock, recordingFor, resolveAudio, settings, tick } from './store';
 
 const athanEl = new Audio();
@@ -11,21 +12,40 @@ chimeEl.preload = 'auto';
 let playingId: string | null = null;
 
 /**
- * True while an athan (not a settings preview) is sounding: the wall holds
- * its own sounds (a timer's alarm, a note's chime) until it ends
- * (core/sound.ts). Set when a real athan's play() goes through (also over a
- * preview of the same recording, which sends no new 'playing'), cleared
- * when it stops.
+ * True while an athan sounds (a moment preview's too; not a recording tried
+ * in the settings): the wall holds its own sounds (a timer's alarm, a note's
+ * chime) until it ends (core/sound.ts). Set when an athan's play() goes
+ * through (also over a tried recording, which sends no new 'playing'),
+ * cleared when it stops.
  */
 export const athanSounding = signal(false);
 for (const ev of ['pause', 'ended', 'emptied'] as const) athanEl.addEventListener(ev, () => (athanSounding.value = false));
-let retry: (() => void) | null = null;
-const handled = new Set<string>();
+
+/** A sound the browser blocked (autoplay) and the tap that unblocks it plays, while its phase (`key`) lasts. */
+let retry: { key: string; play: () => void } | null = null;
+
+/**
+ * Each phase's sound starts once: by `${run}:${id}:${phase}` (run 0 is the
+ * real clock), the moment it may be tried again (performance.now()):
+ * Infinity once it started, a few seconds on when its file could not be
+ * fetched (the athan joins part-way when it comes).
+ */
+const handled = new Map<string, number>();
+const FETCH_RETRY_MS = 5000;
+
+/** Only today's and yesterday's sounds on the real clock matter; a preview's go when it ends. */
+function pruneHandled(today: string): void {
+  const since = addDays(today, -1);
+  for (const key of handled.keys()) {
+    const [run, day] = key.split(':');
+    if (run !== '0' || day < since) handled.delete(key);
+  }
+}
 
 /**
  * Recordings are played from in-memory blobs. Media elements fetch in byte
- * ranges, which a service-worker precache does not answer reliably offline; a
- * whole-file fetch always comes straight out of the cache.
+ * ranges, which the service worker's runtime cache does not answer reliably
+ * offline; a whole-file fetch always comes straight out of the cache.
  */
 const blobs = new Map<string, Promise<string>>();
 
@@ -45,19 +65,18 @@ function playable(url: string): Promise<string> {
   return p;
 }
 
-/** Warms the blobs for every sound the settings currently use. */
+/** Warms the blobs of every sound the settings use, and lets go of those no longer chosen (unless one is on an element). */
 export function preloadSounds(): void {
   const s = settings.value;
-  const ids = new Set([
-    ...Object.values(s.sounds)
-      .filter((c) => c.enabled)
-      .map((c) => c.audioId),
-    'chime',
-  ]);
-  if (s.tahajjud.enabled) ids.add(s.tahajjud.audioId);
-  for (const id of ids) {
-    const a = resolveAudio(id);
-    if (a) playable(a.url).catch(() => {});
+  const kinds = [...PRAYERS.filter((p) => s.sounds[p].enabled), ...(s.tahajjud.enabled ? (['tahajjud'] as const) : [])];
+  const urls = new Set(kinds.flatMap((k) => recordingFor(k)?.url ?? []));
+  const chime = resolveAudio('chime');
+  if (chime) urls.add(chime.url);
+  for (const url of urls) playable(url).catch(() => {});
+  for (const [url, p] of blobs) {
+    if (urls.has(url)) continue;
+    blobs.delete(url);
+    p.then((src) => src !== athanEl.src && src !== chimeEl.src && URL.revokeObjectURL(src)).catch(() => {});
   }
 }
 
@@ -74,38 +93,50 @@ const nextGeneration = (el: HTMLAudioElement) => {
 /**
  * Plays `url` on `el`. With `offsetSec` the recording keeps time with the
  * clock (an athan joined part-way stays in step however long it takes to
- * load); without, it plays from the start.
+ * load); without, it plays from the start. A play the browser blocks is
+ * retried by the next tap while the phase `key` lasts. False when the file
+ * could not be fetched.
  */
-async function start(el: HTMLAudioElement, url: string, volume: number, offsetSec?: number): Promise<void> {
+async function start(
+  el: HTMLAudioElement,
+  url: string,
+  volume: number,
+  key: string | null,
+  offsetSec?: number,
+): Promise<boolean> {
   const gen = nextGeneration(el);
   const asked = Date.now();
   let src: string;
   try {
     src = await playable(url);
   } catch {
-    return; // the file could not be fetched; nothing to play
+    return false;
   }
-  if (generation.get(el) !== gen) return;
+  if (generation.get(el) !== gen) return true;
   if (el.src !== src) el.src = src;
   el.volume = clampVolume(volume);
   el.currentTime = offsetSec === undefined ? 0 : offsetSec + (Date.now() - asked) / 1000;
   try {
     await el.play();
-    if (generation.get(el) !== gen) return;
+    if (generation.get(el) !== gen) return true;
     if (el === athanEl) athanSounding.value = playingId !== null && playingId !== 'preview';
     audioBlocked.value = false;
     retry = null;
   } catch (e) {
-    if ((e as DOMException).name === 'NotAllowedError') {
+    if ((e as DOMException).name === 'NotAllowedError' && key) {
       const blockedAt = Date.now();
       audioBlocked.value = true;
-      retry = () =>
-        void start(el, url, volume, offsetSec === undefined ? undefined : offsetSec + (Date.now() - blockedAt) / 1000);
+      retry = {
+        key,
+        play: () =>
+          void start(el, url, volume, key, offsetSec === undefined ? undefined : offsetSec + (Date.now() - blockedAt) / 1000),
+      };
     }
   }
+  return true;
 }
 
-export function stopAthan(): void {
+function stopAthan(): void {
   nextGeneration(athanEl);
   athanEl.pause();
   playingId = null;
@@ -121,7 +152,7 @@ export function previewSound(audioId: string, volume: number): (() => void) | nu
   if (playingId && playingId !== 'preview') return null;
   const a = resolveAudio(audioId);
   if (!a) return null;
-  void start(athanEl, a.url, volume);
+  void start(athanEl, a.url, volume, null);
   playingId = 'preview';
   return stopPreview;
 }
@@ -139,38 +170,51 @@ export function stopPreview(): void {
 /** First tap after a blocked autoplay replays what should be sounding. */
 export function unlockAudio(): void {
   audioBlocked.value = false;
-  retry?.();
+  retry?.play();
 }
 
 /**
  * Drives sound from the clock state: chime at the start of the pre-athan
  * countdown, athan from the moment it is due (joined part-way if the page
  * loads late), silence once the sequence is dismissed. The wall's display
- * schedule owns the backlight; a takeover wakes the screen.
+ * schedule owns the backlight (prayer/stage.ts wakes a sleeping wall for
+ * the phases that sound).
  */
 export function startAudioController(): void {
   effect(preloadSounds);
+  let prunedFor = '';
   effect(() => {
     const st = clock.value;
     const s = settings.value;
     const n = tick.value.getTime();
     const t = st?.takeover ?? null;
+    const run = previewRun();
 
+    if (run === 0 && toISODate(tick.value) !== prunedFor) {
+      prunedFor = toISODate(tick.value);
+      pruneHandled(prunedFor);
+    }
     if (playingId && playingId !== 'preview' && t?.id !== playingId) stopAthan();
-    if (!st || !t) return;
+    const key = t ? `${run}:${t.id}:${t.phase}` : null;
+    // A blocked sound is not played by a tap after its phase.
+    if (retry && retry.key !== key) retry = null;
+    if (!st || !t || !key) return;
 
     const kind = t.kind === 'tahajjud' ? 'tahajjud' : t.prayer;
     const choice = kind === 'tahajjud' ? s.tahajjud : kind ? s.sounds[kind] : null;
     // The volume follows the settings while the athan plays.
     if (playingId === t.id && choice) athanEl.volume = clampVolume(choice.volume);
 
-    const key = `${previewRun()}:${t.id}:${t.phase}`;
-    if (handled.has(key)) return;
+    if (performance.now() < (handled.get(key) ?? 0)) return;
+    const tried = (p: Promise<boolean>) =>
+      void p.then((ok) => {
+        if (!ok) handled.set(key, performance.now() + FETCH_RETRY_MS);
+      });
 
     if (t.phase === 'pre' && s.chime.enabled && n - t.phaseStart.getTime() < 5000) {
       const chime = resolveAudio('chime');
       if (!chime) return; // audio index still loading; retry next tick
-      void start(chimeEl, chime.url, s.chime.volume);
+      tried(start(chimeEl, chime.url, s.chime.volume, key));
     }
     if (t.phase === 'athan' && kind && choice?.enabled) {
       const a = recordingFor(kind);
@@ -178,10 +222,9 @@ export function startAudioController(): void {
       const offset = (n - t.athan.getTime()) / 1000;
       if (a.durationSec === 0 || offset < a.durationSec - 1) {
         playingId = t.id;
-        void start(athanEl, a.url, choice.volume, Math.max(0, offset));
+        tried(start(athanEl, a.url, choice.volume, key, Math.max(0, offset)));
       }
     }
-    handled.add(key);
-    wakeScreen();
+    handled.set(key, Infinity);
   });
 }

@@ -1,28 +1,17 @@
 import type { ComponentType, FunctionComponent } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
-import {
-  CalendarDays,
-  CalendarSync,
-  CloudSun,
-  Info,
-  ListChecks,
-  Lock,
-  Monitor,
-  Smartphone,
-  Users,
-  Utensils,
-} from 'lucide-preact';
+import { CalendarDays, CalendarSync, Info, ListChecks, Lock, MapPin, Monitor, Smartphone, Users, Utensils } from 'lucide-preact';
 import { settingsPage } from '../../app/nav';
 import { requireParent, unlocked } from '../../core/lock';
 import { Sheet } from '../../ui/overlays';
 import { CalendarPage } from './CalendarPage';
 import { DisplayPage } from './DisplayPage';
 import { GooglePage } from './GooglePage';
+import { LocationPage } from './LocationPage';
 import { LockPage } from './LockPage';
 import { AboutPage, MealsPage, TasksPage } from './OtherPages';
 import { PhonesPage } from './PhonesPage';
 import { ProfilesPage } from './ProfilesPage';
-import { WeatherPage } from './WeatherPage';
 import './settings.css';
 
 export { SleepMenu } from './SleepMenu';
@@ -39,7 +28,7 @@ const PAGES: PageDef[] = [
   { id: 'google', label: 'Google Calendar', icon: CalendarSync, Page: GooglePage },
   { id: 'calendar', label: 'Calendar', icon: CalendarDays, Page: CalendarPage },
   { id: 'display', label: 'Display', icon: Monitor, Page: DisplayPage },
-  { id: 'weather', label: 'Weather', icon: CloudSun, Page: WeatherPage },
+  { id: 'location', label: 'Location', icon: MapPin, Page: LocationPage },
   { id: 'meals', label: 'Meals', icon: Utensils, Page: MealsPage },
   { id: 'lock', label: 'Parental lock', icon: Lock, Page: LockPage },
   { id: 'phones', label: 'Phones', icon: Smartphone, Page: PhonesPage },

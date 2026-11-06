@@ -2,40 +2,41 @@ import './prayer.css';
 import { computed, signal } from '@preact/signals';
 import { useEffect, useState } from 'preact/hooks';
 import type { TargetedEvent } from 'preact';
-import { MapPin, Play, Square } from 'lucide-preact';
-import { prayerSettingsDoc, settings as wallSettings } from '../../data/store';
+import { Play, Square } from 'lucide-preact';
+import { asParent } from '../../core/lock';
+import { prayerSettingsDoc, saveSettings, settings as household } from '../../data/store';
+import type { Place } from '../../data/types';
 import { nowMs } from '../../lib/clock';
-import { locateDevice, searchPlaces } from '../../prayer/core/geo';
+import { laterBy } from '../../lib/date';
+import { jumuahLabel, LABELS } from '../../prayer/core/labels';
 import { loadBundledAudio, MEDIA, type BundledAudio } from '../../prayer/core/media';
 import { PERIOD_NAMES } from '../../prayer/core/schedule';
-import {
-  CALC_METHODS,
-  HIGH_LAT_RULES,
-  HHMM,
-  PRAYERS,
-  RANGES,
-  type Place,
-  type Settings,
-  type SoundChoice,
-} from '../../prayer/core/settings';
+import { CALC_METHODS, HIGH_LAT_RULES, HHMM, limits, PRAYERS, type Settings, type SoundChoice } from '../../prayer/core/settings';
 import { listedRecordings, soundOptions } from '../../prayer/recordings';
 import { settings, updateSettings } from '../../prayer/settingsStore';
 import { Button, Segmented, SettingRow, Stepper, Toggle } from '../../ui/controls';
 import { MosqueIcon } from '../../ui/MosqueIcon';
+import { PlacePicker } from '../../ui/PlacePicker';
 import type { MoreItem } from '../more/items';
 import { moreView } from '../more/view';
 import { goPhone } from '../nav';
-import { swallowRestOfTap } from '../../ui/overlays';
+import { notSaved, swallowRestOfTap } from '../../ui/overlays';
 import { nextLine, placeTime, prayerDay, slotName } from './logic';
 
 const set = (patch: (s: Settings) => Partial<Settings>) => updateSettings(patch);
-const range = (path: keyof typeof RANGES) => ({ min: RANGES[path][0], max: RANGES[path][1] });
+/** A choice table's [value, label] pairs (prayer/core/labels.ts) as this phone's Segmented takes them. */
+const choices = <T extends string>(options: readonly (readonly [T, string])[]) =>
+  options.map(([value, label]) => ({ value, label }));
+
+/** The household's place (Settings > Location on the wall), which the prayer times and the weather are for. */
+const choosePlace = (place: Place) =>
+  asParent(() => saveSettings({ place }).catch(notSaved('Location not saved')), 'Enter the PIN to change the location.');
 
 /** The clock to the minute: the next prayer changes only on one (athans fall on whole minutes). */
 const minute = computed(() => Math.floor(nowMs.value / 60_000));
 
 /** Today's prayers and the next one, for the household's place (null before it has one). */
-export const prayerNow = computed(() => prayerDay(new Date(minute.value * 60_000 + 1), settings.value));
+export const prayerNow = computed(() => prayerDay(new Date(minute.value * 60_000 + 1), household.value.place, settings.value));
 
 /** More > Prayer times, from another tab (Today's prayer line). */
 export function openPrayerTimes(): void {
@@ -49,13 +50,15 @@ const bundled = signal<BundledAudio[]>([]);
 let bundledAsked = false;
 
 /**
- * More > Prayer times: the household's prayer clock settings (the same
- * document the wall's prayer face edits): the place, how the times are
- * calculated, iqamah and Jumu'ah, and each athan's sound. The wall's look
- * (themes, photos, the night clock) is set on the wall.
+ * More > Prayer times: the household's place (the wall's Settings >
+ * Location) and the prayer clock's settings (the document the wall's
+ * prayer face edits): how the times are calculated, iqamah and Jumu'ah,
+ * and each athan's sound. The wall's look (themes, photos, the night
+ * clock) is set on the wall.
  */
 function PrayerTimes() {
   const s = settings.value;
+  const place = household.value.place;
   const [changing, setChanging] = useState(false);
   useEffect(() => {
     if (bundledAsked) return;
@@ -65,39 +68,46 @@ function PrayerTimes() {
       () => (bundledAsked = false),
     );
   }, []);
-  if (!s.place || changing)
+  if (!place || changing)
     return (
       <div class="ph-stack">
-        <PlacePicker
-          onPick={(place) => {
-            set(() => ({ place }));
-            setChanging(false);
-          }}
-          onCancel={s.place ? () => setChanging(false) : undefined}
-        />
+        <section class="ph-card ppt-place" aria-label="Place">
+          <h2 class="ph-card-title">
+            <MosqueIcon size="2.4rem" strokeWidth={1.8} /> Where the family lives
+          </h2>
+          <p class="muted">The wall calculates the prayer times for this place; the weather is for it too.</p>
+          <PlacePicker
+            device="phone"
+            onPick={(p) => {
+              void choosePlace(p);
+              setChanging(false);
+            }}
+          />
+          {place && (
+            <Button small onClick={() => setChanging(false)}>
+              Cancel
+            </Button>
+          )}
+        </section>
       </div>
     );
   return (
     <div class="ph-stack ppt">
-      <Today place={s.place} onChange={() => setChanging(true)} />
+      <Today place={place} onChange={() => setChanging(true)} />
       <Calculation s={s} />
       <Iqamah s={s} />
       <Sounds s={s} />
       <section class="ph-card" aria-label="Calendar">
         <h2 class="ph-card-title">Islamic calendar</h2>
-        <SettingRow label="Ramadan" hint="Suhoor and iftar countdowns and the iftar dua.">
+        <SettingRow label={LABELS.ramadan.label} hint={LABELS.ramadan.hint}>
           <Segmented
             value={s.ramadan}
-            options={[
-              { value: 'auto', label: 'Auto' },
-              { value: 'on', label: 'On' },
-              { value: 'off', label: 'Off' },
-            ]}
+            options={choices(LABELS.ramadan.options)}
             onChange={(ramadan) => set(() => ({ ramadan }))}
           />
         </SettingRow>
-        <SettingRow label="Hijri date adjustment" hint="Days, to match the local moonsighting.">
-          <Stepper value={s.hijriOffset} {...range('hijriOffset')} onChange={(hijriOffset) => set(() => ({ hijriOffset }))} />
+        <SettingRow label={LABELS.hijriOffset.label} hint={LABELS.hijriOffset.hint}>
+          <Stepper value={s.hijriOffset} {...limits('hijriOffset')} onChange={(hijriOffset) => set(() => ({ hijriOffset }))} />
         </SettingRow>
       </section>
       <p class="muted ppt-note">
@@ -108,7 +118,7 @@ function PrayerTimes() {
 }
 
 function Today({ place, onChange }: { place: Place; onChange: () => void }) {
-  const fmt = wallSettings.value.timeFormat;
+  const fmt = household.value.timeFormat;
   const day = prayerNow.value;
   return (
     <section class="ph-card" aria-label="Today's prayer times">
@@ -140,38 +150,33 @@ function Calculation({ s }: { s: Settings }) {
   return (
     <section class="ph-card" aria-label="Calculation">
       <h2 class="ph-card-title">Calculation</h2>
-      <SettingRow label="Calculation method">
+      <SettingRow label={LABELS.method.label}>
         <Select
-          label="Calculation method"
+          label={LABELS.method.label}
           value={s.method}
           options={Object.entries(CALC_METHODS)}
           onChange={(method) => set(() => ({ method: method as Settings['method'] }))}
         />
       </SettingRow>
-      <SettingRow label="Asr" hint="Hanafi: shadow twice an object's length. Standard: Shafi'i, Maliki, Hanbali.">
-        <Segmented
-          value={s.madhab}
-          options={[
-            { value: 'hanafi', label: 'Hanafi' },
-            { value: 'shafi', label: 'Standard' },
-          ]}
-          onChange={(madhab) => set(() => ({ madhab }))}
-        />
+      <SettingRow label={LABELS.madhab.label} hint={LABELS.madhab.hint}>
+        <Segmented value={s.madhab} options={choices(LABELS.madhab.options)} onChange={(madhab) => set(() => ({ madhab }))} />
       </SettingRow>
-      <SettingRow label="High-latitude rule" hint="How Fajr and Isha are found when twilight never fully ends.">
+      <SettingRow label={LABELS.highLatRule.label} hint={LABELS.highLatRule.hint}>
         <Select
-          label="High-latitude rule"
+          label={LABELS.highLatRule.label}
           value={s.highLatRule}
           options={Object.entries(HIGH_LAT_RULES)}
           onChange={(highLatRule) => set(() => ({ highLatRule: highLatRule as Settings['highLatRule'] }))}
         />
       </SettingRow>
-      <h3 class="ppt-sub">Adjust calculated athan times, minutes</h3>
+      <h3 class="ppt-sub">
+        {LABELS.adjust.label}, {LABELS.adjust.unit}
+      </h3>
       {PRAYERS.map((p) => (
         <SettingRow key={p} label={PERIOD_NAMES[p]}>
           <Stepper
             value={s.adjust[p]}
-            {...range('adjust.*')}
+            {...limits('adjust.*')}
             onChange={(v) => set((x) => ({ adjust: { ...x.adjust, [p]: v } }))}
           />
         </SettingRow>
@@ -186,29 +191,29 @@ function Iqamah({ s }: { s: Settings }) {
   return (
     <section class="ph-card" aria-label="Iqamah">
       <h2 class="ph-card-title">Iqamah and Jumu'ah</h2>
-      <h3 class="ppt-sub">Iqamah, minutes after athan</h3>
+      <h3 class="ppt-sub">{LABELS.iqamah.label}</h3>
       {PRAYERS.map((p) => (
         <SettingRow key={p} label={PERIOD_NAMES[p]}>
           <Stepper
             value={s.iqamah[p]}
-            {...range('iqamah.*')}
+            {...limits('iqamah.*')}
             onChange={(v) => set((x) => ({ iqamah: { ...x.iqamah, [p]: v } }))}
           />
         </SettingRow>
       ))}
-      <SettingRow label="Show Jumu'ah" hint="On Fridays Dhuhr becomes Jumu'ah and its iqamah is the first Jumu'ah time.">
+      <SettingRow label={LABELS.jumuah.label} hint={LABELS.jumuah.hint}>
         <Toggle
-          label="Show Jumu'ah"
+          label={LABELS.jumuah.label}
           on={s.jumuah.enabled}
           onChange={(enabled) => set((x) => ({ jumuah: { ...x.jumuah, enabled } }))}
         />
       </SettingRow>
       {s.jumuah.enabled &&
         times.map((t, i) => (
-          <SettingRow key={`${i}-${t}`} label={times.length > 1 ? `Jumu'ah ${i + 1}` : "Jumu'ah"}>
+          <SettingRow key={`${i}-${t}`} label={jumuahLabel(i, times.length)}>
             <div class="ppt-inline">
               <TimeField
-                label={times.length > 1 ? `Jumu'ah ${i + 1} time` : "Jumu'ah time"}
+                label={`${jumuahLabel(i, times.length)} time`}
                 value={t}
                 onChange={(v) => setTimes(times.map((x, j) => (j === i ? v : x)))}
               />
@@ -222,18 +227,11 @@ function Iqamah({ s }: { s: Settings }) {
         ))}
       {s.jumuah.enabled && times.length < 2 && (
         <Button small onClick={() => setTimes([...times, laterBy(times[0] ?? '13:30', 60)])}>
-          Add a second Jumu'ah
+          {LABELS.addJumuah.label}
         </Button>
       )}
     </section>
   );
-}
-
-/** "13:30" an hour later, within the day. */
-function laterBy(hhmm: string, minutes: number): string {
-  const [h, m] = hhmm.split(':').map(Number);
-  const t = Math.min(23 * 60 + 59, h * 60 + m + minutes);
-  return `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
 }
 
 function Sounds({ s }: { s: Settings }) {
@@ -252,19 +250,19 @@ function Sounds({ s }: { s: Settings }) {
         />
       ))}
       <SoundRow
-        label="Tahajjud"
-        hint="An athan at the start of the last third of the night."
+        label={LABELS.tahajjud.label}
+        hint={LABELS.tahajjud.hint}
         kind="athan"
         choice={s.tahajjud}
         onChange={(tahajjud) => set(() => ({ tahajjud }))}
       />
-      <h3 class="ppt-sub">At each prayer</h3>
-      <SettingRow label="One-minute countdown before the athan">
-        <Toggle label="Countdown before the athan" on={seq.preCountdown} onChange={(preCountdown) => setSeq({ preCountdown })} />
+      <h3 class="ppt-sub">{LABELS.atEachPrayer.label}</h3>
+      <SettingRow label={LABELS.preCountdown.label}>
+        <Toggle label={LABELS.preCountdown.label} on={seq.preCountdown} onChange={(preCountdown) => setSeq({ preCountdown })} />
       </SettingRow>
-      <SettingRow label="Chime before the athan">
+      <SettingRow label={LABELS.chime.label}>
         <Toggle
-          label="Chime before the athan"
+          label={LABELS.chime.label}
           on={s.chime.enabled}
           onChange={(enabled) => set((x) => ({ chime: { ...x.chime, enabled } }))}
         />
@@ -276,11 +274,15 @@ function Sounds({ s }: { s: Settings }) {
           onChange={(volume) => set((x) => ({ chime: { ...x.chime, volume } }))}
         />
       )}
-      <SettingRow label="Dua after the athan">
-        <Toggle label="Dua after the athan" on={seq.dua} onChange={(dua) => setSeq({ dua })} />
+      <SettingRow label={LABELS.dua.label}>
+        <Toggle label={LABELS.dua.label} on={seq.dua} onChange={(dua) => setSeq({ dua })} />
       </SettingRow>
-      <SettingRow label="Full-screen iqamah countdown" hint="The last minute before iqamah.">
-        <Toggle label="Iqamah countdown" on={seq.iqamahCountdown} onChange={(iqamahCountdown) => setSeq({ iqamahCountdown })} />
+      <SettingRow label={LABELS.iqamahCountdown.label} hint={LABELS.iqamahCountdown.hint}>
+        <Toggle
+          label={LABELS.iqamahCountdown.label}
+          on={seq.iqamahCountdown}
+          onChange={(iqamahCountdown) => setSeq({ iqamahCountdown })}
+        />
       </SettingRow>
     </section>
   );
@@ -411,82 +413,15 @@ function TimeField({ label, value, onChange }: { label: string; value: string; o
   );
 }
 
-/** Where the family lives: searched by name, or this phone's location. */
-function PlacePicker({ onPick, onCancel }: { onPick: (p: Place) => void; onCancel?: () => void }) {
-  const [query, setQuery] = useState('');
-  const [results, setResults] = useState<Place[] | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const run = async (task: () => Promise<void>) => {
-    setBusy(true);
-    setError(null);
-    try {
-      await task();
-    } catch (e) {
-      setError((e as Error).message || 'That did not work. Try again.');
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <section class="ph-card ppt-place" aria-label="Place">
-      <h2 class="ph-card-title">
-        <MosqueIcon size="2.4rem" strokeWidth={1.8} /> Where the family lives
-      </h2>
-      <p class="muted">The wall calculates the prayer times for this place.</p>
-      <Button onClick={() => void run(async () => onPick(await locateDevice()))} disabled={busy}>
-        <MapPin size="2rem" /> Use this phone's location
-      </Button>
-      <form
-        class="ppt-search"
-        onSubmit={(e) => {
-          e.preventDefault();
-          void run(async () => setResults(await searchPlaces(query)));
-        }}
-      >
-        <input
-          class="input"
-          aria-label="City"
-          placeholder="Or search for a city"
-          value={query}
-          onInput={(e: TargetedEvent<HTMLInputElement>) => setQuery(e.currentTarget.value)}
-        />
-        <Button type="submit" disabled={busy || query.trim().length < 2}>
-          Search
-        </Button>
-      </form>
-      {error && <p class="error">{error}</p>}
-      {results && results.length === 0 && <p class="muted">No places found.</p>}
-      {results && results.length > 0 && (
-        <ul class="ppt-results">
-          {results.map((p) => (
-            <li key={`${p.latitude},${p.longitude}`}>
-              <button type="button" onClick={() => onPick(p)}>
-                <span dir="auto">{p.name}</span>
-                <small class="muted">{p.timezone ?? `${p.latitude.toFixed(2)}, ${p.longitude.toFixed(2)}`}</small>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-      {onCancel && (
-        <Button small onClick={onCancel}>
-          Cancel
-        </Button>
-      )}
-    </section>
-  );
-}
-
 export const prayerItem: MoreItem = {
   id: 'prayer',
   label: 'Prayer times',
   icon: MosqueIcon,
   hint: () => {
-    const s = settings.value;
-    if (!s.place) return 'Set where the family lives';
+    const place = household.value.place;
+    if (!place) return 'Set where the family lives';
     const day = prayerNow.value;
-    return day ? `Next: ${nextLine(day.next, s.place, wallSettings.value.timeFormat)}` : null;
+    return day ? `Next: ${nextLine(day.next, place, household.value.timeFormat)}` : null;
   },
   View: PrayerTimes,
 };

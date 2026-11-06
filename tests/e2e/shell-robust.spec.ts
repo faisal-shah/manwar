@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { writeFields } from './prayer-helpers';
 
 /*
  * The wall left running for weeks: first run, offline boots, idle return,
@@ -575,13 +576,22 @@ test("a failed place search shows only the failure, not the last query's places"
     up
       ? r.fulfill({
           json: {
-            results: [{ name: 'Springfield', admin1: 'Illinois', country: 'United States', latitude: 39.8, longitude: -89.6 }],
+            results: [
+              {
+                name: 'Springfield',
+                admin1: 'Illinois',
+                country: 'United States',
+                latitude: 39.8,
+                longitude: -89.6,
+                timezone: 'America/Chicago',
+              },
+            ],
           },
         })
       : r.abort('internetdisconnected'),
   );
   await open(page);
-  await openSettings(page, 'Weather');
+  await openSettings(page, 'Location');
   const search = page.getByRole('searchbox', { name: 'Search for a place' });
   await search.fill('Springfield');
   await expect(page.getByRole('button', { name: /Springfield/ })).toBeVisible();
@@ -748,7 +758,11 @@ test('weather is fetched once per place, not on every settings change, and hides
       },
     });
   });
-  await open(page);
+  // The demo household has no place: the weather is for the one set here (Houston: its Dhuhr is long after the spec's start).
+  const name = await open(page);
+  await writeFields(name, 'settings/main', {
+    place: { name: 'Houston, Texas', lat: 29.7604, lon: -95.3698, timezone: 'America/Chicago' },
+  });
   await expect(page.locator('.topbar .wx')).toContainText('70°');
   const before = fetches;
   await openSettings(page, 'Display');

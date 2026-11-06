@@ -1,5 +1,7 @@
-import { hijriDate, parseHHMM, type HijriDate } from './calendar';
-import { addDays, computeDay, placeDay, startOfDay, type DayTimes } from './prayer';
+import type { Place } from '../../data/types';
+import { dateAt, toISODate } from '../../lib/date';
+import { hijriDate, type HijriDate } from './calendar';
+import { addDays, computeDay, placeDay, startOfDay, type CalcSettings, type DayTimes } from './prayer';
 import { PRAYERS, type BgSlot, type PrayerKey, type Settings, type ThemeKey } from './settings';
 
 export type PeriodKey = 'fajr' | 'sunrise' | 'duha' | 'dhuhr' | 'jumuah' | 'asr' | 'maghrib' | 'isha' | 'tahajjud';
@@ -119,6 +121,12 @@ export interface ClockState {
   period: Period;
   countdown: Countdown;
   takeover: Takeover | null;
+  /**
+   * When the next phase of the athan sequence after now starts (a countdown,
+   * an athan, the tahajjud athan): a reload waits for one starting soon,
+   * and a settings preview ends before it.
+   */
+  nextTakeover: Date | null;
   theme: ThemeKey;
   /**
    * While the calligraphy window or the night hours cover the daytime theme,
@@ -143,18 +151,14 @@ export interface Days {
 }
 
 /** Prayer times for the place's yesterday, today and tomorrow. */
-export function computeDays(now: Date, s: Settings): Days {
-  const d = placeDay(now, s.place?.timezone ?? null);
+export function computeDays(now: Date, place: Place, s: CalcSettings): Days {
+  const d = placeDay(now, place.timezone);
   return {
-    yesterday: computeDay(addDays(d, -1), s),
-    today: computeDay(d, s),
-    tomorrow: computeDay(addDays(d, 1), s),
+    yesterday: computeDay(addDays(d, -1), place, s),
+    today: computeDay(d, place, s),
+    tomorrow: computeDay(addDays(d, 1), place, s),
   };
 }
-
-/** yyyy-mm-dd on the local calendar: the prefix of every slot id. */
-export const dayKey = (d: Date) =>
-  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 function slotsFor(day: DayTimes, s: Settings): Slot[] {
   const friday = day.date.getDay() === 5 && s.jumuah.enabled;
@@ -164,10 +168,10 @@ function slotsFor(day: DayTimes, s: Settings): Slot[] {
     let name: PeriodKey = p;
     if (p === 'dhuhr' && friday) {
       name = 'jumuah';
-      const first = s.jumuah.times.map((t) => parseHHMM(day.date, t)).find((t) => t > athan);
+      const first = s.jumuah.times.map((t) => dateAt(toISODate(day.date), t)).find((t) => t > athan);
       if (first) iqamah = first;
     }
-    return { id: `${dayKey(day.date)}:${p}`, prayer: p, name, athan, iqamah };
+    return { id: `${toISODate(day.date)}:${p}`, prayer: p, name, athan, iqamah };
   });
 }
 
@@ -249,19 +253,16 @@ function prayerPhases(slot: Slot, s: Settings, athanLength: AthanLength): PhaseS
   return spans;
 }
 
-function takeoverAt(
-  now: Date,
-  allSlots: Slot[],
-  days: Days,
-  s: Settings,
-  athanLength: AthanLength,
-  dismissed: ReadonlySet<string>,
-): Takeover | null {
-  const n = now.getTime();
+/**
+ * Every phase of the athan sequence around now, as takeovers: each prayer's
+ * of yesterday, today and tomorrow, then the tahajjud athans of the last two
+ * nights when it is on. Not dismissed ones only.
+ */
+function takeovers(allSlots: Slot[], days: Days, s: Settings, athanLength: AthanLength, dismissed: ReadonlySet<string>) {
+  const all: Takeover[] = [];
   for (const slot of allSlots) {
-    const span = prayerPhases(slot, s, athanLength).find((p) => n >= p.start && n < p.end);
-    if (span && !dismissed.has(phaseId({ id: slot.id, phase: span.phase }))) {
-      return {
+    for (const span of prayerPhases(slot, s, athanLength)) {
+      all.push({
         id: slot.id,
         kind: 'prayer',
         name: slot.name,
@@ -271,31 +272,28 @@ function takeoverAt(
         phaseEnd: new Date(span.end),
         athan: slot.athan,
         iqamah: slot.iqamah,
-      };
+      });
     }
   }
   if (s.tahajjud.enabled) {
+    const len = athanLength('tahajjud');
     for (const day of [days.yesterday, days.today]) {
-      const id = `${dayKey(day.date)}:tahajjud`;
       const start = day.lastThird.getTime();
-      const len = athanLength('tahajjud');
       const end = start + (len === null ? SILENT_ATHAN_SCREEN : len > 0 ? len * SEC : FALLBACK_ATHAN_LENGTH);
-      if (!dismissed.has(phaseId({ id, phase: 'athan' })) && n >= start && n < end) {
-        return {
-          id,
-          kind: 'tahajjud',
-          name: 'tahajjud',
-          prayer: null,
-          phase: 'athan',
-          phaseStart: day.lastThird,
-          phaseEnd: new Date(end),
-          athan: day.lastThird,
-          iqamah: null,
-        };
-      }
+      all.push({
+        id: `${toISODate(day.date)}:tahajjud`,
+        kind: 'tahajjud',
+        name: 'tahajjud',
+        prayer: null,
+        phase: 'athan',
+        phaseStart: day.lastThird,
+        phaseEnd: new Date(end),
+        athan: day.lastThird,
+        iqamah: null,
+      });
     }
   }
-  return null;
+  return all.filter((t) => !dismissed.has(phaseId(t)));
 }
 
 function isRamadan(d: Date, s: Settings): boolean {
@@ -356,7 +354,10 @@ export function clockState(
   }
 
   const period = periodAt(now, days, slots);
-  const takeover = takeoverAt(now, all, days, s, athanLength, dismissed);
+  const phases = takeovers(all, days, s, athanLength, dismissed);
+  const takeover = phases.find((t) => n >= t.phaseStart.getTime() && n < t.phaseEnd.getTime()) ?? null;
+  const later = phases.map((t) => t.phaseStart.getTime()).filter((t) => t > n);
+  const nextTakeover = later.length ? new Date(Math.min(...later)) : null;
 
   let theme: ThemeKey = s.dayTheme;
   let themeUntil = nightEnd(now, days, s);
@@ -384,12 +385,13 @@ export function clockState(
     period,
     countdown,
     takeover,
+    nextTakeover,
     theme,
     themeUntil,
     makruh: makruhAt(now, days.today),
     ramadan: isRamadan(now, s) || countdown.kind === 'suhoor',
     hijri: hijriDate(now, s.hijriOffset),
-    jumuah: s.jumuah.enabled ? s.jumuah.times.map((t) => parseHHMM(friday, t)) : [],
+    jumuah: s.jumuah.enabled ? s.jumuah.times.map((t) => dateAt(toISODate(friday), t)) : [],
     tahajjud,
     duha: new Date(days.today.sunrise.getTime() + SUNRISE_MAKRUH),
   };

@@ -68,23 +68,20 @@ export const BG_SLOT_NAMES: Record<BgSlot, string> = {
  */
 export type PhotoChoice = string[] | 'all' | null;
 
-export interface Place {
-  name: string;
-  latitude: number;
-  longitude: number;
-  timezone: string | null;
-}
-
 export interface SoundChoice {
   enabled: boolean;
-  /** Bundled audio id from public/audio/index.json, or `upload:<id>`. */
+  /** Bundled audio id from public/prayer/audio/index.json, or `upload:<id>`. */
   audioId: string;
   /** 0..1 */
   volume: number;
 }
 
+/**
+ * The prayer clock's settings (`settings/prayer`). The place it calculates
+ * for is the household's (`settings/main.place`), as are the time format
+ * and the temperature unit it shows.
+ */
 export interface Settings {
-  place: Place | null;
   method: CalcMethod;
   madhab: 'hanafi' | 'shafi';
   highLatRule: HighLatRule;
@@ -109,9 +106,9 @@ export interface Settings {
   chime: { enabled: boolean; volume: number };
   /** Per slot, the photos the calligraphy theme rotates through, one a day. */
   backgrounds: Record<BgSlot, PhotoChoice>;
-  clock24h: boolean;
   hijriOffset: number;
-  weather: { enabled: boolean; unit: 'f' | 'c' };
+  /** The weather at the household's place on the face. */
+  showWeather: boolean;
   ramadan: 'auto' | 'on' | 'off';
   showDaily: boolean;
   makruhBadge: boolean;
@@ -124,7 +121,6 @@ export interface Settings {
 const perPrayer = <T>(f: (p: PrayerKey) => T) => Object.fromEntries(PRAYERS.map((p) => [p, f(p)])) as Record<PrayerKey, T>;
 
 export const DEFAULT_SETTINGS: Settings = {
-  place: null,
   method: 'NorthAmerica',
   madhab: 'hanafi',
   highLatRule: 'recommended',
@@ -140,9 +136,8 @@ export const DEFAULT_SETTINGS: Settings = {
   tahajjud: { enabled: false, audioId: 'athan-1', volume: 0.3 },
   chime: { enabled: true, volume: 0.5 },
   backgrounds: Object.fromEntries(BG_SLOTS.map((s) => [s, null])) as Record<BgSlot, PhotoChoice>,
-  clock24h: false,
   hijriOffset: 0,
-  weather: { enabled: true, unit: 'f' },
+  showWeather: true,
   ramadan: 'auto',
   showDaily: true,
   makruhBadge: true,
@@ -160,7 +155,6 @@ const ENUMS: Record<string, readonly string[]> = {
   highLatRule: Object.keys(HIGH_LAT_RULES),
   dayTheme: DAY_THEMES,
   calligraphyFont: Object.keys(CALLIGRAPHY_FONTS),
-  unit: ['f', 'c'],
   ramadan: ['auto', 'on', 'off'],
   motion: ['full', 'calm'],
 };
@@ -224,21 +218,6 @@ function overlay<T>(defaults: T, raw: unknown, path = ''): T {
   return raw as T;
 }
 
-function parsePlace(raw: unknown): Place | null {
-  if (!raw || typeof raw !== 'object') return null;
-  const p = raw as Record<string, unknown>;
-  const lat = p.latitude,
-    lon = p.longitude;
-  const valid = (v: unknown, max: number): v is number => typeof v === 'number' && Number.isFinite(v) && Math.abs(v) <= max;
-  if (!valid(lat, 90) || !valid(lon, 180)) return null;
-  return {
-    name: typeof p.name === 'string' ? p.name : `${lat.toFixed(3)}, ${lon.toFixed(3)}`,
-    latitude: lat,
-    longitude: lon,
-    timezone: typeof p.timezone === 'string' ? p.timezone : null,
-  };
-}
-
 /** A slot's photos: 'all', distinct ids, or null (the defaults) for anything else. */
 function parsePhotoChoice(raw: unknown): PhotoChoice {
   if (raw === 'all') return 'all';
@@ -249,7 +228,6 @@ function parsePhotoChoice(raw: unknown): PhotoChoice {
 export function sanitizeSettings(raw: unknown): Settings {
   const s = overlay(DEFAULT_SETTINGS, raw);
   const r = raw as Record<string, unknown> | null;
-  s.place = parsePlace(r?.place);
   const bgs = (r?.backgrounds ?? {}) as Record<string, unknown>;
   s.backgrounds = Object.fromEntries(BG_SLOTS.map((slot) => [slot, parsePhotoChoice(bgs[slot])])) as Settings['backgrounds'];
   s.jumuah.times = s.jumuah.times.filter((t) => HHMM.test(t)).slice(0, 2);
@@ -258,23 +236,19 @@ export function sanitizeSettings(raw: unknown): Settings {
 }
 
 const isMap = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
-/** Settings written whole when they change, never field by field. */
-const WHOLE = new Set(['place']);
 
 /**
  * What `next` changes from `was`, as a nested partial of the changed values
- * only (maps recurse, except the place; anything else, lists included, is a
- * value), or null
+ * only (maps recurse; anything else, lists included, is a value), or null
  * when nothing changed. Merged into the stored document, it leaves the
  * fields another device changed meanwhile as that device left them.
  */
 export function settingsChanges(was: Settings, next: Settings): Record<string, unknown> | null {
-  const diff = (a: unknown, b: unknown, key?: string): unknown => {
-    // A place is one value: two devices choosing places at once must not mix their fields.
-    if (isMap(a) && isMap(b) && !WHOLE.has(key ?? '')) {
+  const diff = (a: unknown, b: unknown): unknown => {
+    if (isMap(a) && isMap(b)) {
       const out: Record<string, unknown> = {};
       for (const k of Object.keys(b)) {
-        const d = diff(a[k], b[k], k);
+        const d = diff(a[k], b[k]);
         if (d !== undefined) out[k] = d;
       }
       return Object.keys(out).length ? out : undefined;

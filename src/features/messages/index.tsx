@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import { Play, StickyNote } from 'lucide-preact';
+import { shownFace } from '../../app/face';
 import { sleeping } from '../../core/display';
 import { playChime } from '../../core/sound';
 import { asParent } from '../../core/lock';
@@ -108,16 +109,17 @@ const ANNOUNCED_KEPT = 50;
 
 function Note({ m, more }: { m: Message; more: number }) {
   const author = m.from ? profileById.value.get(m.from) : undefined;
-  // A message that arrives while the wall sleeps waits, silent behind the sleep screen, until someone wakes it.
-  const asleep = sleeping.value;
+  // A message is announced once it is seen: one that arrives while the wall sleeps, or under the prayer face
+  // (the athan sequence, which also wakes a sleeping wall for a while), waits silent until the family face shows it.
+  const seen = !sleeping.value && shownFace.value === 'family';
   useEffect(() => {
-    if (asleep || announced.peek().includes(m.id)) return;
+    if (!seen || announced.peek().includes(m.id)) return;
     announced.value = [...announced.peek(), m.id].slice(-ANNOUNCED_KEPT);
     playChime();
     if (!m.readAloud || !settings.value.sounds) return;
     const id = setTimeout(() => speak(m.text), SPEAK_AFTER_CHIME_MS);
     return () => clearTimeout(id);
-  }, [m.id, asleep]);
+  }, [m.id, seen]);
   return (
     <div class="message-layer" role="dialog" aria-label="Message">
       <article class="message-note" style={{ '--c': NOTE_COLOR }}>

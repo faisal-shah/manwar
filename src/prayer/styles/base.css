@@ -5,14 +5,10 @@
  */
 .prayer-face {
   --navy: #0e1b36;
-  --navy-2: #172a52;
-  --ink: #101a30;
   --gold: #e3b55e;
   --gold-soft: #f0d9a4;
-  --champagne: #efe2c2;
   --bronze-1: #b9864f;
   --bronze-2: #8b5a2b;
-  --paper: #fffdf8;
   --serif-display: 'Noto Serif Display', 'Times New Roman', serif;
   --serif-caps: 'Marcellus', serif;
   --serif-text: 'Cormorant Garamond', Georgia, serif;
@@ -145,11 +141,6 @@
   margin-left: 0.1em;
   letter-spacing: 0.03em;
   font-weight: 500;
-}
-
-.prayer-face .caps {
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
 }
 
 /* Uthmani Quran text carries pause and small-letter marks only Amiri Quran draws well. */

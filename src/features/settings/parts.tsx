@@ -3,11 +3,12 @@ import { asParent } from '../../core/lock';
 import { saveSettings } from '../../data/store';
 import type { HHMM, SettingsPatch } from '../../data/types';
 import { Segmented } from '../../ui/controls';
+import { notSaved } from '../../ui/overlays';
 
-/** Every settings write is a parent action. */
+/** Every settings write is a parent action; one the server refuses says so. */
 export function change(partial: SettingsPatch): Promise<void> {
   return asParent(() => {
-    void saveSettings(partial);
+    saveSettings(partial).catch(notSaved('Settings not saved'));
   }, 'Enter the PIN to change settings.');
 }
 

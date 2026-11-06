@@ -1,7 +1,9 @@
-import { batch, computed, effect, signal } from '@preact/signals';
+import { batch, computed, signal } from '@preact/signals';
 import { deleteField } from 'firebase/firestore';
-import { prayerSettingsDoc, savePrayerSettings } from '../data/store';
-import { isPreviewing, now, travelTo } from './core/clock';
+import { prayerSettingsDoc, settings as household } from '../data/store';
+import { currentTime } from '../lib/clock';
+import { addDays, toISODate } from '../lib/date';
+import { now, previewing, travelTo } from './core/clock';
 import { bundledPhoto, defaultIds, photoForDay, rotation, upcoming } from './core/library';
 import {
   deleteUpload,
@@ -21,12 +23,11 @@ import {
   type Photo,
   type Upload,
 } from './core/media';
-import { addDays, placeDay, type DayTimes } from './core/prayer';
+import { placeDay, type DayTimes } from './core/prayer';
 import {
   calligraphyWindowId,
   clockState,
   computeDays,
-  dayKey,
   periodMoment,
   SLOT_PERIOD,
   type AthanLength,
@@ -34,16 +35,19 @@ import {
   type Days,
 } from './core/schedule';
 import { BG_SLOTS, DEFAULT_SETTINGS, PRAYERS, type BgSlot, type Settings, type PrayerKey, type ThemeKey } from './core/settings';
-import { fetchWeather, type Weather } from './core/weather';
-import { settings, updateSettings } from './settingsStore';
+import { previewEnd } from './rules';
+import { savePrayer, settings, updateSettings } from './settingsStore';
 
 export { settings, updateSettings };
+
+/** The household's place (Settings > Location), which the prayer times are for. */
+export const place = computed(() => household.value.place);
 
 /** Virtual time, advanced once per displayed second. */
 export const tick = signal<Date>(now());
 let lastSecond = Math.floor(tick.value.getTime() / 1000);
 setInterval(() => {
-  if (isPreviewing() && Date.now() > previewEndsAt) endPreview();
+  if (previewing.peek() && currentTime() >= previewEndsAt) endPreview();
   const n = now();
   const sec = Math.floor(n.getTime() / 1000);
   if (sec !== lastSecond) {
@@ -59,15 +63,19 @@ export const uploads = signal<Upload[]>([]);
 const DISMISSED_KEY = 'manwar.prayer.dismissed.v1';
 
 /**
- * What was closed this session, kept across a reload so a background update
- * can't bring back an athan the user stopped. Ids start with their day;
- * anything before yesterday is dropped.
+ * What was closed, kept across a reload so a background update can't bring
+ * back an athan the user stopped. Ids start with their day; only yesterday's
+ * and later matter, so older ones are dropped as new ones come.
  */
+const recent = (ids: Iterable<string>, at: Date): Set<string> => {
+  const since = addDays(toISODate(at), -1);
+  return new Set([...ids].filter((id) => id >= since));
+};
+
 function loadDismissed(): ReadonlySet<string> {
   try {
     const ids: unknown = JSON.parse(localStorage.getItem(DISMISSED_KEY) ?? '[]');
-    const since = dayKey(addDays(now(), -1));
-    return new Set(Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string' && id >= since) : []);
+    return recent(Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string') : [], now());
   } catch {
     return new Set();
   }
@@ -136,7 +144,7 @@ let warming = false;
  * controls the page (the first visit's fetches would not be cached).
  */
 async function warmMedia(): Promise<void> {
-  if (warming || !settings.peek().place || !('caches' in window) || !navigator.serviceWorker?.controller) {
+  if (warming || !place.peek() || !('caches' in window) || !navigator.serviceWorker?.controller) {
     if (!warming) setTimeout(() => void warmMedia(), WARM_AFTER_MS * 10);
     return;
   }
@@ -181,17 +189,14 @@ function resetSoundsUsing(ref: string): void {
 }
 
 export function dismiss(id: string): void {
-  dismissed.value = new Set([...dismissed.value, id]);
+  dismissed.value = recent([...dismissed.value, id], now());
   // A preview's dismissals are its own and end with it.
   if (!liveDismissed) saveDismissed(dismissed.value);
 }
 
 /** The real clock's dismissals, set aside while a preview keeps its own. */
 let liveDismissed: ReadonlySet<string> | null = null;
-
-/** Moves the clock to a preview moment, where nothing has been dismissed yet. */
-/** A preview left running ends on its own, so it can't hold off the real athans for long. */
-const PREVIEW_LIMIT = 20 * 60_000;
+/** When the running preview ends itself (rules.ts `previewEnd`), on the real clock. */
 let previewEndsAt = 0;
 
 /**
@@ -208,10 +213,38 @@ function travel(at: Date | null, theme: ThemeKey | null, ids: ReadonlySet<string
   });
 }
 
-export function startPreview(at: Date, theme: ThemeKey | null): void {
-  previewEndsAt = Date.now() + PREVIEW_LIMIT;
+/** The clock at the real time (also while a preview has moved `clock`), or null before the household has a place. */
+function realClock(): ClockState | null {
+  const p = place.peek();
+  if (!p) return null;
+  const at = new Date(currentTime());
+  const s = settings.peek();
+  return clockState(at, computeDays(at, p, s), s, athanLength.peek(), liveDismissed ?? dismissed.peek());
+}
+
+/**
+ * Moves the clock to a preview moment, where nothing has been dismissed
+ * yet, until the preview's end (rules.ts `previewEnd`: before the real
+ * clock's next takeover). False when no preview may start: the real athan
+ * sequence is on, or about to be.
+ */
+export function startPreview(at: Date, theme: ThemeKey | null): boolean {
+  const real = realClock();
+  const end = real && previewEnd(real);
+  if (!end) return false;
+  previewEndsAt = end;
   liveDismissed ??= dismissed.value;
   travel(at, theme, new Set());
+  return true;
+}
+
+/** Why no preview can start now, or null (the settings panel says it). */
+export function previewRefusal(): string | null {
+  const real = realClock();
+  if (!real || previewEnd(real)) return null;
+  return real.takeover
+    ? 'Previews wait until the athan sequence ends.'
+    : 'The athan sequence starts in a minute; previews wait until it ends.';
 }
 
 /** Returns to the real clock and what was dismissed there. */
@@ -231,35 +264,35 @@ export function setDayTheme(dayTheme: Settings['dayTheme']): void {
 let daysCache: { key: string; days: Days } | null = null;
 
 const days = computed<Days | null>(() => {
+  const p = place.value;
+  if (!p) return null;
   const s = settings.value;
-  if (!s.place) return null;
-  const key = JSON.stringify([
-    placeDay(tick.value, s.place.timezone).getTime(),
-    s.place,
-    s.method,
-    s.madhab,
-    s.highLatRule,
-    s.adjust,
-  ]);
-  if (daysCache?.key !== key) daysCache = { key, days: computeDays(tick.value, s) };
+  const key = JSON.stringify([placeDay(tick.value, p.timezone).getTime(), p, s.method, s.madhab, s.highLatRule, s.adjust]);
+  if (daysCache?.key !== key) daysCache = { key, days: computeDays(tick.value, p, s) };
   return daysCache.days;
 });
 
+/** Object URLs of this tablet's uploads (their files and photo thumbnails), by upload id; revoked when the upload is deleted. */
 const uploadUrls = new Map<string, string>();
+const thumbUrls = new Map<string, string>();
 
-export function uploadUrl(u: Upload): string {
-  let url = uploadUrls.get(u.id);
+function objectUrl(urls: Map<string, string>, id: string, blob: Blob): string {
+  let url = urls.get(id);
   if (!url) {
-    url = URL.createObjectURL(u.blob);
-    uploadUrls.set(u.id, url);
+    url = URL.createObjectURL(blob);
+    urls.set(id, url);
   }
   return url;
 }
 
-export function forgetUploadUrl(id: string): void {
-  const url = uploadUrls.get(id);
-  if (url) URL.revokeObjectURL(url);
-  uploadUrls.delete(id);
+export const uploadUrl = (u: Upload): string => objectUrl(uploadUrls, u.id, u.blob);
+
+function revokeUrls(id: string): void {
+  for (const urls of [uploadUrls, thumbUrls]) {
+    const url = urls.get(id);
+    if (url) URL.revokeObjectURL(url);
+    urls.delete(id);
+  }
 }
 
 /** Resolves an audio id (bundled or `upload:<id>`) to a playable URL and length. */
@@ -302,27 +335,20 @@ export const clock = computed<ClockState | null>(() => {
   return clockState(tick.value, d, settings.value, athanLength.value, dismissed.value);
 });
 
-/** The clock a little way into a slot's part of the day, as the calligraphy theme would show it then. */
+/** The clock a little way into a slot's part of the day, as the calligraphy theme would show it then (the clock has a place). */
 export function clockInSlot(slot: BgSlot, today: DayTimes): ClockState {
   const s = settings.value;
   const at = periodMoment(today, SLOT_PERIOD[slot]);
-  return clockState(at, computeDays(at, s), s, athanLength.value);
+  return clockState(at, computeDays(at, place.value!, s), s, athanLength.value);
 }
 
 // --- Photo library and backgrounds -------------------------------------------
 
-const thumbUrls = new Map<string, string>();
-
 function uploadPhoto(u: ImageUpload): Photo {
-  let thumb = thumbUrls.get(u.id);
-  if (!thumb) {
-    thumb = URL.createObjectURL(u.thumb);
-    thumbUrls.set(u.id, thumb);
-  }
   return {
     id: `upload:${u.id}`,
     url: uploadUrl(u),
-    thumb,
+    thumb: objectUrl(thumbUrls, u.id, u.thumb),
     category: 'uploads',
     title: u.name,
     subtitle: '',
@@ -402,9 +428,7 @@ function listRecordings(audio: readonly AudioUpload[]): void {
   const listed = (prayerSettingsDoc.peek().recordings ?? {}) as Record<string, unknown>;
   const missing = audio.filter((u) => !(u.id in listed));
   if (!missing.length) return;
-  void savePrayerSettings({
-    recordings: Object.fromEntries(missing.map((u) => [u.id, { name: u.name, durationSec: u.durationSec }])),
-  });
+  savePrayer({ recordings: Object.fromEntries(missing.map((u) => [u.id, { name: u.name, durationSec: u.durationSec }])) });
 }
 
 const photoName = (file: string) =>
@@ -433,14 +457,11 @@ export async function uploadPhotos(files: File[]): Promise<{ ids: string[]; fail
 /** Deletes an upload and every reference to it. */
 export async function removeUpload(id: string): Promise<void> {
   await deleteUpload(id);
-  forgetUploadUrl(id);
-  const thumb = thumbUrls.get(id);
-  if (thumb) URL.revokeObjectURL(thumb);
-  thumbUrls.delete(id);
+  revokeUrls(id);
   uploads.value = uploads.value.filter((u) => u.id !== id);
   const ref = `upload:${id}`;
   resetSoundsUsing(ref);
-  void savePrayerSettings({ recordings: { [id]: deleteField() } });
+  savePrayer({ recordings: { [id]: deleteField() } });
   updateSettings((x) => ({
     backgrounds: Object.fromEntries(
       BG_SLOTS.map((slot) => {
@@ -449,55 +470,4 @@ export async function removeUpload(id: string): Promise<void> {
       }),
     ) as Settings['backgrounds'],
   }));
-}
-
-// --- Weather ----------------------------------------------------------------
-
-const WEATHER_KEY = 'manwar.prayer.weather.v1';
-const WEATHER_REFRESH = 15 * 60_000;
-/** Older readings are not shown (the network may be down for hours). */
-export const WEATHER_MAX_AGE = 3 * 3600_000;
-
-const placeKey = (p: NonNullable<Settings['place']>) => `${p.latitude},${p.longitude}`;
-
-/** The last reading, if it was taken at this place recently enough to show. */
-function cachedWeather(): Weather | null {
-  try {
-    const c = JSON.parse(localStorage.getItem(WEATHER_KEY) ?? 'null');
-    const place = settings.value.place;
-    const w = c?.weather;
-    return place && c.place === placeKey(place) && typeof w?.tempC === 'number' && Date.now() - w.fetchedAt < WEATHER_MAX_AGE
-      ? w
-      : null;
-  } catch {
-    return null;
-  }
-}
-
-export const weather = signal<Weather | null>(cachedWeather());
-
-export function startWeather(): void {
-  const refresh = (place: Settings['place']) => {
-    if (!place) return;
-    fetchWeather(place.latitude, place.longitude)
-      .then((w) => {
-        if (settings.value.place && placeKey(settings.value.place) !== placeKey(place)) return;
-        weather.value = w;
-        localStorage.setItem(WEATHER_KEY, JSON.stringify({ place: placeKey(place), weather: w }));
-      })
-      .catch(() => {});
-  };
-  // Refetch whenever the place changes or weather is switched on; the cache
-  // only stands in for the first load at the same place.
-  let lastKey = '';
-  effect(() => {
-    const { place, weather: w } = settings.value;
-    const key = w.enabled && place ? placeKey(place) : '';
-    if (key === lastKey) return;
-    const first = lastKey === '';
-    lastKey = key;
-    if (!first) weather.value = null;
-    if (key && !(first && weather.value)) refresh(place);
-  });
-  setInterval(() => settings.value.weather.enabled && refresh(settings.value.place), WEATHER_REFRESH);
 }

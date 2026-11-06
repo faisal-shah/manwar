@@ -74,63 +74,9 @@
   opacity: 0.5;
 }
 
-.prayer-face .loc {
-  display: flex;
-  flex-direction: column;
-  gap: 1.6rem;
-  align-items: stretch;
-}
-
-.prayer-face .loc-search {
-  display: flex;
-  gap: 1rem;
-}
-
-.prayer-face .loc-search input {
-  flex: 1;
-  min-width: 0;
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  border-radius: 99rem;
-  padding: 1.2rem 2.2rem;
-  background: rgba(0, 0, 0, 0.25);
-  color: inherit;
-  font: 400 2rem var(--sans);
-}
-
-.prayer-face .loc-error {
+.prayer-face .panel-error {
   color: #ffb4a2;
   font-size: 1.8rem;
-}
-
-.prayer-face .loc-results {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-  max-height: 40vh;
-  overflow: auto;
-}
-
-.prayer-face .loc-result {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.2rem;
-  border: 0;
-  border-radius: 1.4rem;
-  padding: 1.2rem 2rem;
-  background: rgba(255, 255, 255, 0.07);
-  text-align: left;
-  font: 500 2rem var(--sans);
-  cursor: pointer;
-}
-
-.prayer-face .loc-result small {
-  color: rgba(244, 236, 220, 0.6);
-  font-size: 1.5rem;
 }
 
 /* --- Settings panel ---------------------------------------------------------- */

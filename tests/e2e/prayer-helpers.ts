@@ -3,20 +3,17 @@ import { FS, OWNER } from './phone-helpers';
 
 /*
  * Helpers for the prayer face's specs. The prayer clock's settings are the
- * household's `settings/prayer` document; a spec writes them through the
- * emulator's REST API before the wall opens, and reads them back to see
+ * household's `settings/prayer` document, and the place it calculates for
+ * is the household's (`settings/main.place`); a spec writes them through
+ * the emulator's REST API before the wall opens, and reads them back to see
  * what a change wrote.
  */
 
 export const RUN = Date.now().toString(36);
 let opened = 0;
 
-export const CHICAGO = {
-  name: 'Chicago, Illinois, United States',
-  latitude: 41.8781,
-  longitude: -87.6298,
-  timezone: 'America/Chicago',
-};
+/** The household place (data/types.ts `Place`) the prayer specs' times are for. */
+export const CHICAGO = { name: 'Chicago, Illinois', lat: 41.8781, lon: -87.6298, timezone: 'America/Chicago' };
 
 type Value = Record<string, unknown>;
 
@@ -60,12 +57,18 @@ export async function writeFields(household: string, path: string, fields: Recor
   expect(res.ok, await res.text()).toBe(true);
 }
 
-/** The prayer settings document as stored ({} while there is none). */
-export async function prayerDoc(household: string): Promise<Record<string, unknown>> {
-  const res = await fetch(docUrl(household, 'settings/prayer'), { headers: OWNER });
+/** A household document as stored ({} while there is none). */
+async function readDoc(household: string, path: string): Promise<Record<string, unknown>> {
+  const res = await fetch(docUrl(household, path), { headers: OWNER });
   if (res.status === 404) return {};
   return fromValue({ mapValue: await res.json() }) as Record<string, unknown>;
 }
+
+/** The prayer settings document as stored ({} while there is none). */
+export const prayerDoc = (household: string) => readDoc(household, 'settings/prayer');
+
+/** The household's settings document as stored ({} while there is none). */
+export const mainDoc = (household: string) => readDoc(household, 'settings/main');
 
 /** A fixed forecast (Manwar's weather and the prayer face's both read it): the real Open-Meteo answers a suite with 429s. */
 const FORECAST = {
@@ -94,8 +97,8 @@ export interface OpenedWall {
 }
 
 /**
- * The wall on a new demo household whose prayer clock is in Chicago (with
- * `prayer` over the defaults; `place: null` for none), at `now` (a local
+ * The wall on a new demo household in Chicago (`place: null` for no place
+ * yet), with `prayer` over the prayer clock's defaults, at `now` (a local
  * time, or '' for the page's own clock, which a spec may fake), on the
  * prayer face unless `face` says otherwise. `wall` fields go into the
  * household's settings (a resting face, a sleep window).
@@ -104,11 +107,16 @@ export async function openWall(
   page: Page,
   now: string,
   prayer: Record<string, unknown> = {},
-  { face = 'prayer', wall }: { face?: 'prayer' | 'family'; wall?: Record<string, unknown> } = {},
+  {
+    face = 'prayer',
+    wall,
+    place = CHICAGO,
+  }: { face?: 'prayer' | 'family'; wall?: Record<string, unknown>; place?: typeof CHICAGO | null } = {},
 ): Promise<OpenedWall> {
   const household = `prayer-${RUN}-${++opened}`;
-  await writeFields(household, 'settings/prayer', { place: CHICAGO, ...prayer });
-  if (wall) await writeFields(household, 'settings/main', wall);
+  if (Object.keys(prayer).length) await writeFields(household, 'settings/prayer', prayer);
+  const main = { ...(place ? { place } : {}), ...wall };
+  if (Object.keys(main).length) await writeFields(household, 'settings/main', main);
   const errors = trackErrors(page);
   await page.route('**/api.open-meteo.com/**', (r) => r.fulfill({ json: FORECAST }));
   await page.goto(`/?demo=${household}&face=${face}${now ? `&now=${now}` : ''}`);

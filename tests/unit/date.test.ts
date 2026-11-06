@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addDays, addMonths, diffDays, formatTime, formatTimeRange, startOfWeek, weekdayOf } from '../../src/lib/date';
+import { addDays, addMonths, diffDays, formatTime, formatTimeRange, laterBy, startOfWeek, weekdayOf } from '../../src/lib/date';
 import { describeRepeat, lastOccurrenceOnOrBefore, occurrencesBetween, occursOn } from '../../src/lib/repeat';
 
 describe('date', () => {
@@ -26,6 +26,11 @@ describe('date', () => {
     expect(formatTime(d(15), '24h')).toBe('15:00');
     expect(formatTimeRange(d(8), d(9, 30), '12h')).toBe('8 - 9:30 AM');
     expect(formatTimeRange(d(11, 30), d(12), '12h')).toBe('11:30 AM - 12 PM');
+  });
+  it('moves a time of day later within its day', () => {
+    expect(laterBy('13:30', 60)).toBe('14:30');
+    expect(laterBy('09:45', 30)).toBe('10:15');
+    expect(laterBy('23:30', 60)).toBe('23:59');
   });
 });
 

@@ -7,51 +7,24 @@ import { settings as wallSettings } from '../data/store';
 import { pending } from '../features/messages/state';
 import { timer, timerPhase } from '../features/timer/state';
 import { athanSounding, unlockAudio } from './audio';
-import { isPreviewing } from './core/clock';
-import type { Takeover } from './core/schedule';
-import { audioBlocked, clock, endPreview, picking, settings, settingsOpen, viewer } from './store';
+import { previewing } from './core/clock';
+import { FACE_IDLE_MS, inSequence, prayerBusyNow, restingFace } from './rules';
+import { audioBlocked, clock, endPreview, picking, place, settings, settingsOpen, viewer } from './store';
 
-/** Without a touch for this long, the wall goes back to its resting face (as the sleep rule waits, core/sleep.ts). */
-export const FACE_IDLE_MS = 3 * 60_000;
 const IDLE_CHECK_MS = 15_000;
 
-/**
- * The face the wall rests on: the household's choice (Settings > Display),
- * except Family while a note waits or a timer runs, which a resting prayer
- * face would hide, and before the prayer clock has a place (its setup card
- * is no night screen).
- */
-const restingFace = (): Face =>
-  pending.value.length || timer.value || !settings.value.place ? 'family' : wallSettings.value.restingFace;
-
-/** A phase that sounds: its athan's recording is on (the iqamah countdown never sounds). Only these wake a sleeping wall. */
-function sounds(t: Takeover): boolean {
-  if (t.phase === 'iqamah') return false;
-  const s = settings.value;
-  return t.kind === 'tahajjud' ? s.tahajjud.enabled : !!t.prayer && s.sounds[t.prayer].enabled;
-}
-
-/** What the family face has open outside #app (sheets, toasts portaled to the page) is inert under the prayer face too. */
-function coverFamily(covered: boolean): void {
-  for (const el of document.body.children) {
-    if (el.classList.contains('prayer-face')) continue;
-    if (covered && !el.hasAttribute('inert')) {
-      el.setAttribute('inert', '');
-      el.setAttribute('data-face-inert', '');
-    } else if (!covered && el.hasAttribute('data-face-inert')) {
-      el.removeAttribute('inert');
-      el.removeAttribute('data-face-inert');
-    }
-  }
-  // A field in a sheet keeps neither focus nor the on-screen keyboard behind the prayer face.
-  const active = document.activeElement;
-  if (covered && active instanceof HTMLElement && !active.closest('.prayer-face')) active.blur();
-}
+const resting = (): Face =>
+  restingFace({
+    notes: pending.value.length,
+    timer: !!timer.value,
+    place: !!place.value,
+    chosen: wallSettings.value.restingFace,
+  });
 
 /** The prayer face's own screens (settings, a photo picker, the viewer, a preview) put away. Untracked: an effect calling it follows only its own signals. */
 function putAway(): void {
   untracked(() => {
-    if (isPreviewing()) endPreview();
+    if (previewing.value) endPreview();
     settingsOpen.value = false;
     picking.value = null;
     viewer.value = null;
@@ -59,21 +32,24 @@ function putAway(): void {
 }
 
 /**
- * The rules between the wall's two faces (app/face.ts). The athan sequence
- * shows over either and holds the wall's own sounds; a note or timer from a
- * phone brings the family face; idle and sleep return to the resting face.
+ * The rules between the wall's two faces (app/face.ts; the rules themselves
+ * are pure in prayer/rules.ts). The athan sequence shows over either and
+ * holds the wall's own sounds; a note or timer from a phone brings the
+ * family face; idle and sleep return to the resting face.
  */
 export function startStage(): void {
   // `?face=prayer` opens on the prayer face (tests, screenshots); otherwise the resting face.
   const asked = new URLSearchParams(location.search).get('face');
-  face.value = asked === 'prayer' || asked === 'family' ? asked : restingFace();
+  face.value = asked === 'prayer' || asked === 'family' ? asked : resting();
 
   effect(() => {
-    // A settings preview is the prayer face's own; only the real clock's sequence takes the wall, and
-    // a sleeping wall only for a phase that sounds (an athan turned off does not light the room).
-    const t = clock.value?.takeover;
-    prayerSequence.value = !!t && !isPreviewing() && (sounds(t) || !scheduledSleep.value);
-    prayerBusy.value = !!t || settingsOpen.value || !!viewer.value || isPreviewing();
+    const st = clock.value;
+    const open = { settings: settingsOpen.value, viewer: !!viewer.value, previewing: previewing.value };
+    prayerSequence.value = inSequence(st?.takeover ?? null, settings.value, {
+      previewing: open.previewing,
+      asleep: scheduledSleep.value,
+    });
+    prayerBusy.value = prayerBusyNow(st, open);
   });
   // The wall's own sounds wait for the whole sequence (a note's chime with the note still under it).
   effect(() => {
@@ -92,13 +68,9 @@ export function startStage(): void {
     },
     { capture: true },
   );
-  // The family face under the prayer face takes no taps, focus or reading.
+  // Leaving the prayer face puts its own screens away (the family face under it is covered while it is mounted: ui/Face.tsx).
   effect(() => {
-    const shown = shownFace.value;
-    document.documentElement.dataset.face = shown;
-    document.getElementById('app')?.toggleAttribute('inert', shown === 'prayer');
-    coverFamily(shown === 'prayer');
-    if (shown === 'family') putAway();
+    if (shownFace.value === 'family') putAway();
   });
 
   // A note or timer for the wall shows on the family face (after the athan sequence, if one is on).
@@ -118,13 +90,15 @@ export function startStage(): void {
     if (timerPhase.value === 'done') face.value = 'family';
   });
 
-  // Asleep, the wall rests: the family face's sleep screen, or the prayer face's night clock.
+  // Asleep, the wall rests (the family face's sleep screen, or the prayer face's night clock) with its screens put away.
   effect(() => {
-    if (sleeping.value) face.value = restingFace();
+    if (!sleeping.value) return;
+    face.value = resting();
+    putAway();
   });
   setInterval(() => {
-    if (idleFor() < FACE_IDLE_MS || prayerSequence.peek() || isPreviewing()) return;
-    face.value = restingFace();
+    if (idleFor() < FACE_IDLE_MS || prayerSequence.peek() || previewing.peek()) return;
+    face.value = resting();
     putAway();
   }, IDLE_CHECK_MS);
 }

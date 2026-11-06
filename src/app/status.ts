@@ -6,7 +6,7 @@ export const STALE_SYNC_MS = 15 * 60_000;
 /** The current-weather reading is hidden once it is this old (the forecast keeps showing). */
 export const STALE_WEATHER_MS = 3 * 60 * 60_000;
 
-/** The reading to show in the top bar: none once fetches have failed for STALE_WEATHER_MS. */
+/** The reading to show (the top bar, the prayer face): none once fetches have failed for STALE_WEATHER_MS. */
 export const currentWeather = <W extends { fetchedAt: number }>(w: W | null, now: number): W | null =>
   w && now - w.fetchedAt < STALE_WEATHER_MS ? w : null;
 

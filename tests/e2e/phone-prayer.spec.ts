@@ -1,12 +1,12 @@
 import { devices, expect as baseExpect, test, type Browser, type Page } from '@playwright/test';
 import { newContext } from './phone-helpers';
-import { face, openWall, prayerDoc, trackErrors } from './prayer-helpers';
+import { face, mainDoc, openWall, prayerDoc, trackErrors } from './prayer-helpers';
 
 /*
  * The phone's More > Prayer times and Today's prayer line, against a wall
- * on the same household: the phone edits the household's prayer settings,
- * the wall's prayer face follows. Chicago, 29 October 2026 at 2:53 PM: Asr
- * 4:06 PM, iqamah 15 minutes after.
+ * on the same household: the phone edits the household's place and prayer
+ * settings, the wall's prayer face follows. Chicago, 29 October 2026 at
+ * 2:53 PM: Asr 4:06 PM, iqamah 15 minutes after.
  */
 
 const expect = baseExpect.configure({ timeout: 15_000 });
@@ -56,20 +56,21 @@ const row = (page: Page, card: string, label: string) =>
   page.getByRole('region', { name: card }).locator('.setting-row', { hasText: label });
 
 test('with no place yet, the phone sets one and the wall calculates its times', async ({ browser, page }) => {
-  const wall = await openWall(page, NOW, { place: null }, { face: 'prayer' });
+  const wall = await openWall(page, NOW, {}, { face: 'prayer', place: null });
   await expect(face(page).getByRole('heading', { name: 'Prayer times' })).toBeVisible();
   const p = await phoneOn(browser, wall.household);
   await p.page.locator('.ph-nav').getByRole('button', { name: 'More' }).click();
   await expect(p.page.locator('.ph-menu button', { hasText: 'Prayer times' })).toContainText('Set where the family lives');
   await expect(p.page.locator('.pd-prayer')).toHaveCount(0);
   await openPrayerTimes(p.page);
-  await p.page.getByLabel('City').fill('Austin');
-  await p.page.getByRole('button', { name: 'Search' }).click();
-  await p.page.locator('.ppt-results button', { hasText: 'Austin' }).click();
+  await p.page.getByRole('searchbox', { name: 'Search for a place' }).fill('Austin');
+  await p.page.locator('.place-results button', { hasText: 'Austin' }).click();
   await expect(p.page.getByRole('region', { name: "Today's prayer times" })).toContainText('Austin, Texas');
+  // The household's place (the weather's too), not the prayer clock's own.
   await expect
-    .poll(async () => ((await prayerDoc(wall.household)).place as { name?: string } | undefined)?.name)
-    .toBe('Austin, Texas, United States');
+    .poll(async () => (await mainDoc(wall.household)).place)
+    .toEqual({ name: 'Austin, Texas', lat: 30.2672, lon: -97.7431, timezone: 'America/Chicago' });
+  expect(await prayerDoc(wall.household)).toEqual({});
   // The wall leaves its setup screen for the clock.
   await expect(face(page).locator('.cl')).toBeVisible();
   expect([...wall.errors, ...p.errors]).toEqual([]);

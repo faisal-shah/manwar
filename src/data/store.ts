@@ -489,6 +489,11 @@ export function batch() {
       b.set(settingsRef(), partial, { merge: true });
       return api;
     },
+    /** Merge into the prayer clock's settings document, as savePrayerSettings does. */
+    prayerSettings(changes: Record<string, unknown>) {
+      b.set(prayerSettingsRef(), changes, { merge: true });
+      return api;
+    },
     /** Adjust a profile's star balance by delta. */
     stars(profileId: string, delta: number) {
       b.update(docRef('profiles', profileId) as DocumentReference, { stars: increment(delta) });

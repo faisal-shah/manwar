@@ -98,29 +98,6 @@
 .ppt-place > .btn {
   width: 100%;
 }
-.ppt-search {
-  display: flex;
-  gap: 0.8rem;
-  margin-top: 1.2rem;
-}
-.ppt-search .input {
-  flex: 1;
-  min-width: 0;
-}
-.ppt-results {
-  list-style: none;
-  margin: 1rem 0;
-  padding: 0;
-}
-.ppt-results button {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  width: 100%;
-  min-height: 5.6rem;
-  padding: 0.8rem 0;
-  text-align: start;
-}
-.ppt-results li + li {
-  border-top: 1px solid var(--line);
+.ppt-place .place-picker > .btn {
+  align-self: stretch;
 }
