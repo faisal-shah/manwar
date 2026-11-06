@@ -2,6 +2,70 @@
 Changelog
 =========
 
+0.3.4 (2026-11-06)
+==================
+
+A bug hunt across the wall, the phone and the server.
+
+Changed
+-------
+
+- The family's location is set once, in Settings > Location (or More >
+  Prayer times on a phone); the weather and the prayer times both use
+  it, and the location already set carries over by itself. The prayer
+  clock follows the household's time format and temperature unit.
+- Grocery suggestions put items whose name starts with what is typed
+  first; the items bought most rise among close matches. A quantity
+  typed first ("2 gal milk") still suggests milk, and a picked
+  suggestion keeps it. Arabic items match with or without the article,
+  and "البيض" and "بيض" are one item.
+- Days the calendar has not loaded yet say "Not loaded yet" in every
+  view, on the wall and on a phone that starts offline, instead of
+  looking empty.
+
+Fixed
+-----
+
+- Connecting Google again from Settings no longer drops the wall to the
+  sign-in screen when it fails; a toast says how it went. A reconnect
+  can no longer lose the new connection to a token request running at
+  the same moment, connecting again always repairs a lost connection,
+  and an update never reloads the page in the middle of a sign-in. The
+  sign-in code is bound to the tablet that asked for it (PKCE).
+- At night the prayer clock stays dark through the iqamah countdown and
+  any athan whose sound is off.
+- A note that arrives overnight is announced when someone wakes the
+  wall, not when the Fajr athan lights it.
+- A preview left running ends before the next real athan, and a preview
+  can no longer silence a real athan. Updates wait for an athan due in
+  the next few minutes, and an athan whose recording failed to load
+  tries again.
+- Saving an event changes who it is for, or its countdown, only when
+  you changed them, so another tablet's assignment is kept. Editing a
+  list item or a recipe keeps another device's change to the fields
+  you left alone.
+- Yearly countdowns, such as a birthday, no longer vanish for weeks
+  after each occurrence when countdowns are set to Always.
+- A calendar hidden in Settings stays hidden after the wall reloads
+  offline, and changing a repeating event between all-day and timed
+  keeps its deleted occurrences deleted.
+- Taking the last person off a holiday in To assign puts it back in the
+  queue.
+- Recipe ingredients put on the list while the Add dialog was open are
+  no longer added twice. An item unchecked offline after another device
+  cleared it comes back unchecked.
+- Undo no longer writes over an item added again since, or a check-off
+  made on another device. Failed clears, deletes, undos and star
+  changes say so.
+- Sync now after a rate limit resumes the regular sync, and the phone
+  stops fetching far-ahead days once you leave the agenda.
+- The phone's Today shows a wall timer over an hour as 1:29:59, not
+  89:59.
+- A tablet clock set back no longer keeps the wall unlocked, awake or
+  away from its resting face for that long.
+- Right after a deploy, a browser could load the old page for up to an
+  hour and find its scripts gone (a blank page).
+
 0.3.3 (2026-11-05)
 ==================
 
