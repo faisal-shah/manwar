@@ -1,6 +1,5 @@
 import { useLayoutEffect, useRef } from 'preact/hooks';
-import { daysOf } from '../../../calendar/engine';
-import type { CalEvent } from '../../../calendar/types';
+import { daysOf, type CalEvent } from '../../../calendar/types';
 import { settings } from '../../../data/store';
 import type { ISODate } from '../../../data/types';
 import { now, today } from '../../../lib/clock';
@@ -10,7 +9,7 @@ import { fillStyle, isPast, isUnassigned, itemsByDay, nowMinute, timeLabel, type
 import { EventPill, EventWho, MealPill } from '../parts';
 import { HOUR_MAX, HOUR_MIN, hourHeight, openDetail, periodOf, todayPressed, type CalNav } from '../state';
 import { remPx, usePinchZoom } from '../gestures';
-import { DayLabel, DayWeather } from './common';
+import { DayLabel, DayWeather, NotLoaded } from './common';
 
 /** Multi-day time grid: day headers, all-day row, hour gutter, events in lanes, now-line. */
 export function ScheduleView({ nav }: { nav: CalNav }) {
@@ -106,6 +105,7 @@ function DayColumn({
   const nowMin = nowAt.getHours() * 60 + nowAt.getMinutes();
   return (
     <div class={`sched-col${shade ? ' cal-weekend' : ''}`} data-day={day}>
+      <NotLoaded day={day} />
       {placed.map(({ item: s, lane, lanes }) => {
         // A hairline gap keeps back-to-back blocks distinct.
         const top = (s.startMin / 60) * H + GAP / 2;

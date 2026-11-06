@@ -110,7 +110,9 @@ flowchart LR
   deletes a nested key: `pinChange(null)` passes `deleteField()` for that.
 - **Calendar events** live in the household's Google calendars. `calendar/engine.ts`
   fetches a window around today (six weeks back, four months ahead, widened
-  to the days the latest view asked for with `ensureRange`), caches a snapshot
+  to the days the latest view shows: it asks with `ensureRange` and lets them
+  go with the release it returns, its effect's cleanup, so the window narrows
+  back once the view pages on or unmounts), caches a snapshot
   in localStorage for offline display (marked with its household: another
   household opening drops the calendars and ignores it), polls every 3
   minutes, and joins each
@@ -123,16 +125,24 @@ flowchart LR
   write through `assign`/`setCountdown`/`updateEvent`, which touch only the
   document they mean to change, and only its fields they change (a write
   without profiles adds none, `arrayUnion()`, so it cannot clear an
-  assignment another tablet made that has not arrived yet). `refresh()` called during a fetch gets one
+  assignment another tablet made that has not arrived yet; the editor
+  passes `updateEvent` only the people and countdown it changed,
+  `metaChanges` in `features/calendar/form.ts`). `assign` with no one
+  writes `[NOBODY]`, so the event goes back to triage, a holiday or one
+  occurrence of a series with people included. `refresh()` called during a fetch gets one
   more fetch after it (each Google request gives up after 30 seconds, so a
   dead connection cannot stall the queue or a save awaiting it), and a
   calendar that fails keeps its last events. A calendar hidden in Settings
   (on any tablet: the engine follows `hiddenCalendars`) leaves the wall at
-  once, and one shown again is fetched. The fetched window counts as
-  loaded even when a calendar failed in it (the next poll asks that one
-  again), so page turns inside it do not refetch everything.
-  `loadedRange` is that window (or the snapshot's), null before either: a
-  view shows a day outside it as not loaded yet, never as empty.
+  once, the snapshot's events of it too (`shownOnly`), and one shown again
+  is fetched. The fetched window counts as loaded once any shown calendar
+  answered in it (the next poll asks a failed one again), so page turns
+  inside it do not refetch everything; a fetch no calendar answered leaves
+  the loaded window as it was. `loadedRange` is that window (or the
+  snapshot's), null before either: a view shows a day outside it as not
+  loaded yet, never as empty (`isLoaded`; the wall's views through
+  `NotLoaded` and `dayCount` in `views/common.tsx`). A range asked for
+  while a fetch is out is compared with the window that fetch asks for.
   `passesHidden(ev, hidden)` is the profile filter rule (an event shows
   while any of its people does, and always when it is for everyone or no
   one); `passesFilter` applies the household's filter with it.
@@ -145,7 +155,9 @@ flowchart LR
   theirs, and one whose only person was deleted (NOBODY) waits like any
   other. The demo's holidays calendar has Google's US holidays id, so the
   demo follows the same rule. Countdowns past the window (setting Always) come from
-  `CalendarSource.nextOccurrence`, asked hourly and only of calendars that
+  `CalendarSource.nextOccurrence`, for each countdown with no occurrence
+  from today on in the window (a birthday last month is asked for next
+  year's), asked hourly and only of calendars that
   answered the fetch; when it finds nothing left (deleted, declined, over)
   the meta gets `countdown: false`, so no tablet asks again. New events get their id from
   `newEventId()` once per editor, so a retried save updates instead of
@@ -167,9 +179,12 @@ flowchart LR
   All events leaves the series times out when they were not changed, a
   changed repeat replaces only the RRULE line (EXDATEs stay), EXDATEs move
   with a series (or a new This and following series) whose time or day
-  changes (`shiftExdates`; a timed series and its EXDATEs move on the
+  changes (`moveRecurrence`; a timed series and its EXDATEs move on the
   tablet's wall clock, so a day later across a clock change keeps the time
-  of day), a weekly rule's BYDAY days move with an occurrence moved to
+  of day), a series changed between timed and all-day takes its EXDATEs
+  and UNTIL into its new kind (Google takes an EXDATE only where it names
+  an occurrence: a date on an all-day series, a date-time on a timed one;
+  a date made a date-time is written in UTC), a weekly rule's BYDAY days move with an occurrence moved to
   another weekday when the repeat was not edited (`shiftByday`; the demo
   source and meal plans do the same with `shiftRepeat`), and This and
   following copies guests, color and
@@ -189,7 +204,8 @@ flowchart LR
   Retry-After up to 5 s) and otherwise fails saying when to try again.
   Google accepting a save, and Sync now, resume the sync (`syncNow`); the
   fetch they wait for runs even when the fetch running at the time is
-  limited and pauses the sync again.
+  limited and pauses the sync again, and any fetch Google answers without
+  a limit ends the pause.
 - **Tasks**: `tasks/engine.ts` is pure (occurrences from schedules; late
   chores; Up for Grabs; repeat-after-done via `Task.lastDone`), unit-tested.
   A new repeat-after-done chore added in the evening starts tomorrow
@@ -480,7 +496,8 @@ sequenceDiagram
   the days from a start day, all-day rows first, the Now line on today,
   free days folded into one line) from today or a day gone to; scrolling
   near the end adds days, shown only inside `loadedRange` and asked for
-  with `ensureRange`. The day at the top (`lookingAt`) gives the header
+  with `ensureRange` (let go when the agenda unmounts, so the polls go back
+  to the usual window). The day at the top (`lookingAt`) gives the header
   its month and is where + adds an event; at midnight it stays in place.
   The person filter is per phone (`shownPeople`, localStorage) on the
   wall's rule (`passesHidden`), and Today follows it too. Event details and the editor are the

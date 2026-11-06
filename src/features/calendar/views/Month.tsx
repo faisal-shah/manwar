@@ -1,7 +1,6 @@
 import type { RefObject } from 'preact';
 import { useLayoutEffect, useRef, useState } from 'preact/hooks';
-import { daysOf } from '../../../calendar/engine';
-import type { CalEvent } from '../../../calendar/types';
+import { daysOf, type CalEvent } from '../../../calendar/types';
 import { settings } from '../../../data/store';
 import type { ISODate } from '../../../data/types';
 import { today } from '../../../lib/clock';
@@ -11,7 +10,7 @@ import { itemsByDay, type DayItems, type MealItem } from '../model';
 import { EventPill, MealPill } from '../parts';
 import { remPx } from '../gestures';
 import { dayPopup, periodOf, type CalNav } from '../state';
-import { DayWeather } from './common';
+import { DayWeather, NotLoaded } from './common';
 
 /** Week row pieces, in rem: the date line, one item line, the gap between rows. */
 const HEAD = 3;
@@ -171,6 +170,7 @@ function MonthWeek({
           >
             <DayWeather day={d} size={2.2} />
             <span class={`mnum${d === t ? ' today' : ''}`}>{n === 1 ? `${monthShort(fromISODate(d).getMonth())} 1` : n}</span>
+            <NotLoaded day={d} />
           </button>
         );
       })}

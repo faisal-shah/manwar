@@ -23,6 +23,7 @@ import {
   draftFromForm,
   formFromEvent,
   formProblem,
+  metaChanges,
   newForm,
   sameRepeat,
   setAllDay,
@@ -46,6 +47,8 @@ export function EventEditor({ req, onClose }: { req: EditorRequest; onClose: () 
       ? formFromEvent(ev, profilesOf(ev) ?? [], !!metaFor(ev)?.countdown)
       : newForm(req.day, currentTime(), defaultCalendarId(), req.countdown),
   );
+  /** The form as it opened: a save writes who the event is for and its countdown only where they were changed. */
+  const [opened] = useState(form);
   const [rs, setRs] = useState<RepeatState>(ev?.seriesId ? { status: 'loading' } : { status: 'none' });
   /** The series' rule as loaded, to tell whether the repeat was changed. */
   const [loadedRule, setLoadedRule] = useState<Repeat | undefined>(undefined);
@@ -91,7 +94,7 @@ export function EventEditor({ req, onClose }: { req: EditorRequest; onClose: () 
       const draft = draftFromForm(form, keep);
       setBusy(true);
       try {
-        if (ev) await updateEvent(ev, draft, scope, form.profiles, { countdown: form.countdown });
+        if (ev) await updateEvent(ev, draft, scope, metaChanges(opened, form));
         else await createEvent(form.calendarId, newId, draft, form.profiles, { countdown: form.countdown });
         toast(ev ? 'Event saved' : 'Event added');
         editorSaved();
@@ -219,7 +222,7 @@ export function EventEditor({ req, onClose }: { req: EditorRequest; onClose: () 
 
         <Field label="Calendar">
           {ev ? (
-            <span>{calendarName(ev.calendarId)}</span>
+            <bdi>{calendarName(ev.calendarId)}</bdi>
           ) : writable.length ? (
             <select
               class="input"

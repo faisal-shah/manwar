@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CalEvent, CalendarInfo, CalendarSource } from '../../src/calendar/types';
 import { EVERYONE, NOBODY, type EventMeta, type Profile } from '../../src/data/types';
-import { isHolidayCalendar } from '../../src/calendar/types';
+import { daysOf, isHolidayCalendar } from '../../src/calendar/types';
 
 /**
  * Calendar engine against an in-memory store and a scripted calendar
@@ -174,11 +174,11 @@ describe('saving an edited occurrence', () => {
     source.listEvents = async () => engine.events.value;
   });
 
-  it('"This event" without a change of profiles leaves the occurrence following its series', async () => {
+  it('"This event" given its series’ people leaves the occurrence following its series', async () => {
     const [a, b] = [swim(3), swim(10)];
     engine.events.value = [a, b];
     store.data.eventMeta.value = [meta('swim', ['asiyah'])];
-    await engine.updateEvent(a, draft(a), 'this', ['asiyah'], { countdown: false });
+    await engine.updateEvent(a, draft(a), 'this', { profiles: ['asiyah'], countdown: false });
     expect(metaDoc(a.id)).toBeUndefined();
     engine.assign(b, ['hashim'], 'series');
     expect(engine.profilesOf(a)).toEqual(['hashim']);
@@ -188,7 +188,7 @@ describe('saving an edited occurrence', () => {
     const [a, b] = [swim(3), swim(10)];
     engine.events.value = [a, b];
     store.data.eventMeta.value = [meta('swim', ['asiyah'])];
-    await engine.updateEvent(a, draft(a), 'this', ['hashim'], { countdown: true });
+    await engine.updateEvent(a, draft(a), 'this', { profiles: ['hashim'], countdown: true });
     expect(engine.profilesOf(a)).toEqual(['hashim']);
     expect(engine.metaFor(a)?.countdown).toBe(true);
     expect(engine.profilesOf(b)).toEqual(['asiyah']);
@@ -199,10 +199,23 @@ describe('saving an edited occurrence', () => {
     const [a, b] = [swim(3), swim(10)];
     engine.events.value = [a, b];
     store.data.eventMeta.value = [meta('swim', ['asiyah']), meta(a.id, ['hashim'], { countdown: true })];
-    await engine.updateEvent(a, draft(a), 'all', ['asiyah', 'hashim'], { countdown: false });
+    await engine.updateEvent(a, draft(a), 'all', { profiles: ['asiyah', 'hashim'], countdown: false });
     expect(engine.profilesOf(a)).toEqual(['asiyah', 'hashim']);
     expect(engine.metaFor(a)?.countdown).toBe(false);
     expect(metaDoc(a.id)).toBeUndefined();
+  });
+
+  it('writes only what the editor changed, so an assignment made elsewhere since it opened is kept', async () => {
+    const [a, b] = [swim(3), swim(10)];
+    engine.events.value = [a, b];
+    // The editor opened with the series Asiyah's; a phone has given it to Hashim since.
+    store.data.eventMeta.value = [meta('swim', ['hashim'])];
+    await engine.updateEvent(a, draft(a), 'all', { countdown: true });
+    expect(metaDoc('swim')).toMatchObject({ profiles: ['hashim'], countdown: true });
+    // A title change alone writes no meta at all.
+    await engine.updateEvent(b, draft(b), 'this', {});
+    expect(metaDoc(b.id)).toBeUndefined();
+    expect(engine.profilesOf(b)).toEqual(['hashim']);
   });
 
   it('deleting one occurrence drops its own document and keeps the series one', async () => {
@@ -267,6 +280,19 @@ describe('triage queue', () => {
     expect(engine.unassigned.value.map((e) => e.id)).toEqual(['party', 'vet']);
     expect(isHolidayCalendar('en.islamic#holiday@group.v.calendar.google.com')).toBe(true);
     expect(isHolidayCalendar('family@group.calendar.google.com')).toBe(false);
+  });
+
+  it('puts a holiday back in the queue when its last person is taken off', () => {
+    const hol = 'en.usa#holiday@group.v.calendar.google.com';
+    const vet = ev('vet', day(3, '00:00'), day(4, '00:00'), { calendarId: hol, key: `${hol}::vet`, allDay: true });
+    engine.events.value = [vet];
+    // Waiting because its one person was deleted; assigned on the phone, then the chip tapped off again.
+    store.data.eventMeta.value = [{ id: engine.metaKey(hol, 'vet'), profiles: [NOBODY], updatedAt: 0 }];
+    engine.assign(vet, ['asiyah']);
+    expect(engine.unassigned.value).toEqual([]);
+    engine.assign(vet, []);
+    expect(engine.profilesOf(vet)).toBeNull();
+    expect(engine.unassigned.value.map((e) => e.id)).toEqual(['vet']);
   });
 
   it('keeps a series whose next occurrence alone was assigned', () => {
@@ -367,7 +393,7 @@ describe('which days an event is on', () => {
   it('shows a zero-length event at midnight on its day', () => {
     const z = ev('z', '2026-11-08T00:00', '2026-11-08T00:00');
     engine.events.value = [z];
-    expect(engine.daysOf(z)).toEqual(['2026-11-08']);
+    expect(daysOf(z)).toEqual(['2026-11-08']);
     expect(engine.eventsOn('2026-11-08').map((e) => e.id)).toEqual(['z']);
     expect(engine.eventsOn('2026-11-07')).toEqual([]);
   });
@@ -378,10 +404,10 @@ describe('which days an event is on', () => {
     const noon = ev('n', '2026-11-07T12:00', '2026-11-07T12:00');
     const trip = ev('t', '2026-11-21T00:00', '2026-11-24T00:00', { allDay: true });
     engine.events.value = [overnight, toMidnight, noon, trip];
-    expect(engine.daysOf(overnight)).toEqual(['2026-11-10', '2026-11-11']);
-    expect(engine.daysOf(toMidnight)).toEqual(['2026-11-10']);
-    expect(engine.daysOf(noon)).toEqual(['2026-11-07']);
-    expect(engine.daysOf(trip)).toEqual(['2026-11-21', '2026-11-22', '2026-11-23']);
+    expect(daysOf(overnight)).toEqual(['2026-11-10', '2026-11-11']);
+    expect(daysOf(toMidnight)).toEqual(['2026-11-10']);
+    expect(daysOf(noon)).toEqual(['2026-11-07']);
+    expect(daysOf(trip)).toEqual(['2026-11-21', '2026-11-22', '2026-11-23']);
     expect(engine.eventsOn('2026-11-11').map((e) => e.id)).toEqual(['o']);
     expect(engine.eventsOn('2026-11-24')).toEqual([]);
   });
@@ -456,6 +482,61 @@ describe('refresh', () => {
     nowMs.value -= 200 * 86_400_000;
   });
 
+  it('narrows the window back once the view that asked for far days lets them go', async () => {
+    const windows: string[] = [];
+    source.listCalendars = async () => [CAL];
+    source.listEvents = async (_id, a, b) => {
+      windows.push(`${toISODate(a)}..${toISODate(b)}`);
+      return [];
+    };
+    const t = today.value;
+    const usual = `${addDays(t, -42)}..${addMonths(t, 4)}`;
+    // The phone's agenda scrolled most of a year ahead.
+    const release = engine.ensureRange(t, addDays(t, 300));
+    await engine.refresh();
+    expect(windows.pop()).toBe(`${addDays(t, -42)}..${addDays(t, 330)}`);
+    // A view letting go of days it no longer asks for leaves another view's newer ask alone.
+    const later = engine.ensureRange(t, addDays(t, 250));
+    release();
+    await engine.refresh();
+    expect(windows.pop()).toBe(`${addDays(t, -42)}..${addDays(t, 280)}`);
+    // Left (the tab put away): the polls fetch the usual window again.
+    later();
+    await engine.refresh();
+    expect(windows.pop()).toBe(usual);
+  });
+
+  it('fetches days a view asks for while a fetch that leaves them out is under way', async () => {
+    const t = today.value;
+    const far = [addDays(t, 200), addDays(t, 230)] as const;
+    const windows: string[] = [];
+    let hold: Promise<void> | null = null;
+    source.listCalendars = async () => [CAL];
+    source.listEvents = async (_id, a, b) => {
+      windows.push(`${toISODate(a)}..${toISODate(b)}`);
+      if (hold) await hold;
+      return [];
+    };
+    const idle = () => new Promise((r) => setTimeout(r, 0));
+    // The far days were loaded; the view came back to today and the poll under way asks for the usual window.
+    const release = engine.ensureRange(...far);
+    await engine.refresh();
+    release();
+    windows.length = 0;
+    const gate = deferred<void>();
+    hold = gate.promise;
+    const poll = engine.refresh();
+    await idle();
+    // The view pages out to the far days again before that poll lands.
+    engine.ensureRange(...far);
+    hold = null;
+    gate.resolve();
+    await poll;
+    await idle();
+    expect(windows).toEqual([`${addDays(t, -42)}..${addMonths(t, 4)}`, `${addDays(t, -42)}..${addDays(t, 260)}`]);
+    expect(engine.isLoaded(far[1])).toBe(true);
+  });
+
   it('keeps the last events of a calendar that fails to load and still updates the others', async () => {
     const other: CalendarInfo = { ...CAL, id: 'school', primary: false, accessRole: 'reader' };
     const kept = ev('kept', day(1), day(1, '10:00'), { calendarId: 'school', key: 'school::kept' });
@@ -516,6 +597,23 @@ describe('countdowns past the fetched window', () => {
     await engine.refresh();
     expect(asked).toHaveLength(2);
     expect(engine.countdowns.value.map((c) => c.ev.id)).toEqual(['trip']);
+  });
+
+  it('asks for the next occurrence of a series whose occurrence in the window is over (a birthday last month)', async () => {
+    const birthday = (offset: number) =>
+      ev(`bd_${offset}`, day(offset, '00:00'), day(offset + 1, '00:00'), { allDay: true, seriesId: 'bd', title: 'Birthday' });
+    const asked: string[] = [];
+    source.listCalendars = async () => [CAL];
+    source.listEvents = async () => [birthday(-10)];
+    source.nextOccurrence = async (_cal, id) => {
+      asked.push(id);
+      return birthday(355);
+    };
+    store.data.eventMeta.value = [meta('bd', ['asiyah'], { countdown: true })];
+    store.settings.value = { ...DEFAULT_SETTINGS, countdownWindow: 'always' };
+    await engine.refresh();
+    expect(asked).toEqual(['bd']);
+    expect(engine.countdowns.value.map((c) => [c.ev.id, c.days])).toEqual([['bd_355', 355]]);
   });
 
   it('turns off a countdown Google has nothing left for, so it is not asked for again', async () => {

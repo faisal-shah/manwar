@@ -1298,6 +1298,100 @@ describe('google calendar: series edits and the occurrences changed elsewhere', 
     ]);
   });
 
+  it('writes the deleted dates and the end of a series made all-day as dates', async () => {
+    // Lessons deleted on an iPhone (local time) and elsewhere (UTC); the series ends Dec 31.
+    routes.push((c) =>
+      c.method === 'GET'
+        ? {
+            body: master([
+              'RRULE:FREQ=WEEKLY;BYDAY=SA;UNTIL=20270101T055959Z',
+              'EXDATE;TZID=America/Chicago:20261107T093000,20261114T093000',
+              'EXDATE:20261205T153000Z',
+            ]),
+          }
+        : undefined,
+    );
+    routes.push((c) => (c.method === 'PATCH' ? { body: { id: 'swim' } } : undefined));
+    const allDay: EventDraft = {
+      title: 'Swim lesson',
+      allDay: true,
+      start: new Date(2026, 10, 21),
+      end: new Date(2026, 10, 22),
+      firstDay: '2026-11-21',
+      lastDay: '2026-11-21',
+      keepRecurrence: true,
+    };
+    await googleSource.update(occ, allDay, 'all');
+    const body = patched();
+    expect(body.start).toEqual({ date: '2026-10-31', dateTime: null, timeZone: null });
+    expect(body.recurrence).toEqual([
+      'RRULE:FREQ=WEEKLY;BYDAY=SA;UNTIL=20261231',
+      'EXDATE;VALUE=DATE:20261107,20261114',
+      'EXDATE;VALUE=DATE:20261205',
+    ]);
+  });
+
+  it('writes the deleted dates of an all-day series made timed at the new time, across a clock change', async () => {
+    const day: CalEvent = {
+      ...occ,
+      id: 'swim_20261121',
+      key: `${CAL}::swim_20261121`,
+      allDay: true,
+      originalStart: new Date(2026, 10, 21),
+      start: new Date(2026, 10, 21),
+      end: new Date(2026, 10, 22),
+      timeZone: undefined,
+      endTimeZone: undefined,
+    };
+    // Oct 31 is in daylight time, Nov 14 in standard time.
+    routes.push((c) =>
+      c.method === 'GET'
+        ? { body: master(['RRULE:FREQ=WEEKLY;UNTIL=20261231', 'EXDATE;VALUE=DATE:20261031,20261114'], true) }
+        : undefined,
+    );
+    routes.push((c) => (c.method === 'PATCH' ? { body: { id: 'swim' } } : undefined));
+    const timed: EventDraft = {
+      title: 'Swim lesson',
+      allDay: false,
+      start: new Date('2026-11-21T09:30'),
+      end: new Date('2026-11-21T10:15'),
+      keepRecurrence: true,
+    };
+    await googleSource.update(day, timed, 'all');
+    const body = patched();
+    expect(new Date(body.start.dateTime)).toEqual(new Date('2026-10-31T09:30'));
+    expect(body.recurrence).toEqual(['RRULE:FREQ=WEEKLY;UNTIL=20270101T055959Z', 'EXDATE:20261031T143000Z,20261114T153000Z']);
+  });
+
+  it('writes the deleted dates of a new series made all-day from one lesson on as dates', async () => {
+    routes.push((c) =>
+      c.method === 'GET'
+        ? { body: master(['RRULE:FREQ=WEEKLY;BYDAY=SA', 'EXDATE;TZID=America/Chicago:20261205T093000']) }
+        : undefined,
+    );
+    routes.push((c) => (c.method === 'POST' ? { body: { id: 'swim2' } } : undefined));
+    routes.push((c) => (c.method === 'PATCH' ? { body: { id: 'swim' } } : undefined));
+    const allDay: EventDraft = {
+      title: 'Swim lesson',
+      allDay: true,
+      start: new Date(2026, 10, 21),
+      end: new Date(2026, 10, 22),
+      firstDay: '2026-11-21',
+      lastDay: '2026-11-21',
+      keepRecurrence: true,
+    };
+    await googleSource.update(occ, allDay, 'following');
+    expect(calls.find((c) => c.method === 'POST')!.body.recurrence).toEqual([
+      'RRULE:FREQ=WEEKLY;BYDAY=SA',
+      'EXDATE;VALUE=DATE:20261205',
+    ]);
+    // The old series stays timed, its deleted dates as they were.
+    expect(patched().recurrence).toEqual([
+      'RRULE:FREQ=WEEKLY;BYDAY=SA;UNTIL=20261121T152959Z',
+      'EXDATE;TZID=America/Chicago:20261205T093000',
+    ]);
+  });
+
   it('moves a weekly series to the weekday its occurrence moved to (All events)', async () => {
     // Saturday lessons, and the Nov 21 one moved to Monday Nov 23 for every week.
     routes.push((c) => (c.method === 'GET' ? { body: master(['RRULE:FREQ=WEEKLY;BYDAY=SA']) } : undefined));

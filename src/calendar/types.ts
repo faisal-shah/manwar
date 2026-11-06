@@ -1,4 +1,5 @@
 import type { ISODate, Repeat } from '../data/types';
+import { addDays, toISODate } from '../lib/date';
 
 export type AccessRole = 'owner' | 'writer' | 'reader' | 'freeBusyReader';
 
@@ -117,6 +118,21 @@ export interface CalendarSource {
 }
 
 export const eventKey = (calendarId: string, id: string) => `${calendarId}::${id}`;
+
+/** The key of an event's series, or of the event itself when it does not repeat: one row of the triage queue, one countdown. */
+export const seriesOf = (ev: CalEvent) => eventKey(ev.calendarId, ev.seriesId ?? ev.id);
+
+/** End instant for overlap tests: a zero-length event counts as an instant long, so it lands on its start day. */
+export const endMs = (ev: CalEvent) => Math.max(ev.end.getTime(), ev.start.getTime() + 1);
+
+/** ISO dates an event covers (all-day end is exclusive; a zero-length event is on its start day). */
+export function daysOf(ev: CalEvent): ISODate[] {
+  const first = toISODate(ev.start);
+  const last = toISODate(new Date(endMs(ev) - 1));
+  const out: ISODate[] = [];
+  for (let d = first; d <= last; d = addDays(d, 1)) out.push(d);
+  return out;
+}
 
 /**
  * One of Google's holiday calendars ("Holidays in United States", "Islamic

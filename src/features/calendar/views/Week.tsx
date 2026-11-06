@@ -1,13 +1,14 @@
 import { Plus } from 'lucide-preact';
+import { isLoaded } from '../../../calendar/engine';
 import { settings } from '../../../data/store';
 import type { ISODate } from '../../../data/types';
 import { today } from '../../../lib/clock';
 import { addDays, dateRange, isWeekend } from '../../../lib/date';
-import { countLabel, rangeLabel } from '../layout';
+import { rangeLabel } from '../layout';
 import { dayEvents, itemsByDay } from '../model';
 import { EventCard, MealPill } from '../parts';
 import { openEditor, page, periodOf, type CalNav } from '../state';
-import { DayLabel, DayWeather } from './common';
+import { DayLabel, DayWeather, dayCount } from './common';
 
 /** 4x2 card grid: seven day cells and a Next Week cell. */
 export function WeekView({ nav }: { nav: CalNav }) {
@@ -34,8 +35,8 @@ export function WeekView({ nav }: { nav: CalNav }) {
               </div>
               <div class="cal-wc-row">
                 <span class="cal-week-count">
-                  {countLabel(events.length, false)}
-                  {d === t && events.length > 0 && <span class="cal-week-today"> today</span>}
+                  {dayCount(d, events.length)}
+                  {d === t && events.length > 0 && isLoaded(d) && <span class="cal-week-today"> today</span>}
                 </span>
                 <AddOn day={d} />
               </div>

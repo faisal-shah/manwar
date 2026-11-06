@@ -48,6 +48,8 @@ vi.mock('../../src/data/session', () => ({ googleAccessToken: async () => 'token
 
 const store = await import('../../src/data/store');
 const engine = await import('../../src/calendar/engine');
+const { today } = await import('../../src/lib/clock');
+const { addDays, toISODate } = await import('../../src/lib/date');
 
 const cal = (id: string): CalendarInfo => ({ id, name: id, color: '#2D7F86', accessRole: 'owner', primary: true });
 const ev = (calendarId: string, id: string, over: Partial<CalEvent> = {}): CalEvent => ({
@@ -69,6 +71,8 @@ const deferred = () => {
 };
 const settle = () => new Promise((r) => setTimeout(r, 0));
 const ids = () => engine.events.value.map((e) => e.id);
+/** An event as the snapshot keeps it. */
+const kept = (e: CalEvent) => ({ ...e, start: e.start.getTime(), end: e.end.getTime() });
 
 describe('calendar sync across a change of account', () => {
   it('never shows the last account, from memory or from the offline snapshot', async () => {
@@ -328,5 +332,78 @@ describe('calendar sync across a change of account', () => {
     store.settings.value = { ...store.settings.value, hiddenCalendars: [], countdownWindow: '3m' };
     store.data.eventMeta.value = [];
     await settle();
+  });
+
+  it('counts no day as loaded until a calendar answers for it', async () => {
+    const school = 'school@group.calendar.google.com';
+    // A cold start (a phone keeps no snapshot): the calendars are listed, then the network goes.
+    source.listCalendars = async () => [cal('ours@gmail.com'), cal(school)];
+    source.listEvents = async () => {
+      throw new TypeError('Failed to fetch');
+    };
+    store.householdId.value = 'gCold';
+    await settle();
+    expect(engine.loadedRange.value).toBeNull();
+    expect(engine.sync.value.error).toContain('Failed to fetch');
+    // One calendar answers: the window is loaded, and the poll asks the other again.
+    source.listEvents = async (id) => {
+      if (id === school) throw new TypeError('Failed to fetch');
+      return [ev(id, 'swim')];
+    };
+    await engine.refresh();
+    expect(engine.loadedRange.value?.from).toBe(addDays(today.value, -42));
+    expect(engine.sync.value.partial).toBe(true);
+    // A household with no calendar to ask has its days loaded (and empty).
+    source.listCalendars = async () => [];
+    store.householdId.value = 'gNoCalendars';
+    await settle();
+    expect(engine.loadedRange.value).not.toBeNull();
+  });
+
+  it('keeps a calendar hidden since the snapshot was kept off the wall after an offline reload', async () => {
+    const school = 'school@group.calendar.google.com';
+    storage.set(
+      'manwar.events.v1',
+      JSON.stringify({
+        household: 'gHidden',
+        calendars: [cal('ours@gmail.com'), cal(school)],
+        events: [kept(ev('ours@gmail.com', 'swim')), kept(ev(school, 'play'))],
+        from: '2026-01-01',
+        to: '2027-01-01',
+        at: Date.now(),
+        syncedAt: { 'ours@gmail.com': Date.now(), [school]: Date.now() },
+      }),
+    );
+    // School was hidden on another tablet after the snapshot was kept; the tablet reloads offline.
+    store.settings.value = { ...store.settings.value, hiddenCalendars: [school] };
+    source.listCalendars = async () => {
+      throw new TypeError('Failed to fetch');
+    };
+    store.householdId.value = 'gHidden';
+    await settle();
+    expect(ids()).toEqual(['swim']);
+    expect(engine.eventsOn(toISODate(ev(school, 'play').start)).map((e) => e.id)).toEqual(['swim']);
+    store.settings.value = { ...store.settings.value, hiddenCalendars: [] };
+    await settle();
+  });
+
+  it('fetches the days a view asks for before the first fetch lands', async () => {
+    const windows: string[] = [];
+    const answer = deferred();
+    source.listCalendars = async () => [cal('ours@gmail.com')];
+    source.listEvents = async (_id, a, b) => {
+      windows.push(`${toISODate(a)}..${toISODate(b)}`);
+      if (windows.length === 1) await answer.promise;
+      return [];
+    };
+    // Nothing loaded yet: the first fetch is out when the view pages far ahead.
+    store.householdId.value = 'gFirstFetch';
+    await settle();
+    const t = today.value;
+    engine.ensureRange(addDays(t, 200), addDays(t, 230));
+    answer.resolve();
+    await settle();
+    expect(windows).toHaveLength(2);
+    expect(engine.loadedRange.value).toEqual({ from: addDays(t, -42), to: addDays(t, 260) });
   });
 });

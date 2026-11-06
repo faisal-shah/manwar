@@ -1,6 +1,6 @@
 import { computed } from '@preact/signals';
-import { calendars, daysOf, eventsBetween, eventColors, metaFor, profilesOf } from '../../calendar/engine';
-import type { CalEvent } from '../../calendar/types';
+import { calendars, eventsBetween, eventColors, metaFor, profilesOf } from '../../calendar/engine';
+import { daysOf, type CalEvent } from '../../calendar/types';
 import { profileById, settings } from '../../data/store';
 import { nowMs } from '../../lib/clock';
 import { EVERYONE, type ISODate, type MealCategory, type MealEntry, type Profile } from '../../data/types';

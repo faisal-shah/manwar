@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { endSeriesBefore, fromRecurrence, shiftByday, toRRule } from '../../src/calendar/rrule';
+import { endSeriesBefore, fromRecurrence, moveRecurrence, shiftByday, toRRule } from '../../src/calendar/rrule';
 
 describe('rrule', () => {
   it('round-trips the editor subset', () => {
@@ -27,6 +27,17 @@ describe('rrule', () => {
     expect(endSeriesBefore(['RRULE:FREQ=WEEKLY'], new Date('2026-11-21T15:30:00Z'), false)).toEqual([
       'RRULE:FREQ=WEEKLY;UNTIL=20261121T152959Z',
     ]);
+  });
+});
+
+describe('moveRecurrence', () => {
+  it('moves the deleted dates with a series that keeps its kind, and leaves values of the other kind', () => {
+    const lines = ['RRULE:FREQ=WEEKLY;UNTIL=20261231', 'EXDATE;VALUE=DATE:20261114', 'EXDATE:20261121T153000Z'];
+    expect(moveRecurrence(lines, { days: 1 }, true)).toEqual([lines[0], 'EXDATE;VALUE=DATE:20261115', lines[2]]);
+  });
+  it('reads a floating UNTIL as its own day', () => {
+    expect(fromRecurrence(['RRULE:FREQ=DAILY;UNTIL=20261231T000000'])?.until).toBe('2026-12-31');
+    expect(fromRecurrence(['RRULE:FREQ=DAILY;UNTIL=2026-12-31'])).toBeNull();
   });
 });
 

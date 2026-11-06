@@ -1,17 +1,6 @@
-import type { CalEvent } from '../../calendar/types';
+import { daysOf, endMs, type CalEvent } from '../../calendar/types';
 import type { ISODate } from '../../data/types';
-import {
-  addDays,
-  dateAt,
-  dayLong,
-  dayShort,
-  diffDays,
-  formatTime,
-  fromISODate,
-  monthLong,
-  monthShort,
-  toISODate,
-} from '../../lib/date';
+import { addDays, dateAt, dayLong, dayShort, diffDays, formatTime, fromISODate, monthLong, monthShort } from '../../lib/date';
 import type { TimeFormat } from '../../lib/date';
 import { isLong } from '../../features/calendar/layout';
 
@@ -47,18 +36,11 @@ export type AgendaBlock =
     }
   | { kind: 'free'; from: ISODate; to: ISODate };
 
-/** End instant for overlap tests: a zero-length event lasts an instant, so it lands on its start day. */
-const endMs = (ev: CalEvent) => Math.max(ev.end.getTime(), ev.start.getTime() + 1);
-
-/** The days [first, last] an event covers (an all-day end is exclusive). */
-function coveredDays(ev: CalEvent): { first: ISODate; last: ISODate } {
-  return { first: toISODate(ev.start), last: toISODate(new Date(endMs(ev) - 1)) };
-}
-
 function row(ev: CalEvent, day: ISODate, now: number, fmt: TimeFormat): AgendaRow {
-  const { first, last } = coveredDays(ev);
-  const days = diffDays(first, last) + 1;
-  const span = days > 1 && (ev.allDay || isLong(ev)) ? `Day ${diffDays(first, day) + 1} of ${days}` : null;
+  const covered = daysOf(ev);
+  const first = covered[0];
+  const last = covered[covered.length - 1];
+  const span = covered.length > 1 && (ev.allDay || isLong(ev)) ? `Day ${diffDays(first, day) + 1} of ${covered.length}` : null;
   const ended = endMs(ev) <= now;
   const t = (d: Date) => formatTime(d, fmt);
   const base = { ev, span, ended, current: false };
@@ -91,9 +73,8 @@ export function buildAgenda(
 ): AgendaBlock[] {
   const byDay = new Map<ISODate, CalEvent[]>();
   for (const ev of events) {
-    const { first, last } = coveredDays(ev);
-    if (last < from || first > to) continue;
-    for (let d = first < from ? from : first; d <= last && d <= to; d = addDays(d, 1)) {
+    for (const d of daysOf(ev)) {
+      if (d < from || d > to) continue;
       const list = byDay.get(d);
       if (list) list.push(ev);
       else byDay.set(d, [ev]);

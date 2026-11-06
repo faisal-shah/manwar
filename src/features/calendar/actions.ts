@@ -2,6 +2,7 @@ import { assign, deleteEvent, setCountdown } from '../../calendar/engine';
 import type { CalEvent, EditScope } from '../../calendar/types';
 import { asParent } from '../../core/lock';
 import { errorMessage } from '../../data/errors';
+import { isolate } from '../../lib/text';
 import { choose, confirm, toast } from '../../ui/overlays';
 
 /** Mutations started from the calendar UI. Each one goes through the parental lock. */
@@ -39,7 +40,11 @@ export async function deleteFlow(ev: CalEvent, busy: (on: boolean) => void): Pro
       if (!s) return;
       scope = s;
     } else if (
-      !(await confirm('Delete event?', { body: `"${ev.title}" will be removed from the calendar.`, ok: 'Delete', danger: true }))
+      !(await confirm('Delete event?', {
+        body: `"${isolate(ev.title)}" will be removed from the calendar.`,
+        ok: 'Delete',
+        danger: true,
+      }))
     )
       return;
     busy(true);

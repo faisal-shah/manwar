@@ -17,6 +17,16 @@ function untilValue(until: ISODate, allDay: boolean): string {
   return utcStamp(new Date(y, m - 1, d, 23, 59, 59));
 }
 
+/** A DATE or DATE-TIME value (RFC 5545): its fields, and whether it is in UTC. */
+const VALUE = /^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})(Z?))?$/;
+
+/** The day a date or date-time value names: its own date, or a UTC one's day on the tablet's clock. */
+function dayOf(v: string): ISODate {
+  const [, y, mo, d, h, mi, s, z] = VALUE.exec(v)!;
+  if (h === undefined || !z) return `${y}-${mo}-${d}`;
+  return toISODate(new Date(Date.UTC(+y, +mo - 1, +d, +h, +mi, +s)));
+}
+
 export function toRRule(r: Repeat, allDay: boolean): string {
   const parts = [`FREQ=${FREQ[r.unit]}`];
   if (r.every > 1) parts.push(`INTERVAL=${r.every}`);
@@ -57,14 +67,8 @@ export function fromRecurrence(lines: string[]): Repeat | null {
     r.weekdays = days as Weekday[];
   }
   if (kv.UNTIL) {
-    const u: string = kv.UNTIL;
-    if (u.length === 8) r.until = `${u.slice(0, 4)}-${u.slice(4, 6)}-${u.slice(6, 8)}`;
-    else {
-      const utc = new Date(
-        Date.UTC(+u.slice(0, 4), +u.slice(4, 6) - 1, +u.slice(6, 8), +u.slice(9, 11), +u.slice(11, 13), +u.slice(13, 15)),
-      );
-      r.until = toISODate(utc);
-    }
+    if (!VALUE.test(kv.UNTIL)) return null;
+    r.until = dayOf(kv.UNTIL);
   }
   return r;
 }
@@ -137,32 +141,57 @@ export function shiftByday(lines: string[], days: number): string[] {
 }
 
 /**
- * The EXDATE lines moved with a series whose start moved, so occurrences
- * deleted on other clients stay deleted: a local value (TZID or floating)
- * moves its wall-clock fields, a UTC one the local time it names, a date by
- * whole days. Values of the other kind (a date on a timed series) are left
- * as they are.
+ * A series' recurrence after its start moved by `by` (`days`: the series is
+ * all-day now, `wallMs`: timed), from a series that was all-day or timed
+ * (`wasAllDay`). Its EXDATE lines move with it, so occurrences deleted on
+ * other clients stay deleted: a local value (TZID or floating) moves its
+ * wall-clock fields, a UTC one the local time it names, a date by whole
+ * days. A series changed between all-day and timed takes its EXDATEs and
+ * the RRULE's UNTIL into its new kind, as Google requires (an EXDATE must
+ * name an occurrence, so a date on an all-day series and a date-time on a
+ * timed one; RFC 5545 gives UNTIL the kind of the start): a date-time
+ * becomes its day, a date becomes that day at the new time (`wallMs` from
+ * the old midnight) in UTC. Values of the other kind than the series had
+ * are left as they are.
  */
-export function shiftExdates(lines: string[], by: SeriesShift): string[] {
+export function moveRecurrence(lines: string[], by: SeriesShift, wasAllDay: boolean): string[] {
+  const allDay = 'days' in by;
   return lines.map((l) => {
+    if (l.startsWith('RRULE:')) return allDay === wasAllDay ? l : untilIn(l, allDay);
     if (!l.startsWith('EXDATE')) return l;
     const at = l.indexOf(':');
-    const values = l.slice(at + 1).split(',');
-    return `${l.slice(0, at)}:${values.map((v) => shiftValue(v.trim(), by)).join(',')}`;
+    const values = l
+      .slice(at + 1)
+      .split(',')
+      .map((v) => v.trim());
+    if (/^\d{8}$/.test(values[0]) !== wasAllDay) return l;
+    // Into the other kind with its parameters: VALUE=DATE, or none for UTC times (a TZID is for local ones).
+    const head = allDay === wasAllDay ? l.slice(0, at) : allDay ? 'EXDATE;VALUE=DATE' : 'EXDATE';
+    return `${head}:${values.map((v) => shiftValue(v, by)).join(',')}`;
   });
 }
 
 function shiftValue(v: string, by: SeriesShift): string {
-  const m = /^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})(Z?))?$/.exec(v);
+  const m = VALUE.exec(v);
   if (!m) return v;
   const [, y, mo, d, h, mi, s, z] = m;
-  if (h === undefined) return 'days' in by ? addDays(`${y}-${mo}-${d}`, by.days).replace(/-/g, '') : v;
-  if (!('wallMs' in by)) return v;
+  if ('days' in by) return addDays(dayOf(v), by.days).replace(/-/g, '');
+  // A date: that day's midnight on the wall clock, moved to the series' time of day.
+  if (h === undefined) return utcStamp(fromWall(Date.UTC(+y, +mo - 1, +d) + by.wallMs));
   const fields = Date.UTC(+y, +mo - 1, +d, +h, +mi, +s);
   // A UTC value is an instant: the occurrence the series had at that local time, moved on the wall clock.
   if (z) return utcStamp(fromWall(wallOf(new Date(fields)) + by.wallMs));
   // A local value's fields are its wall clock (read as UTC, so the shift is a sum).
   return utcStamp(new Date(fields + by.wallMs)).slice(0, -1);
+}
+
+/** An RRULE line with an UNTIL of the other kind written in this one (the same last day). */
+function untilIn(line: string, allDay: boolean): string {
+  const parts = rruleParts(line).map((p) => {
+    const u = p.slice(6);
+    return p.startsWith('UNTIL=') && VALUE.test(u) && (u.length === 8) !== allDay ? `UNTIL=${untilValue(dayOf(u), allDay)}` : p;
+  });
+  return `RRULE:${parts.join(';')}`;
 }
 
 /**

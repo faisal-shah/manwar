@@ -4,14 +4,17 @@ import { demoMode } from '../config';
 import { listAdd } from '../data/settings';
 import { data, householdId, patch, profileById, put, remove as removeDoc, settings, upsert } from '../data/store';
 import { EVERYONE, NOBODY, type EventMeta, type ISODate } from '../data/types';
+import { sameIds } from '../lib/assignees';
 import { addDays, addMonths, dateAt, diffDays, toISODate } from '../lib/date';
 import { currentTime, today } from '../lib/clock';
 import { fakeSource } from './fake';
 import { googleSource } from './google';
 import {
   RateLimited,
+  endMs,
   eventKey,
   isHolidayCalendar,
+  seriesOf,
   type CalEvent,
   type CalendarInfo,
   type CalendarSource,
@@ -20,10 +23,11 @@ import {
 } from './types';
 
 /**
- * Calendar state for the wall. Events come from the household's Google
- * calendars (or the demo source), are cached in localStorage so the wall
- * shows them offline, and are joined with app-side EventMeta (profiles,
- * countdown) from Firestore.
+ * Calendar state for the wall and the phone. Events come from the
+ * household's Google calendars (or the demo source), are cached in
+ * localStorage so the wall shows them offline (a phone keeps them in memory
+ * only), and are joined with app-side EventMeta (profiles, countdown) from
+ * Firestore.
  */
 
 export const source: CalendarSource = demoMode ? fakeSource : googleSource;
@@ -46,15 +50,22 @@ export const sync = signal<SyncState>({ loading: false, lastSync: null, error: n
 /** When each calendar's events were last fetched. */
 const syncedAt = new Map<string, number>();
 
+type Range = { from: ISODate; to: ISODate };
+
+/** The days the latest view asked for (ensureRange), until that view lets them go. */
+let wanted: Range | null = null;
+
+/** The window the fetch under way asks Google for; null between fetches. */
+let requested: Range | null = null;
+
 /**
  * The fetched window [from, to): six weeks back and four months ahead of
- * today, widened to the days the latest view asked for (ensureRange). It
- * follows today, so a wall left running for months does not keep fetching
- * and caching an ever longer past.
+ * today, widened to the days a view asks for (ensureRange) while it shows
+ * them. It follows today, and narrows back once the view lets the far days
+ * go, so a wall or phone left open for days does not keep fetching and
+ * caching days nobody looks at.
  */
-let wanted: { from: ISODate; to: ISODate } | null = null;
-
-function fetchWindow(): { from: ISODate; to: ISODate } {
+function fetchWindow(): Range {
   const t = today.value;
   let from = addDays(t, -42);
   let to = addMonths(t, 4);
@@ -64,14 +75,23 @@ function fetchWindow(): { from: ISODate; to: ISODate } {
 }
 
 /**
- * The window of the last fetch, or of the offline snapshot shown until the
- * first one, [from, to); null before either. A calendar that failed in it
- * is asked again by the next poll, so a page turn inside the window does not
- * refetch every calendar for it. Days outside it are not known yet: a view
- * that reaches them says so rather than showing them empty.
+ * The window of the last fetch any shown calendar answered (or that had
+ * no calendar to ask), or of the offline snapshot shown until then,
+ * [from, to); null before either. A fetch every calendar failed leaves it
+ * as it was: the events on screen are still that window's. A calendar that
+ * failed in a fetch the others answered is asked again by the next poll,
+ * so a page turn inside the window does not refetch every calendar for it.
+ * Days outside it are not known yet: a view that reaches them says so
+ * rather than showing them empty.
  */
-const loaded = signal<{ from: ISODate; to: ISODate } | null>(null);
-export const loadedRange: ReadonlySignal<{ from: ISODate; to: ISODate } | null> = loaded;
+const loaded = signal<Range | null>(null);
+export const loadedRange: ReadonlySignal<Range | null> = loaded;
+
+/** Is the day inside the loaded window? Read in a render, it follows the window. */
+export const isLoaded = (day: ISODate): boolean => {
+  const r = loaded.value;
+  return !!r && r.from <= day && day < r.to;
+};
 
 const SNAPSHOT_KEY = demoMode ? 'manwar.demoEvents.v1' : 'manwar.events.v1';
 
@@ -138,12 +158,15 @@ function loadSnapshot(household: string) {
       return;
     }
     calendars.value = s.calendars;
-    events.value = s.events.map((e) => ({
-      ...e,
-      start: new Date(e.start),
-      end: new Date(e.end),
-      originalStart: e.originalStart === undefined ? undefined : new Date(e.originalStart),
-    }));
+    // A calendar hidden since the snapshot was kept stays off.
+    events.value = shownOnly(
+      s.events.map((e) => ({
+        ...e,
+        start: new Date(e.start),
+        end: new Date(e.end),
+        originalStart: e.originalStart === undefined ? undefined : new Date(e.originalStart),
+      })),
+    );
     // A calendar missing from syncedAt never answered; a snapshot from before syncedAt was kept has only `at`.
     for (const c of s.calendars) {
       const at = s.syncedAt ? s.syncedAt[c.id] : s.at;
@@ -157,6 +180,12 @@ function loadSnapshot(household: string) {
 }
 
 const visibleCalendars = () => calendars.value.filter((c) => !settings.value.hiddenCalendars.includes(c.id));
+
+/** The events of calendars not hidden in Settings (on any tablet). */
+function shownOnly(evs: CalEvent[]): CalEvent[] {
+  const hidden = settings.peek().hiddenCalendars;
+  return evs.filter((e) => !hidden.includes(e.calendarId));
+}
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
@@ -186,6 +215,12 @@ function endPause(): void {
   clearTimeout(resumeTimer);
 }
 
+/** No limit in force (Google answered without one, or another account connected): the backoff starts over. */
+function clearPause(): void {
+  endPause();
+  pause.step = 0;
+}
+
 const limitIn = (reasons: unknown[]) => reasons.find((r): r is RateLimited => r instanceof RateLimited);
 
 async function fetchAll(): Promise<void> {
@@ -193,52 +228,81 @@ async function fetchAll(): Promise<void> {
   if (!household) return;
   // Results of a fetch that outlived its household (the tablet switched accounts) belong to no one on screen.
   const stale = () => householdId.peek() !== household;
+  const w = fetchWindow();
+  requested = w;
   sync.value = { ...sync.value, loading: true };
   try {
     const cals = await source.listCalendars();
     if (stale()) return;
     calendars.value = cals;
-    const w = fetchWindow();
     const asked = visibleCalendars();
     const answers = await Promise.allSettled(asked.map((c) => source.listEvents(c.id, dateAt(w.from), dateAt(w.to))));
     if (stale()) return;
-    // A calendar hidden while its events were on the way stays off the wall.
-    const hidden = settings.peek().hiddenCalendars;
-    const shown = asked.filter((c) => !hidden.includes(c.id));
-    const results = answers.filter((_, i) => !hidden.includes(asked[i].id));
-    // A calendar that fails keeps the events it had, so one bad calendar neither blanks nor freezes the wall.
-    const failed = shown.filter((_, i) => results[i].status === 'rejected');
-    const kept = events.value.filter((e) => failed.some((c) => c.id === e.calendarId));
-    const fresh = results.flatMap((r) => (r.status === 'fulfilled' ? r.value : []));
-    events.value = [...kept, ...fresh].sort((a, b) => a.start.getTime() - b.start.getTime());
-    const errors = results.flatMap((r) => (r.status === 'rejected' ? [r.reason] : []));
-    const at = Date.now();
-    const answered = shown.filter((c) => !failed.includes(c));
-    answered.forEach((c) => syncedAt.set(c.id, at));
-    loaded.value = w;
-    const far = await fetchFarCountdowns(new Set(answered.map((c) => c.id)));
+    const got = takeAnswers(asked, answers);
+    if (got.answered.length || !got.shown.length) loaded.value = w;
+    const far = await fetchFarCountdowns(new Set(got.answered.map((c) => c.id)));
     if (stale()) return;
     // Hidden while they were looked up: left off too.
-    const hiddenNow = settings.peek().hiddenCalendars;
-    farCountdowns.value = far.found.filter((e) => !hiddenNow.includes(e.calendarId));
-    const limit = limitIn([...errors, ...far.errors]);
+    farCountdowns.value = shownOnly(far.found);
+    const limit = limitIn([...got.errors, ...far.errors]);
     if (limit) pauseSync(limit);
-    else pause.step = 0;
-    sync.value = errors.length
-      ? {
-          loading: false,
-          lastSync: sync.value.lastSync,
-          error: `${failed[0].name}: ${message(errors[0])}`,
-          failing: failingNow(failed),
-          partial: failed.length < shown.length,
-        }
-      : { loading: false, lastSync: at, error: null, failing: [], partial: false };
-    saveSnapshot(household);
+    // A fetch Google answered without a limit ends the pause, one a fetch before it started included.
+    else clearPause();
+    sync.value = syncState(got);
+    if (loaded.peek()) saveSnapshot(household);
   } catch (e) {
     if (stale()) return;
     if (e instanceof RateLimited) pauseSync(e);
     sync.value = { ...sync.value, loading: false, error: message(e), failing: failingNow(visibleCalendars()), partial: false };
+  } finally {
+    requested = null;
   }
+}
+
+/** What a fetch's calendars answered: the ones still shown, which of them answered and which failed (with why). */
+interface Answers {
+  shown: CalendarInfo[];
+  answered: CalendarInfo[];
+  failed: CalendarInfo[];
+  errors: unknown[];
+  at: number;
+}
+
+/**
+ * Put a fetch's answers on the wall. A calendar that answered shows its new
+ * events; one that failed keeps the events it had, so one bad calendar
+ * neither blanks nor freezes the wall; one hidden while its events were on
+ * the way stays off.
+ */
+function takeAnswers(asked: CalendarInfo[], answers: PromiseSettledResult<CalEvent[]>[]): Answers {
+  const hidden = settings.peek().hiddenCalendars;
+  const replies = asked.map((cal, i) => ({ cal, reply: answers[i] })).filter((r) => !hidden.includes(r.cal.id));
+  const answered = replies.filter((r) => r.reply.status === 'fulfilled').map((r) => r.cal);
+  const failed = replies.filter((r) => r.reply.status === 'rejected').map((r) => r.cal);
+  const kept = events.value.filter((e) => failed.some((c) => c.id === e.calendarId));
+  const fresh = replies.flatMap((r) => (r.reply.status === 'fulfilled' ? r.reply.value : []));
+  events.value = [...kept, ...fresh].sort((a, b) => a.start.getTime() - b.start.getTime());
+  const at = Date.now();
+  answered.forEach((c) => syncedAt.set(c.id, at));
+  return {
+    shown: replies.map((r) => r.cal),
+    answered,
+    failed,
+    errors: replies.flatMap((r) => (r.reply.status === 'rejected' ? [r.reply.reason] : [])),
+    at,
+  };
+}
+
+/** The sync state after a fetch: current, or which shown calendars did not answer and since when. */
+function syncState(got: Answers): SyncState {
+  if (!got.failed.length) return { loading: false, lastSync: got.at, error: null, failing: [], partial: false };
+  return {
+    loading: false,
+    lastSync: sync.value.lastSync,
+    error: `${got.failed[0].name}: ${message(got.errors[0])}`,
+    failing: failingNow(got.failed),
+    partial: got.failed.length < got.shown.length,
+  };
 }
 
 const failingNow = (cals: CalendarInfo[]) => cals.map((c) => ({ name: c.name, at: syncedAt.get(c.id) ?? null }));
@@ -254,8 +318,7 @@ function resetForHousehold(household: string | null): void {
   farCache.clear();
   syncedAt.clear();
   // Rate limits are per Google account.
-  endPause();
-  pause.step = 0;
+  clearPause();
   loaded.value = null;
   if (household) loadSnapshot(household);
   // Signed out (disconnected, or a phone removed or unpaired): its events leave the device too.
@@ -307,12 +370,21 @@ function fetchSoon(force: boolean): Promise<void> {
   return queued;
 }
 
-/** Make sure [from, to] is loaded (views call this when paging). */
-export function ensureRange(from: ISODate, to: ISODate): void {
-  wanted = { from, to };
-  // Before the first fetch lands, the window it is fetching.
-  const w = loaded.peek() ?? fetchWindow();
-  if (from < w.from || to >= w.to) void refresh();
+/**
+ * Make sure [from, to] is loaded: a view calls this for the days it shows,
+ * and the release it returns once it stops showing them (an effect's
+ * cleanup: it pages on or unmounts), so the window narrows back. Days the
+ * fetch under way does not ask for (or, between fetches, outside the loaded
+ * window) are fetched.
+ */
+export function ensureRange(from: ISODate, to: ISODate): () => void {
+  const ask = { from, to };
+  wanted = ask;
+  const w = requested ?? loaded.peek();
+  if (!w || from < w.from || to >= w.to) void refresh();
+  return () => {
+    if (wanted === ask) wanted = null;
+  };
 }
 
 let started = false;
@@ -352,8 +424,8 @@ export function startCalendarSync(): void {
     const shownAgain = hidden.some((id) => !next.includes(id));
     hidden = next;
     signalBatch(() => {
-      events.value = events.peek().filter((e) => !next.includes(e.calendarId));
-      farCountdowns.value = farCountdowns.peek().filter((e) => !next.includes(e.calendarId));
+      events.value = shownOnly(events.peek());
+      farCountdowns.value = shownOnly(farCountdowns.peek());
     });
     if (shownAgain) void refresh();
   });
@@ -446,23 +518,11 @@ export function eventsBetween(
   return events.value.filter((e) => endMs(e) > a && e.start.getTime() < b && passesHidden(e, hidden));
 }
 
-/** End instant for overlap tests: a zero-length event counts as an instant long, so it lands on its start day. */
-const endMs = (e: CalEvent) => Math.max(e.end.getTime(), e.start.getTime() + 1);
-
 /** Events on one day, all-day first, then by start, filtered as eventsBetween is. */
 export function eventsOn(day: ISODate, hidden?: readonly string[]): CalEvent[] {
   return eventsBetween(day, day, hidden).sort(
     (x, y) => Number(y.allDay) - Number(x.allDay) || x.start.getTime() - y.start.getTime(),
   );
-}
-
-/** ISO dates an event covers (all-day end is exclusive; a zero-length event is on its start day). */
-export function daysOf(ev: CalEvent): ISODate[] {
-  const first = toISODate(ev.start);
-  const last = toISODate(new Date(endMs(ev) - 1));
-  const out: ISODate[] = [];
-  for (let d = first; d <= last; d = addDays(d, 1)) out.push(d);
-  return out;
 }
 
 /**
@@ -477,7 +537,7 @@ export const unassigned = computed(() => {
   const out: CalEvent[] = [];
   for (const ev of events.value) {
     if (endMs(ev) <= from || settings.value.hiddenCalendars.includes(ev.calendarId) || profilesOf(ev)) continue;
-    const series = eventKey(ev.calendarId, ev.seriesId ?? ev.id);
+    const series = seriesOf(ev);
     if (seen.has(series)) continue;
     seen.add(series);
     out.push(ev);
@@ -536,13 +596,21 @@ function putSeries(ev: CalEvent, fields: MetaFields): void {
 }
 
 /**
- * Assign profiles. 'series' writes the series-level entry (and drops this
- * occurrence's own profiles); 'instance' overrides one occurrence's profiles.
+ * No one chosen is written as [NOBODY]: an empty list would read as
+ * following the series on an occurrence, and as the family's on a holiday.
+ */
+const orNobody = (ids: string[]) => (ids.length ? ids : [NOBODY]);
+
+/**
+ * Assign profiles (none: back in the triage queue). 'series' writes the
+ * series-level entry (and drops this occurrence's own profiles);
+ * 'instance' overrides one occurrence's profiles.
  */
 export function assign(ev: CalEvent, profileIds: string[], scope: 'series' | 'instance' = 'series'): void {
-  if (!ev.seriesId) return putSeries(ev, { profiles: profileIds });
-  if (scope === 'instance') return putOwn(ev, { profiles: profileIds });
-  putSeries(ev, { profiles: profileIds });
+  const profiles = orNobody(profileIds);
+  if (!ev.seriesId) return putSeries(ev, { profiles });
+  if (scope === 'instance') return putOwn(ev, { profiles });
+  putSeries(ev, { profiles });
   if (metaDocs(ev).own) putOwn(ev, { profiles: [] });
 }
 
@@ -571,11 +639,16 @@ const FAR_TTL_MS = 60 * 60_000;
 async function fetchFarCountdowns(answered: Set<string>): Promise<{ found: CalEvent[]; errors: unknown[] }> {
   if (settings.value.countdownWindow !== 'always') return { found: [], errors: [] };
   const shown = new Set(visibleCalendars().map((c) => c.id));
-  const loadedKeys = new Set(
-    events.value.flatMap((e) => [metaKey(e.calendarId, e.id), metaKey(e.calendarId, e.seriesId ?? e.id)]),
+  // Only what the window holds from today on, as countdownsFor counts: a series whose occurrence in the window is
+  // over (a birthday last month) is asked for its next one.
+  const t0 = today.value;
+  const inWindow = new Set(
+    events.value
+      .filter((e) => toISODate(e.start) >= t0)
+      .flatMap((e) => [metaKey(e.calendarId, e.id), metaKey(e.calendarId, e.seriesId ?? e.id)]),
   );
-  const wanted = data.eventMeta.value
-    .filter((m) => m.countdown && !loadedKeys.has(m.id))
+  const lookups = data.eventMeta.value
+    .filter((m) => m.countdown && !inWindow.has(m.id))
     .map((m) => {
       const key = decodeURIComponent(m.id);
       const at = key.lastIndexOf('::');
@@ -583,8 +656,10 @@ async function fetchFarCountdowns(answered: Set<string>): Promise<{ found: CalEv
     })
     .filter((k) => shown.has(k.calendarId));
   const now = currentTime();
-  const after = dateAt(today.value);
-  const stale = wanted.filter((k) => answered.has(k.calendarId) && (farCache.get(k.metaId)?.at ?? -Infinity) <= now - FAR_TTL_MS);
+  const after = dateAt(t0);
+  const stale = lookups.filter(
+    (k) => answered.has(k.calendarId) && (farCache.get(k.metaId)?.at ?? -Infinity) <= now - FAR_TTL_MS,
+  );
   const found = await Promise.allSettled(stale.map((k) => source.nextOccurrence(k.calendarId, k.id, after)));
   found.forEach((r, i) => {
     if (r.status !== 'fulfilled') return;
@@ -595,7 +670,7 @@ async function fetchFarCountdowns(answered: Set<string>): Promise<{ found: CalEv
     void patch('eventMeta', metaId, { countdown: false, updatedAt: now }).catch(() => {});
   });
   return {
-    found: wanted.flatMap((k) => farCache.get(k.metaId)?.ev ?? []),
+    found: lookups.flatMap((k) => farCache.get(k.metaId)?.ev ?? []),
     errors: found.flatMap((r) => (r.status === 'rejected' ? [r.reason] : [])),
   };
 }
@@ -616,7 +691,7 @@ export function countdownsFor(hidden: readonly string[]): { ev: CalEvent; days: 
   for (const ev of [...events.value, ...farCountdowns.value]) {
     const day = toISODate(ev.start);
     if (day < t0 || day > horizon || !passesHidden(ev, hidden)) continue;
-    const series = eventKey(ev.calendarId, ev.seriesId ?? ev.id);
+    const series = seriesOf(ev);
     if (seen.has(series) || !metaFor(ev)?.countdown) continue;
     seen.add(series);
     out.push({ ev, days: diffDays(t0, day) });
@@ -670,41 +745,42 @@ export async function createEvent(
   await syncNow();
 }
 
-export async function updateEvent(
-  ev: CalEvent,
-  draft: EventDraft,
-  scope: EditScope,
-  profileIds: string[],
-  opts: { countdown?: boolean } = {},
-): Promise<void> {
-  const shown = metaFor(ev);
+/** What the editor changed of who an event is for and its countdown; a field left out was not changed. */
+export type MetaChanges = Pick<MetaFields, 'profiles' | 'countdown'>;
+
+/**
+ * Save an edited event. Only the meta `changes` names is written, so an
+ * assignment or countdown another device changed since the editor opened
+ * is kept.
+ */
+export async function updateEvent(ev: CalEvent, draft: EventDraft, scope: EditScope, changes: MetaChanges): Promise<void> {
   const { newSeriesId } = await source.update(ev, draft, scope);
-  const countdown = !!opts.countdown;
+  const { profiles, countdown } = changes;
   if (newSeriesId) {
-    // The new series starts out as the edited occurrence looked.
+    // The new series starts out as the edited occurrence looks, with the editor's changes.
+    const shown = metaFor(ev);
     void put('eventMeta', {
       id: metaKey(ev.calendarId, newSeriesId),
-      profiles: profileIds,
-      countdown,
+      profiles: profiles ?? profilesOf(ev) ?? [],
+      countdown: countdown ?? !!shown?.countdown,
       emoji: shown?.emoji,
       updatedAt: currentTime(),
     });
   } else if (ev.seriesId && scope === 'this') {
     // The occurrence keeps only what differs from its series.
     const series = metaDocs(ev).series;
-    putOwn(ev, {
-      profiles: sameIds(profileIds, series?.profiles ?? []) ? [] : profileIds,
-      countdown: countdown === !!series?.countdown ? undefined : countdown,
-    });
-  } else {
-    putSeries(ev, { profiles: profileIds, countdown });
-    // "All events" applies to this occurrence too.
-    if (ev.seriesId && metaDocs(ev).own) putOwn(ev, { profiles: [], countdown: undefined });
+    const own: MetaFields = {};
+    if (profiles) own.profiles = sameIds(profiles, series?.profiles ?? []) ? [] : profiles;
+    if (countdown !== undefined) own.countdown = countdown === !!series?.countdown ? undefined : countdown;
+    if (Object.keys(own).length) putOwn(ev, own);
+  } else if (profiles || countdown !== undefined) {
+    putSeries(ev, changes);
+    // "All events" applies to this occurrence too: its own value of what changed goes.
+    if (ev.seriesId && metaDocs(ev).own)
+      putOwn(ev, { ...(profiles && { profiles: [] }), ...(countdown !== undefined && { countdown: undefined }) });
   }
   await syncNow();
 }
-
-const sameIds = (a: string[], b: string[]) => a.length === b.length && a.every((x) => b.includes(x));
 
 export async function deleteEvent(ev: CalEvent, scope: EditScope): Promise<void> {
   await source.remove(ev, scope);
@@ -714,7 +790,7 @@ export async function deleteEvent(ev: CalEvent, scope: EditScope): Promise<void>
   await syncNow();
 }
 
-/** The series' editable repeat rule (null when it can't be represented), for the editor. */
+/** The series' recurrence lines (RRULE, EXDATE), for the editor and the event's details; none for a one-off event. */
 export async function seriesRecurrence(ev: CalEvent): Promise<string[]> {
   return ev.seriesId ? source.seriesRecurrence(ev.calendarId, ev.seriesId) : [];
 }

@@ -2,11 +2,11 @@ import { Fragment } from 'preact';
 import { useRef, useState } from 'preact/hooks';
 import { Check, Repeat } from 'lucide-preact';
 import { assign, calendars, events, profilesOf, triageScope, unassigned } from '../../calendar/engine';
-import { eventKey, type CalEvent } from '../../calendar/types';
+import { seriesOf, type CalEvent } from '../../calendar/types';
 import { requireParent } from '../../core/lock';
 import { profiles } from '../../data/store';
-import { EVERYONE, NOBODY } from '../../data/types';
-import { sameAssignees, toggleAssignee } from '../../lib/assignees';
+import { EVERYONE } from '../../data/types';
+import { sameIds, toggleAssignee } from '../../lib/assignees';
 import { calendarName, whenLabel, whoOf } from '../../features/calendar/model';
 import { openDetail } from '../../features/calendar/state';
 import { useBack } from '../../ui/back';
@@ -16,8 +16,6 @@ import { Avatar, everyoneProfile } from '../../ui/profile';
 import { calView } from './state';
 
 type Scope = 'series' | 'instance';
-
-const seriesOf = (ev: CalEvent) => eventKey(ev.calendarId, ev.seriesId ?? ev.id);
 
 interface VisitRow {
   series: string;
@@ -83,7 +81,7 @@ function AssignRow({ row }: { row: VisitRow }) {
   const lastTap = useRef<{ id: string; at: number } | null>(null);
   const stored = profilesOf(ev) ?? [];
   const p = pending.current;
-  if (p && (sameAssignees(p.ids, stored) || performance.now() - p.at > PENDING_MS)) pending.current = null;
+  if (p && (sameIds(p.ids, stored) || performance.now() - p.at > PENDING_MS)) pending.current = null;
   const on = pending.current?.ids ?? stored;
 
   const tap = async (id: string) => {
@@ -97,8 +95,8 @@ function AssignRow({ row }: { row: VisitRow }) {
     const next = toggleAssignee(pending.current?.ids ?? profilesOf(ev) ?? [], id);
     pending.current = { ids: next, at: performance.now() };
     redraw((n) => n + 1);
-    // Nobody: back in the queue (one occurrence of a series that has people says so itself).
-    assign(ev, next.length ? next : scope === 'instance' ? [NOBODY] : [], scope);
+    // Nobody (the last chip taken off): back in the queue, a holiday included.
+    assign(ev, next, scope);
   };
 
   const color = calendars.value.find((c) => c.id === ev.calendarId)?.color;
@@ -110,7 +108,12 @@ function AssignRow({ row }: { row: VisitRow }) {
         <span>{whenLabel(ev)}</span>
         <span class="muted">
           <bdi>{calendarName(ev.calendarId)}</bdi>
-          {ev.organizer ? ` · from ${ev.organizer}` : ''}
+          {ev.organizer && (
+            <>
+              {' · from '}
+              <bdi>{ev.organizer}</bdi>
+            </>
+          )}
         </span>
         {ev.seriesId && (
           <span class="phc-tri-repeat muted">

@@ -79,6 +79,33 @@ test('pages across a month and year boundary', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
+test('says the days past what is loaded are not loaded yet, in every view, rather than empty', async ({ page }) => {
+  const errors = await open(page);
+  // The calendars still list, but none of their events load; the loaded days end in early March.
+  const down = JSON.stringify(['family@demo', 'mamma@demo', 'en.usa#holiday@group.v.calendar.google.com']);
+  await page.evaluate((ids) => localStorage.setItem('manwar.demoCalendarDown.v1', ids), down);
+  await pickView(page, 'Month');
+  for (let i = 0; i < 6; i++) await page.getByRole('button', { name: 'Next' }).click();
+  await expect(title(page)).toHaveText('May 2027');
+  await expect(page.locator('.mcell[data-day="2027-05-12"] .cal-unloaded')).toHaveText('Not loaded yet');
+  await pickView(page, 'Day');
+  await expect(page.locator('.dayv-items .cal-unloaded')).toHaveText('Not loaded yet');
+  await expect(page.locator('.dayv-items')).not.toContainText('Nothing on the calendar.');
+  await pickView(page, 'Week');
+  await expect(page.locator('.cal-week-count').first()).toHaveText('Not loaded yet');
+  await pickView(page, 'Schedule');
+  await expect(page.locator('.sched-col .cal-unloaded').first()).toHaveText('Not loaded yet');
+  // Google answers again: the days load.
+  await page.evaluate(() => {
+    localStorage.removeItem('manwar.demoCalendarDown.v1');
+    window.dispatchEvent(new Event('online'));
+  });
+  await expect(page.locator('.cal-unloaded')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Today' }).click();
+  await expect(page.locator('.cal-unloaded')).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
 test('opens event details, including a read-only event', async ({ page }) => {
   const errors = await open(page);
   await page.locator('[data-event="family@demo::quran_20261105"]').click();

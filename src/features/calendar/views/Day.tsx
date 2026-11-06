@@ -1,3 +1,4 @@
+import { isLoaded } from '../../../calendar/engine';
 import { settings } from '../../../data/store';
 import type { ISODate } from '../../../data/types';
 import { today } from '../../../lib/clock';
@@ -7,7 +8,7 @@ import { miniMonthDays } from '../layout';
 import { dayEvents, itemsByDay } from '../model';
 import { EventCard, MealPill } from '../parts';
 import { periodOf, showDay, type CalNav } from '../state';
-import { DayWeather } from './common';
+import { DayWeather, NotLoaded } from './common';
 
 /** Mini month on the left third, the selected day's event cards on the right. */
 export function DayView({ nav }: { nav: CalNav }) {
@@ -23,13 +24,14 @@ export function DayView({ nav }: { nav: CalNav }) {
           <DayWeather day={day} size={3} />
         </header>
         <div class="dayv-items scroll">
+          <NotLoaded day={day} />
           {items.meals.map((m) => (
             <MealPill key={m.key} item={m} badge />
           ))}
           {events.map((ev) => (
             <EventCard key={ev.key} ev={ev} />
           ))}
-          {!events.length && !items.meals.length && <Empty emoji="🗓️">Nothing on the calendar.</Empty>}
+          {!events.length && !items.meals.length && isLoaded(day) && <Empty emoji="🗓️">Nothing on the calendar.</Empty>}
         </div>
       </section>
     </div>
