@@ -3,9 +3,9 @@ import { addDays, diffDays, fromISODate, toISODate } from '../lib/date';
 import {
   endSeriesBefore,
   fromWall,
+  moveRecurrence,
   recurrenceCount,
   shiftByday,
-  shiftExdates,
   toRRule,
   wallOf,
   withCount,
@@ -480,8 +480,9 @@ export const googleSource: CalendarSource = {
         // Moved to another weekday: the new series repeats on the days it moved to.
         body.recurrence = shiftByday(body.recurrence, daysMoved(cut, draft));
       }
-      // The new series repeats at the edited occurrence's time: the deleted dates it carries move with it.
-      if (body.recurrence && draft.allDay === seriesAllDay) body.recurrence = shiftExdates(body.recurrence, shiftOf(cut, draft));
+      // The new series repeats at the edited occurrence's time: the deleted dates it carries move with it, and they
+      // and its end are written in its kind (all-day or timed).
+      if (body.recurrence) body.recurrence = moveRecurrence(body.recurrence, shiftOf(cut, draft), seriesAllDay);
       const created = await call<GEvent>(`/calendars/${cal}/events`, { method: 'POST', body: JSON.stringify(body) });
       try {
         await call(`/calendars/${cal}/events/${encodeURIComponent(ev.seriesId)}`, {
@@ -520,11 +521,11 @@ export const googleSource: CalendarSource = {
         const shifted = shiftByday(lines, daysMoved(ev.start, draft));
         if (shifted.some((l, i) => l !== lines[i])) body.recurrence = shifted;
       }
-      // The dates deleted on other clients move with the series, or they would come back at the new time.
-      if (draft.allDay === seriesAllDay) {
-        const lines = body.recurrence ?? master.recurrence ?? [];
-        if (lines.some((l) => l.startsWith('EXDATE'))) body.recurrence = shiftExdates(lines, shiftOf(ev.start, draft));
-      }
+      // The dates deleted on other clients move with the series, or they would come back at the new time; they and
+      // the series' end are written in its kind, which may have changed (all-day or timed).
+      const lines = body.recurrence ?? master.recurrence ?? [];
+      const moved = moveRecurrence(lines, shiftOf(ev.start, draft), seriesAllDay);
+      if (moved.some((l, i) => l !== lines[i])) body.recurrence = moved;
     }
     await call(`/calendars/${cal}/events/${encodeURIComponent(ev.seriesId)}`, { method: 'PATCH', body: JSON.stringify(body) });
     return {};

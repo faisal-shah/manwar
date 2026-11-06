@@ -23,10 +23,8 @@ export function CalendarBody({ nav }: { nav: CalNav }) {
   useSwipe(ref, (dir) => page(nav, dir));
   const view = nav.view.value;
   const p = periodOf(nav);
-  useEffect(() => {
-    // Week view also shows the next week's range in its last cell.
-    ensureRange(p.from, addDays(p.to, 7));
-  }, [p.from, p.to]);
+  // The days on screen, and the week after them (Week view shows its range in the last cell), until the view pages on.
+  useEffect(() => ensureRange(p.from, addDays(p.to, 7)), [p.from, p.to]);
   const View = VIEWS[view];
   const dir = nav.dir.value;
   return (

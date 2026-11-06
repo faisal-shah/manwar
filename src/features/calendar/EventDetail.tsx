@@ -156,7 +156,7 @@ export function EventDetail({ ev, anchor, onClose }: { ev: CalEvent; anchor: DOM
               {who.map((w) => (
                 <li key={w.id}>
                   <Avatar profile={w.profile} size={2.8} />
-                  {w.profile.name}
+                  <bdi>{w.profile.name}</bdi>
                 </li>
               ))}
             </ul>
@@ -172,14 +172,14 @@ export function EventDetail({ ev, anchor, onClose }: { ev: CalEvent; anchor: DOM
         <Row icon={<RefreshCw {...ICON} />}>
           <span class="evd-label">Synced calendar</span>
           <span>
-            {calendarName(ev.calendarId)}
+            <bdi>{calendarName(ev.calendarId)}</bdi>
             {!ev.editable && <span class="muted"> (read-only)</span>}
           </span>
         </Row>
         {ev.organizer && (
           <Row icon={<UserRound {...ICON} />}>
             <span class="evd-label">Invited by</span>
-            <span>{ev.organizer}</span>
+            <bdi>{ev.organizer}</bdi>
           </Row>
         )}
         {ev.location && (

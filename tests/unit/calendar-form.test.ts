@@ -4,6 +4,7 @@ import {
   draftFromForm,
   formFromEvent,
   formProblem,
+  metaChanges,
   newForm,
   sameRepeat,
   setAllDay,
@@ -83,6 +84,16 @@ describe('event editor form', () => {
       'default',
       true,
     ]);
+  });
+  it('names only who it is for and the countdown where the form changed them since it opened', () => {
+    const opened = valid({ profiles: ['asiyah', 'hashim'], countdown: false });
+    // The title alone, or the same people tapped off and on again in another order: nothing to write.
+    expect(metaChanges(opened, { ...opened, title: 'Dentist (moved)' })).toEqual({});
+    expect(metaChanges(opened, { ...opened, profiles: ['hashim', 'asiyah'] })).toEqual({});
+    expect(metaChanges(opened, { ...opened, profiles: ['hashim'], countdown: true })).toEqual({
+      profiles: ['hashim'],
+      countdown: true,
+    });
   });
   it('gives an all-day event real times when it becomes timed', () => {
     const ev: CalEvent = {

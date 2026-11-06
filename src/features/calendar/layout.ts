@@ -209,7 +209,7 @@ export function layoutLanes<T>(items: T[], start: (t: T) => number, end: (t: T) 
     const placed = { item, lane, lanes: 1 };
     cluster.push(placed);
     out.push(placed);
-    clusterEnd = Math.max(clusterEnd === -Infinity ? e : clusterEnd, e);
+    clusterEnd = Math.max(clusterEnd, e);
   }
   close();
   return out;
@@ -317,7 +317,7 @@ export function layoutMonthWeek(bars: WeekBar[], singles: string[][], maxLines: 
   return out;
 }
 
-/* ---------- Mini month ---------- */
+/* ---------- Event spans ---------- */
 
 /**
  * All-day events and events of a day or longer go in the all-day row and
@@ -356,11 +356,15 @@ export function segmentOn(ev: { start: Date; end: Date }, day: ISODate): { start
   return { startMin, endMin: endMin <= startMin && lasts > 0 ? Math.min(24 * 60, startMin + lasts) : endMin };
 }
 
+/* ---------- Mini month ---------- */
+
 /** The 6 weeks (42 days) of a mini month, leading and trailing days included. */
 export function miniMonthDays(month: ISODate, weekStart: 0 | 1): ISODate[] {
   const from = startOfWeek(startOfMonth(month), weekStart);
   return Array.from({ length: 42 }, (_, i) => addDays(from, i));
 }
+
+/* ---------- Labels ---------- */
 
 /** A countdown's days to go: "Today!", "1 day", "9 days". */
 export const daysText = (days: number) => (days === 0 ? 'Today!' : plural(days, 'day'));

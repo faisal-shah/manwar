@@ -1,12 +1,10 @@
 import { signal, type Signal } from '@preact/signals';
-import { ensureRange } from '../../calendar/engine';
 import type { CalEvent } from '../../calendar/types';
 import { asParent } from '../../core/lock';
 import { secondTapOf, tapMark, type TapMark } from '../../ui/overlays';
 import { settings } from '../../data/store';
 import type { CalendarView, ISODate } from '../../data/types';
 import { today } from '../../lib/clock';
-import { addDays } from '../../lib/date';
 import { stored } from '../../lib/stored';
 import { focusForView, pageFocus, periodTitle, viewPeriod, type NavSettings, type Period } from './layout';
 
@@ -49,12 +47,10 @@ export function navSettings(): NavSettings {
 
 export const periodOf = (nav: CalNav): Period => viewPeriod(nav.view.value, nav.focus.value, today.value, navSettings());
 
+/** One period earlier or later (the view on screen asks for its days: CalendarBody). */
 export function page(nav: CalNav, dir: -1 | 1): void {
   nav.focus.value = pageFocus(nav.view.value, nav.focus.value, today.value, navSettings(), dir);
   nav.dir.value = dir;
-  const p = periodOf(nav);
-  // Week view also previews the next week.
-  ensureRange(p.from, nav.view.value === 'week' ? addDays(p.to, 7) : p.to);
 }
 
 export function goToday(nav: CalNav): void {

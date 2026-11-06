@@ -192,6 +192,25 @@ describe('calendar sync under a rate limit', () => {
     expect(engine.events.value.map((e) => e.id)).toEqual(['dentist']);
   });
 
+  it('ends the pause when Sync now, queued behind a poll Google limits, gets through', async () => {
+    let answer!: () => void;
+    source.listCalendars = () => {
+      asked++;
+      if (asked > 1) return Promise.resolve([CAL]);
+      return new Promise((_, reject) => (answer = () => reject(new RateLimited('busy', 20 * 60_000))));
+    };
+    const poll = engine.refresh();
+    const synced = engine.syncNow();
+    await vi.advanceTimersByTimeAsync(0);
+    answer();
+    await poll;
+    await synced;
+    expect([asked, engine.sync.value.error]).toEqual([2, null]);
+    // Google answered: the background sync goes on, not twenty minutes later.
+    await engine.refresh();
+    expect(asked).toBe(3);
+  });
+
   it('does not pause for other errors', async () => {
     source.listCalendars = async () => {
       asked++;

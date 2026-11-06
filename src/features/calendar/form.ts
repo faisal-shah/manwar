@@ -1,5 +1,7 @@
+import type { MetaChanges } from '../../calendar/engine';
 import type { CalEvent, EventDraft } from '../../calendar/types';
 import type { HHMM, ISODate, Repeat } from '../../data/types';
+import { sameIds } from '../../lib/assignees';
 import { addDays, dateAt, diffDays, hhmmToMinutes, minutesToHHMM, toISODate } from '../../lib/date';
 import { plainText } from './text';
 
@@ -55,6 +57,14 @@ export function newForm(day: ISODate | undefined, nowMs: number, calendarId: str
     location: '',
     notes: '',
     countdown,
+  };
+}
+
+/** Who the event is for and its countdown, where the form changed them since it opened (`opened`). */
+export function metaChanges(opened: Form, form: Form): MetaChanges {
+  return {
+    ...(!sameIds(opened.profiles, form.profiles) && { profiles: form.profiles }),
+    ...(opened.countdown !== form.countdown && { countdown: form.countdown }),
   };
 }
 

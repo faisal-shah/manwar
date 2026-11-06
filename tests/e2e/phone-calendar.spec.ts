@@ -560,6 +560,29 @@ test('a calendar that does not load is named in the status line; the others stil
   expect(p.errors).toEqual([]);
 });
 
+test('a cold start whose calendars list but whose events do not load shows no day as empty', async ({ browser }) => {
+  const household = `phcal-${RUN}-events-down`;
+  await seededWall(browser, household);
+  const ctx = await newContext(browser, { ...devices['Pixel 7'], timezoneId: 'America/Chicago' });
+  const down = JSON.stringify(['family@demo', 'mamma@demo', 'en.usa#holiday@group.v.calendar.google.com']);
+  await ctx.addInitScript((ids) => localStorage.setItem('manwar.demoCalendarDown.v1', ids), down);
+  const page = await ctx.newPage();
+  const errors = track(page);
+  await page.goto(`/?demo=${household}&layout=phone&${NOW}`);
+  await expect(page.locator('.ph-nav')).toBeVisible({ timeout: 30_000 });
+  await calTab(page).click();
+  await expect(page.locator('.phc-list')).toContainText('The calendar could not be loaded yet.');
+  await expect(page.locator('.phc-day')).toHaveCount(0);
+  await expect(page.locator('.phc-list')).not.toContainText('Nothing planned');
+  // Reachable again: the days come in.
+  await page.evaluate(() => {
+    localStorage.removeItem('manwar.demoCalendarDown.v1');
+    window.dispatchEvent(new Event('online'));
+  });
+  await expect(page.locator(`[data-event="${READING}"]`)).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
 test('offline: the agenda stays, an edit fails and keeps the editor, an assignment reaches the wall later, nothing kept on disk', async ({
   browser,
 }) => {

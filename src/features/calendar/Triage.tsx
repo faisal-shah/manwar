@@ -2,7 +2,8 @@ import { signal } from '@preact/signals';
 import { useState } from 'preact/hooks';
 import { Repeat } from 'lucide-preact';
 import { triageScope, unassigned } from '../../calendar/engine';
-import { eventKey, type CalEvent } from '../../calendar/types';
+import { seriesOf, type CalEvent } from '../../calendar/types';
+import { isolate } from '../../lib/text';
 import { Button, Empty } from '../../ui/controls';
 import { Sheet, toast } from '../../ui/overlays';
 import { ProfilePicker } from '../../ui/profile';
@@ -11,12 +12,12 @@ import { calendarName, whenLabel } from './model';
 
 /** Series skipped in this session ("Skip for now"); they stay in the queue and the badge. */
 const skipped = signal<Set<string>>(new Set());
-const seriesOf = (ev: CalEvent) => eventKey(ev.calendarId, ev.seriesId ?? ev.id);
 
 /**
  * Triage queue: events nobody is assigned to (invitations, events added on
- * phones, shared calendars). A parent picks who each one is for; recurring
- * events are assigned for the whole series. There are no automatic rules.
+ * phones, shared calendars). A parent picks who each one is for; a
+ * repeating event is assigned for the whole series, or for this occurrence
+ * alone when only it has no one (triageScope). There are no automatic rules.
  */
 export function TriageSheet({ onClose }: { onClose: () => void }) {
   const all = unassigned.value;
@@ -25,8 +26,8 @@ export function TriageSheet({ onClose }: { onClose: () => void }) {
   return (
     <Sheet title="Assign events" onClose={onClose} wide>
       <p class="muted triage-intro">
-        These events are not assigned to anyone yet. Choose who each one is for; repeating events are assigned for every
-        occurrence.
+        These events are not assigned to anyone yet. Choose who each one is for. A repeating event says whether that is every time
+        it repeats or this time only.
       </p>
       {list.length ? (
         <div class="triage-list">
@@ -60,15 +61,20 @@ function TriageRow({ ev }: { ev: CalEvent }) {
         </h3>
         <span>
           {whenLabel(ev)}
-          {ev.seriesId && scope === 'series' && (
+          {ev.seriesId && (
             <span class="triage-repeat">
-              <Repeat size="1.6rem" /> repeats
+              <Repeat size="1.6rem" /> {scope === 'series' ? 'every time it repeats' : 'this time only'}
             </span>
           )}
         </span>
         <span class="muted">
-          {calendarName(ev.calendarId)}
-          {ev.organizer ? ` · from ${ev.organizer}` : ''}
+          <bdi>{calendarName(ev.calendarId)}</bdi>
+          {ev.organizer && (
+            <>
+              {' · from '}
+              <bdi>{ev.organizer}</bdi>
+            </>
+          )}
         </span>
       </div>
       <ProfilePicker value={sel} onChange={setSel} everyone />
@@ -78,7 +84,7 @@ function TriageRow({ ev }: { ev: CalEvent }) {
           disabled={!sel.length}
           onClick={() =>
             void assignFlow(ev, sel, scope).then(() => {
-              if (!unassigned.value.some((x) => seriesOf(x) === seriesOf(ev))) toast(`Assigned "${ev.title}"`);
+              if (!unassigned.value.some((x) => seriesOf(x) === seriesOf(ev))) toast(`Assigned "${isolate(ev.title)}"`);
             })
           }
         >

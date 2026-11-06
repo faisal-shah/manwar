@@ -5,12 +5,12 @@ import { fromISODate, monthLong } from '../../lib/date';
 import { Popover } from '../../ui/overlays';
 import { EventDetail } from './EventDetail';
 import { EventEditor } from './EventEditor';
-import { countLabel } from './layout';
 import { dayEvents, itemsByDay } from './model';
 import { EventCard, MealPill } from './parts';
 import { CountdownList } from './ProgressStrip';
 import { countdownPopup, dayPopup, detailReq, editorReq, triageOpen } from './state';
 import { TriageSheet } from './Triage';
+import { dayCount } from './views/common';
 
 /**
  * Popovers and sheets for whichever calendar surface is on screen (the
@@ -65,7 +65,7 @@ function DayPopup({ day, anchor, onClose }: { day: ISODate; anchor: DOMRect; onC
     <Popover anchor={anchor} onClose={onClose} width={44} label={title}>
       <div class="cal-day-popup" data-popup={day}>
         <h2 class="serif">{title}</h2>
-        <span class="muted">{countLabel(events.length, false)}</span>
+        <span class="muted">{dayCount(day, events.length)}</span>
         <div class="cal-day-popup-items">
           {it.meals.map((m) => (
             <MealPill key={m.key} item={m} badge />
